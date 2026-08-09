@@ -17,7 +17,10 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/internal/presentation"
 )
 
-const forbiddenFixtureCanary = "JOBMAN_DIAG_SECRET_CANARY_7f84d1"
+const (
+	fixtureJobmanRelease   = "v1.4.0"
+	forbiddenFixtureCanary = "JOBMAN_DIAG_SECRET_CANARY_7f84d1"
+)
 
 type manifest struct {
 	JobmanRelease  string  `json:"jobman_release"`
@@ -36,7 +39,7 @@ func TestCopiedCoreFixtures(t *testing.T) {
 
 	root := filepath.Join("..", "..", "testdata", "jobman-v1")
 	origin := readManifest(t, filepath.Join(root, "manifest.json"))
-	if origin.EvidenceSchema != diagnostic.SchemaVersion || origin.JobmanRelease == "" {
+	if origin.EvidenceSchema != diagnostic.SchemaVersion || origin.JobmanRelease != fixtureJobmanRelease {
 		t.Fatalf("fixture origin = %#v", origin)
 	}
 	diagnostician, err := engine.New("compatibility-test", func() time.Time {

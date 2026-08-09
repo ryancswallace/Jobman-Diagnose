@@ -29,26 +29,17 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - name: Checkout coordinated Jobman core
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ryancswallace/jobman
-          ref: 44b90e597264534f3b64486e1d7b8ff2b5c13e15 # Diagnostic evidence schema 1
-          path: jobman
-          persist-credentials: false
-
-      - name: Checkout companion
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: jobman-diagnose
           persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: jobman-diagnose/go.version
+          go-version-file: go.version
           check-latest: true
-          cache-dependency-path: jobman-diagnose/go.sum
+          cache-dependency-path: go.sum
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
@@ -57,7 +48,6 @@ jobs:
 
       - name: Build
         run: make build
-        working-directory: jobman-diagnose
 
       - name: Analyze
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6

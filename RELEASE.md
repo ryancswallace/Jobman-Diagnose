@@ -7,24 +7,21 @@ evaluation gate while the evidence and generation contracts mature.
 
 ## First-release prerequisites
 
-Before creating the first tag:
+Jobman v1.4.0 is the immutable core compatibility baseline: it publishes
+diagnostic evidence schema 1, the module requires its tag directly, copied
+fixtures record that origin and exact hashes, and continuous integration builds
+without a sibling checkout.
 
-1. Publish a Jobman version containing diagnostic evidence schema 1, require
-   that version in `go.mod`, and remove the sibling `replace` directive.
-2. Replace compatibility fixture origin `unreleased` with that Jobman tag and
-   verify every recorded SHA-256.
-3. Remove development-only sibling checkouts and core commit-pin guards from
-   workflows after the tagged module resolves independently.
-4. Update `CHANGELOG.md`, `docs/COMPATIBILITY.md`, `SECURITY.md`, and
-   `docs/INSTALLATION.md` with the final supported versions and verification
-   commands.
-5. Install the GitHub Settings app, apply `.github/settings.yml`, enable private
-   vulnerability reporting and secret scanning where available, and confirm
-   the `main` release environment requires maintainer approval.
+Before creating the first companion tag:
 
-During coordinated unreleased development, push the compatible Jobman revision
-before updating the exact core pin in companion workflows and compatibility
-tests. That ordering keeps every companion workflow reproducible.
+1. Confirm `CHANGELOG.md`, `docs/COMPATIBILITY.md`, `SECURITY.md`, and
+   `docs/INSTALLATION.md` describe the final supported versions and
+   verification commands.
+2. Confirm the GitHub Settings app has applied `.github/settings.yml`, private
+   vulnerability reporting and secret scanning are enabled where available,
+   and the `main` release environment requires maintainer approval.
+3. Complete the candidate and live-provider validation below and retain its
+   release evidence.
 
 ## Candidate validation
 

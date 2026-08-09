@@ -16,10 +16,9 @@ Keep Jobman lightweight and model-agnostic. Do not add model SDKs, prompts, or
 provider credentials to core. Keep this companion read-only: it may suggest
 actions, but it must not mutate, retry, signal, or repair jobs.
 
-The development module uses a sibling Jobman checkout until evidence schema 1
-has a tagged release. Preserve that coordinated layout, update all pinned core
-workflow revisions together, and push the compatible core revision before a
-companion commit that selects it.
+The module requires a tagged Jobman release. Preserve the minimum supported
+version documented in `docs/COMPATIBILITY.md`, and test public evidence changes
+against immutable copied fixtures from their recorded Jobman release.
 
 ## Start safely
 

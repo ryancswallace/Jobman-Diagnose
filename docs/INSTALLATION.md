@@ -1,11 +1,11 @@
 # Installation
 
 Jobman Diagnose has not published its first release. Until then, build it from
-a coordinated pair of sibling checkouts so the development-only Jobman module
-replacement resolves:
+source. Install Jobman v1.4.0 or newer first, then build the companion; the Go
+dependency resolves from the tagged module and does not require a sibling
+checkout:
 
 ```console
-git clone https://github.com/ryancswallace/jobman.git
 git clone https://github.com/ryancswallace/jobman-diagnose.git
 cd jobman-diagnose
 make setup

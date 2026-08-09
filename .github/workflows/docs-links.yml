@@ -57,6 +57,7 @@ jobs:
             --scheme https
             --exclude '^https://([^.]+\.)?example\.com/'
             --exclude '^https://api\.securityscorecards\.dev/'
+            --exclude '^https://securityscorecards\.dev/'
             --exclude '^https://github\.com/ryancswallace/jobman-diagnose/actions/workflows/[^/]+/badge\.svg$'
             --exclude '^https://img\.shields\.io/'
             --exclude '^https://token\.actions\.githubusercontent\.com/?$'

@@ -1,5 +1,5 @@
 {
-  "jobman_release": "unreleased",
+  "jobman_release": "v1.4.0",
   "evidence_schema": 1,
   "fixtures": [
     {

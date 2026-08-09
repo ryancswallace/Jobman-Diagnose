@@ -52,28 +52,18 @@ Confidence measures the strength of a controlled rule and its cited evidence.
 It is not presented as a probability. A report is advisory: the companion
 cannot signal, rerun, mutate, or repair a Jobman job.
 
-## Build during coordinated development
+## Build from source
 
-The module currently uses a local `replace` for the adjacent unreleased Jobman
-evidence package. Clone both repositories as siblings, then build and test:
+Jobman Diagnose requires Jobman v1.4.0 or newer for diagnostic evidence schema
+1 and external-command dispatch. The Go module resolves that tagged dependency
+normally, so the repositories do not need to be adjacent:
 
 ```console
-git clone https://github.com/ryancswallace/jobman.git
 git clone https://github.com/ryancswallace/jobman-diagnose.git
 cd jobman-diagnose
+make setup
 make check
 ```
-
-Until that package has a release tag, coordinated GitHub Actions workflows pin
-their Jobman checkout to the exact compatible core revision. When the evidence
-contract changes, first push the corresponding Jobman commit, then update the
-pin in `test.yml`, `codeql.yml`, `fuzz.yml`, and the compatibility test before
-pushing the companion. This order ensures every companion workflow can resolve
-the sibling module reproducibly.
-
-Before the first companion release, the local replacement will be removed and
-the module will require the first tagged Jobman version containing diagnostic
-evidence schema 1.
 
 ## Use it
 

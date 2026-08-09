@@ -7,6 +7,7 @@ semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
+| Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schema 1 |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
 | Jobman extension environment | Protocol 1 |
@@ -43,18 +44,14 @@ local `/api/chat` structured output. Command bridges must implement the raw
 schema-1 stdin/stdout protocol documented in
 [`GENERATION_PROTOCOL.md`](GENERATION_PROTOCOL.md).
 
-Copied core fixtures under `testdata/jobman-v1/` record their Jobman origin,
-evidence IDs, and exact SHA-256 values. Compatibility tests never download
-fixtures. The corpus includes pre-fingerprint omissions, typed resource facts,
-local-only fingerprints, exact same-fingerprint history, maximum-budget data,
-and secret canaries. When Jobman publishes the first evidence release, the
-manifest's temporary `unreleased` origin will be replaced by that tag and
-retained as the oldest schema-1 fixture set.
+Copied core fixtures under `testdata/jobman-v1/` record their Jobman v1.4.0
+origin, evidence IDs, and exact SHA-256 values. Compatibility tests never
+download fixtures. The corpus includes pre-fingerprint omissions, typed
+resource facts, local-only fingerprints, exact same-fingerprint history,
+maximum-budget data, and secret canaries. The v1.4.0 fixture set is retained as
+the oldest schema-1 baseline even after newer Jobman releases add compatible
+evidence items.
 
-The development `go.mod` uses a sibling checkout because the public evidence
-package has not yet been tagged. This replacement is not a release contract and
-will be removed before publishing the first companion module version.
-Coordinated development workflows pin that sibling checkout to an exact Jobman
-revision rather than its moving default branch. A compatible core revision must
-be pushed before a companion change that selects it; the checked-in
-compatibility test keeps all workflow pins aligned.
+The development and release module both resolve a tagged Jobman dependency.
+Continuous integration uses the module graph directly, which verifies that a
+clean checkout can build without an unpublished sibling repository.
