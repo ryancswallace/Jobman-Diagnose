@@ -1,57 +1,85 @@
-# Release checklist
+# Release process
 
-The project is not yet released. Before the first tag:
+Jobman Diagnose has not published its first release. Releases are deliberately
+maintainer-triggered semantic-version tags rather than automatic releases from
+every merge. This leaves an explicit compatibility and live-provider
+evaluation gate while the evidence and generation contracts mature.
 
-1. require the first tagged Jobman module containing evidence schema 1 and
-   remove the local `replace` directive;
-2. replace copied fixture origin `unreleased` with that Jobman tag and verify
-   every SHA-256;
-3. run formatting, lint, race tests, vulnerability analysis, and native and
-   cross-platform builds;
-4. verify a direct and `jobman diagnose` assembled invocation against the
-   minimum and newest supported Jobman versions;
-5. run `make release-check release-build` and build reproducible CGO-free
-   archives for the supported operating systems and architectures using the
-   checked-in GoReleaser configuration;
-6. push a `vX.Y.Z` tag only after the preceding gates pass; the Release
-   workflow revalidates the source, builds a draft with GoReleaser, emits
-   archive SBOMs and checksums, signs the checksum manifest keylessly with
-   Cosign, and records GitHub build attestations;
-7. verify a clean installation needs no config, credentials, Python, network,
-   or provider runtime; and
-8. update `CHANGELOG.md`, `docs/COMPATIBILITY.md`, and `SECURITY.md` before
-   publishing;
-9. run recorded-response evaluation and adapter conformance for every shipped
-   provider, then perform opt-in live evaluation against at least one supported
-   hosted strict-output service and one supported local runtime; and
-10. verify secret-canary, prompt-injection, refusal, timeout, malformed-output,
-    redirect, locality, and deterministic-fallback cases in the release build.
+## First-release prerequisites
 
-The release workflow deliberately fails while `go.mod` contains the sibling
-Jobman `replace` directive. After the first compatible Jobman tag exists,
-replace the placeholder requirement with that tag, remove the directive, copy
-and identify released compatibility fixtures, and rerun `make check` before
-tagging. Releases are drafts so a maintainer can verify archives, SBOMs, the
-checksum Sigstore bundle, and attestations before publication.
+Before creating the first tag:
 
-During unreleased coordinated development, push a compatible Jobman core
-revision before updating the exact core pin in the companion's test, CodeQL,
-and fuzz workflows. Once the tagged module dependency replaces the sibling
-checkout, remove those development-only checkouts and their pin guard together.
+1. Publish a Jobman version containing diagnostic evidence schema 1, require
+   that version in `go.mod`, and remove the sibling `replace` directive.
+2. Replace compatibility fixture origin `unreleased` with that Jobman tag and
+   verify every recorded SHA-256.
+3. Remove development-only sibling checkouts and core commit-pin guards from
+   workflows after the tagged module resolves independently.
+4. Update `CHANGELOG.md`, `docs/COMPATIBILITY.md`, `SECURITY.md`, and
+   `docs/INSTALLATION.md` with the final supported versions and verification
+   commands.
+5. Install the GitHub Settings app, apply `.github/settings.yml`, enable private
+   vulnerability reporting and secret scanning where available, and confirm
+   the `main` release environment requires maintainer approval.
 
-Run the checked-in corpus for every candidate:
+During coordinated unreleased development, push the compatible Jobman revision
+before updating the exact core pin in companion workflows and compatibility
+tests. That ordering keeps every companion workflow reproducible.
+
+## Candidate validation
+
+Run the complete local gate from a clean checkout using the exact Go toolchain:
 
 ```console
-make evaluate
+make setup
+make check
+make snapshot
 ```
 
-Then follow [`docs/EVALUATION.md`](docs/EVALUATION.md) for one explicitly
-configured hosted provider and one self-hosted provider. Retain the resulting
-JSON, exact model/runtime identifiers, and profile limits with candidate
-evidence.
+The gate verifies module integrity, formatting, lint, Actions syntax, reachable
+vulnerabilities, race-enabled coverage, the deterministic evaluation corpus,
+documentation links, every supported architecture, GoReleaser configuration,
+and release builds.
+
+Also verify direct and `jobman diagnose` assembled invocation against the
+minimum and newest supported Jobman versions. Follow
+[`docs/EVALUATION.md`](docs/EVALUATION.md) for recorded-response evaluation and
+opt-in live evaluation against at least one supported hosted strict-output
+service and one supported local runtime. Retain exact model/runtime identifiers,
+profile limits, and resulting JSON with the candidate evidence.
+
+Exercise secret-canary, prompt-injection, refusal, timeout, malformed-output,
+redirect, locality, and deterministic-fallback cases in the release build. A
+clean deterministic installation must need no configuration, credentials,
+Python, network, or provider runtime.
+
+## Publish
+
+Create a signed `vX.Y.Z` tag only after the candidate gates pass and push it to
+GitHub. The protected Release workflow:
+
+- rejects non-semantic tags, tags outside `main`, local Jobman replacements,
+  and the unreleased `v0.0.0` placeholder;
+- repeats source, security, documentation, evaluation, and release checks;
+- creates CGO-free Linux, macOS, and Windows archives as a draft release;
+- emits SHA-256 checksums and per-archive SBOMs;
+- signs the checksum manifest keylessly with Cosign; and
+- records GitHub build attestations for the checksum manifest.
+
+Inspect the draft before publishing. Verify archive contents, an installation
+on each operating-system family, checksums, the Sigstore bundle, SBOMs,
+attestations, generated release notes, and the `jobman-diagnose version` output.
+Publish only after those artifacts agree with the tag and commit.
 
 Generated analysis remains explicit opt-in. Do not describe an adapter as
 release-supported until its structured-output behavior, locality boundary,
-failure behavior, and disclosure manifest have passed the provider security
-and compatibility gate. A clean deterministic installation remains the minimum
-supported configuration.
+failure behavior, and disclosure manifest pass the provider security and
+compatibility gate.
+
+## Post-release
+
+Install the published archive in a clean environment and repeat one
+deterministic and one configured provider smoke test. Confirm documentation
+links and badges, then record any release-specific caveat in the changelog.
+Never rebuild or replace artifacts under an existing tag; publish a new patch
+version instead.

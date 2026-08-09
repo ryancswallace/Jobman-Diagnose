@@ -51,8 +51,13 @@ archives:
       - LICENSE
       - README.md
       - CHANGELOG.md
+      - CITATION.cff
+      - CODE_OF_CONDUCT.md
+      - CONTRIBUTING.md
       - RELEASE.md
       - SECURITY.md
+      - SUPPORT.md
+      - THIRD_PARTY_NOTICES.md
       - docs/*.md
 
 checksum:
