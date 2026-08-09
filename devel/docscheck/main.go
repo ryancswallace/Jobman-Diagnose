@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -168,12 +169,12 @@ func resolveDestination(root, sourceDirectory, destination string) (string, bool
 	if err != nil || parsed.Scheme != "" || parsed.Host != "" {
 		return "", false
 	}
-	path, err := url.PathUnescape(parsed.Path)
-	if err != nil || path == "" {
+	linkPath, err := url.PathUnescape(parsed.Path)
+	if err != nil || linkPath == "" {
 		return "", false
 	}
-	if filepath.IsAbs(path) {
-		return filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(path, "/"))), true
+	if path.IsAbs(linkPath) {
+		return filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(linkPath, "/"))), true
 	}
-	return filepath.Join(sourceDirectory, filepath.FromSlash(path)), true
+	return filepath.Join(sourceDirectory, filepath.FromSlash(linkPath)), true
 }

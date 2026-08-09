@@ -50,6 +50,19 @@ func TestDestinationsHandleTitlesAndReferenceLinks(t *testing.T) {
 	}
 }
 
+func TestResolveDestinationUsesMarkdownRootSemantics(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("repository", "root")
+	resolved, local := resolveDestination(root, filepath.Join(root, "docs"), "/README.md#top")
+	if !local {
+		t.Fatal("root-relative Markdown link was not classified as local")
+	}
+	if want := filepath.Join(root, "README.md"); resolved != want {
+		t.Fatalf("resolved = %q, want %q", resolved, want)
+	}
+}
+
 func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
