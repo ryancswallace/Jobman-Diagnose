@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: If you use Jobman Diagnose, please cite this software.
+type: software
+title: Jobman Diagnose
+authors:
+  - family-names: Wallace
+    given-names: Ryan
+repository-code: https://github.com/ryancswallace/jobman-diagnose
+url: https://github.com/ryancswallace/jobman-diagnose
+license: MIT

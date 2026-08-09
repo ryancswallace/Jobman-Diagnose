@@ -1,5 +1,10 @@
 # jobman-diagnose
 
+[![Test](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/test.yml/badge.svg)](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/test.yml)
+[![CodeQL](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/codeql.yml/badge.svg)](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ryancswallace/jobman-diagnose/badge)](https://securityscorecards.dev/viewer/?uri=github.com/ryancswallace/jobman-diagnose)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 `jobman-diagnose` is the optional diagnostic companion for
 [Jobman](https://github.com/ryancswallace/jobman). It turns bounded, versioned
 core evidence into a cited diagnosis report with confidence, limitations,
@@ -8,6 +13,10 @@ recommended next actions, and explicit retry advice.
 Status: deterministic diagnosis, generated augmentation, and initial provider
 adapters are implemented on `main`; not yet released. Live provider evaluation
 and release packaging remain gates before a first tag.
+
+[Documentation](docs/README.md) · [Installation](docs/INSTALLATION.md) ·
+[Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) ·
+[Security](SECURITY.md)
 
 The default mode is local, deterministic, read-only, network-free, and does not
 require configuration, credentials, Python, or a model runtime. Generated
