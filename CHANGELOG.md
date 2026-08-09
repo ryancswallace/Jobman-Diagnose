@@ -64,6 +64,18 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
   in every sealed request.
 - Added keyless checksum signing, SBOM packaging, build metadata, and an
   attested draft-release workflow that rejects development module replacements.
+- Added contributor, support, conduct, citation, issue, pull-request, and
+  third-party notice metadata plus a navigable installation and troubleshooting
+  documentation set.
+- Added dependency review, OpenSSF Scorecard, Dependabot, synchronized labels,
+  scheduled external-link checks, repository settings-as-code, and a pinned
+  multi-architecture devcontainer.
+- Added an aggregate coverage floor and deterministic repository-relative
+  documentation link validation plus pinned spelling checks to local and
+  continuous-integration gates.
+- Hardened the draft-release gate with protected environment approval,
+  semantic-tag and main-branch verification, full source revalidation, and a
+  tagged Jobman dependency requirement.
 
 ### Fixed
 
