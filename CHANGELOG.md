@@ -76,13 +76,13 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 - Hardened the draft-release gate with protected environment approval,
   semantic-tag and main-branch verification, full source revalidation, and a
   tagged Jobman dependency requirement.
+- Established Jobman v1.4.0 as the minimum tagged core dependency and made
+  source builds and continuous integration independent of a sibling checkout.
 
 ### Fixed
 
 - Honor Windows file-mode semantics for exports, credentials, and executable
   validation, and preserve byte-exact evidence fixtures across Windows checkouts.
-- Pin coordinated GitHub Actions jobs to the exact compatible Jobman core
-  revision so the unreleased sibling module always contains evidence schema 1.
 - Distinguish terminal completion reasons such as `failure_limit` from an
   active job that is waiting for prerequisites when summarizing retry policy.
 - Made `--help` a successful informational invocation instead of returning the

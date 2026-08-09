@@ -11,11 +11,10 @@ Report vulnerabilities through [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Development setup
 
-Development currently requires sibling Jobman and Jobman Diagnose checkouts
-because the core evidence package is not yet released:
+Jobman Diagnose uses the tagged Jobman module recorded in `go.mod`; a sibling
+Jobman checkout is not required:
 
 ```console
-git clone https://github.com/ryancswallace/jobman.git
 git clone https://github.com/ryancswallace/jobman-diagnose.git
 cd jobman-diagnose
 make setup
@@ -69,9 +68,9 @@ validated, uncalibrated hypotheses and reorder existing action identifiers. It
 must not change deterministic facts, retry policy, commands, or job state.
 Provider errors must remain bounded and secret-safe.
 
-When the compatible Jobman revision changes, update every coordinated checkout
-and `internal/compatibility/workflows_test.go` together. Push Jobman first so the
-selected commit exists when companion Actions run.
+When the minimum compatible Jobman release changes, update `go.mod`, the copied
+fixture origin, compatibility documentation, and changelog together. Never use
+a branch, pseudo-version, or local replacement as a published dependency.
 
 ## Commits and pull requests
 
