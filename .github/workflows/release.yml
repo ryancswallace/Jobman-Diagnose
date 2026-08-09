@@ -82,6 +82,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify complete release artifact set
+        run: ./devel/check-release.sh dist
+
       - name: Prepare attestation input
         run: |
           checksum_files=(dist/jobman-diagnose_*_checksums.txt)

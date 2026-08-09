@@ -22,6 +22,41 @@ Before creating a companion tag:
    and the `main` release environment requires maintainer approval.
 3. Complete the candidate and live-provider validation below and retain its
    release evidence.
+4. Confirm the `main` environment contains `HOMEBREW_TAP_TOKEN` and
+   `CLOUDSMITH_API_KEY`, and that the reusable `v*.*.*` environment tag policy
+   is present. See the one-time distribution setup below.
+
+## One-time distribution setup
+
+### Homebrew tap
+
+Create `HOMEBREW_TAP_TOKEN` as a fine-grained personal access token whose
+resource owner is `ryancswallace`. Grant it access only to
+`ryancswallace/homebrew-tap`, with **Contents: read and write** and no other
+repository permissions. Store it as an environment secret named
+`HOMEBREW_TAP_TOKEN` in this repository's protected `main` environment.
+
+The publishing workflow checks the token's push permission before cloning the
+tap. The tap's branch rules must allow the token owner to update `main`. Rotate
+the secret before the token expires and immediately after suspected exposure.
+Never put the token in repository, organization, or local configuration files.
+
+### Cloudsmith
+
+Keep `jobman/stable` public and classified as an open-source repository. Create
+or reuse a narrowly scoped Cloudsmith service account/API key that can read and
+upload packages only in `jobman/stable`; it does not need workspace-management
+permissions. Store the key as an environment secret named
+`CLOUDSMITH_API_KEY` in this repository's protected `main` environment.
+
+The workflow grants no GitHub OIDC permission because the free Cloudsmith plan
+does not support that authentication path. The pinned Cloudsmith action receives
+the API key, verifies authentication, and installs pinned CLI version 1.21.0.
+The publication helper never prints the key.
+
+Both distribution jobs run only for a public, non-prerelease `vMAJOR.MINOR.PATCH`
+release, use the protected environment, and can also be dispatched manually
+from `main` to repair an interrupted publication.
 
 ## Candidate validation
 
@@ -59,15 +94,39 @@ GitHub. The protected Release workflow:
   and the unreleased `v0.0.0` placeholder;
 - repeats source, security, documentation, evaluation, and release checks;
 - creates CGO-free Linux, macOS, and Windows archives as a draft release;
-- emits SHA-256 checksums and per-archive SBOMs;
+- creates `.deb`, `.rpm`, and `.apk` packages for Linux 386, amd64, and arm64;
+- emits SHA-256 checksums and per-archive and per-package SPDX SBOMs;
 - signs the checksum manifest keylessly with Cosign; and
-- records GitHub build attestations for the checksum manifest.
+- records GitHub build attestations for every archive, native package, and
+  SBOM in the checksum manifest.
 
 Inspect the draft before publishing. Verify archive contents, an installation
 on each operating-system family, checksums, the Sigstore bundle, SBOMs,
 attestations, generated release notes, and the `jobman-diagnose --version`
 output.
 Publish only after those artifacts agree with the tag and commit.
+
+Publishing a stable GitHub release triggers two independent distribution
+workflows. The Homebrew workflow regenerates `Formula/jobman-diagnose.rb` from
+the public checksum manifest and commits it to `ryancswallace/homebrew-tap`.
+The Cloudsmith workflow downloads all nine native packages, verifies the
+release's keyless checksum signature, checks every package checksum and GitHub
+attestation, and uploads them to `jobman/stable`.
+
+Cloudsmith can re-sign RPM bytes. Each upload therefore carries an immutable
+`source-sha256-DIGEST` tag containing the original GitHub release digest. A
+repair run accepts an existing filename only when that source-digest tag
+matches, and refuses ambiguous or conflicting records.
+
+If either distribution job fails, fix only its credential or hosted
+configuration and dispatch **Publish Homebrew formula** or **Publish Linux
+packages** from `main` with the existing stable tag. These workflows consume
+the already-public release and never rebuild or replace its artifacts.
+
+The v0.1.0 GitHub release predates native packages. After this distribution
+code reaches `main`, the Homebrew workflow may be dispatched for v0.1.0 because
+its signed macOS archives already exist. Do not dispatch the Cloudsmith workflow
+for v0.1.0; publish native packages with the next release instead.
 
 Generated analysis remains explicit opt-in. Do not describe an adapter as
 release-supported until its structured-output behavior, locality boundary,
@@ -76,8 +135,8 @@ compatibility gate.
 
 ## Verify published artifacts
 
-Download the archive, checksum manifest, and Sigstore bundle from the same
-release. For v0.1.0 on Apple silicon, for example:
+Download the archive or native package, checksum manifest, and Sigstore bundle
+from the same release. For v0.1.0 on Apple silicon, for example:
 
 ```console
 gh release download v0.1.0 \
@@ -107,6 +166,10 @@ guide when testing a different platform.
 
 Install the published archive in a clean environment and repeat one
 deterministic and one configured provider smoke test. Confirm documentation
-links and badges, then record any release-specific caveat in the changelog.
+links and badges. For releases after v0.1.0, also confirm the Homebrew formula
+commit, install through Homebrew on macOS, install at least one Cloudsmith
+package through each relevant repository format, and verify that all nine
+Cloudsmith records carry their expected source-digest tag. Then record any
+release-specific caveat in the changelog.
 Never rebuild or replace artifacts under an existing tag; publish a new patch
 version instead.

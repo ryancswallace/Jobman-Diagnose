@@ -5,6 +5,17 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Added
+
+- Added Homebrew distribution through `ryancswallace/homebrew-tap`, generated
+  only from the checksums of an already-public stable GitHub release.
+- Added `.deb`, `.rpm`, and `.apk` packages for Linux 386, amd64, and arm64,
+  per-package SPDX SBOMs, release checks, and idempotent publication to the
+  public Cloudsmith repository.
+- Added separately repairable post-release workflows with protected
+  credentials, checksum-signature and attestation verification, and
+  source-digest tags that detect conflicting Cloudsmith packages.
+
 ## [0.1.0] - 2026-08-09
 
 ### Added

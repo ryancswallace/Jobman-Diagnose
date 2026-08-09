@@ -4,6 +4,7 @@
 [![CodeQL](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/codeql.yml/badge.svg)](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ryancswallace/jobman-diagnose/badge)](https://securityscorecards.dev/viewer/?uri=github.com/ryancswallace/jobman-diagnose)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![OSS hosting by Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-Cloudsmith-blue?logo=cloudsmith)](https://cloudsmith.com/)
 
 `jobman-diagnose` is the optional diagnostic companion for
 [Jobman](https://github.com/ryancswallace/jobman). It turns bounded, versioned
@@ -54,12 +55,25 @@ cannot signal, rerun, mutate, or repair a Jobman job.
 
 ## Install
 
-Download the appropriate CGO-free archive from the [v0.1.0 release], verify its
-checksum and provenance, and put `jobman-diagnose` on `PATH`. See the
-[installation guide](docs/INSTALLATION.md) for exact Linux, macOS, and Windows
-asset names and verification commands.
+Install Jobman v1.4.0 or newer first. On macOS, Homebrew installs both projects
+from the shared tap:
+
+```console
+brew install ryancswallace/tap/jobman-diagnose
+```
+
+Stable releases after v0.1.0 include signed `.deb`, `.rpm`, and `.apk` packages
+for Linux 386, amd64, and arm64. They are available from the public
+[Cloudsmith repository] as well as the GitHub release. The v0.1.0 release
+remains archive-only on Linux and is also the source for the initial Homebrew
+formula.
+
+Portable CGO-free archives remain available for Linux, macOS, and Windows.
+See the [installation guide](docs/INSTALLATION.md) for package-repository setup,
+exact asset names, and checksum, signature, and attestation verification.
 
 [v0.1.0 release]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0
+[Cloudsmith repository]: https://cloudsmith.io/~jobman/repos/stable/
 
 ## Build from source
 

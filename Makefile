@@ -227,7 +227,7 @@ release-build: tool-goreleaser ## Compile every target declared to GoReleaser.
 snapshot: tool-goreleaser tool-syft ## Build a complete local release snapshot without publishing.
 	PATH='$(abspath $(BIN_DIR))':$$PATH \
 		$(GORELEASER) release --snapshot --clean --parallelism 2 --skip=sign
-	@test -n "$$(find dist -maxdepth 1 -type f -name 'jobman-diagnose_*_checksums.txt' -print -quit)"
+	./devel/check-release.sh dist
 
 .PHONY: clean
 clean: ## Remove build, release, and test artifacts.

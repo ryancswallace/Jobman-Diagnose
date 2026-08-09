@@ -68,4 +68,7 @@ environments:
         type: "User"
     deployment_branch_policy:
       custom_branches:
-        - main
+        - name: main
+          type: branch
+        - name: "v*.*.*"
+          type: tag

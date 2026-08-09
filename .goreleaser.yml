@@ -60,6 +60,35 @@ archives:
       - THIRD_PARTY_NOTICES.md
       - docs/*.md
 
+nfpms:
+  - id: jobman-diagnose
+    ids:
+      - jobman-diagnose
+    package_name: jobman-diagnose
+    vendor: Jobman Diagnose contributors
+    homepage: https://github.com/ryancswallace/Jobman-Diagnose
+    maintainer: Ryan Wallace <ryancswallace@gmail.com>
+    description: >-
+      Deterministic and AI-assisted diagnostics for Jobman failures.
+    license: MIT
+    section: utils
+    priority: optional
+    formats:
+      - apk
+      - deb
+      - rpm
+    contents:
+      - src: LICENSE
+        dst: /usr/share/licenses/jobman-diagnose/LICENSE
+      - src: THIRD_PARTY_NOTICES.md
+        dst: /usr/share/licenses/jobman-diagnose/THIRD_PARTY_NOTICES.md
+      - src: README.md
+        dst: /usr/share/doc/jobman-diagnose/README.md
+      - src: docs/INSTALLATION.md
+        dst: /usr/share/doc/jobman-diagnose/INSTALLATION.md
+      - src: docs/CONFIGURATION.md
+        dst: /usr/share/doc/jobman-diagnose/CONFIGURATION.md
+
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
   algorithm: sha256
@@ -67,6 +96,8 @@ checksum:
 sboms:
   - id: archives
     artifacts: archive
+  - id: packages
+    artifacts: package
 
 signs:
   - id: checksums
