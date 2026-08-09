@@ -234,6 +234,9 @@ func TestRunUsesDefaultGeneratedProfileWithImpliedMetadata(t *testing.T) {
 		!report.Disclosure.GeneratedContentUsed {
 		t.Fatalf("generated report = %#v", report)
 	}
+	if stderr.Len() != 0 {
+		t.Fatalf("automatic progress with JSON output = %q, want empty", stderr.String())
+	}
 }
 
 func TestRunDeterministicIgnoresMalformedModelConfiguration(t *testing.T) {
@@ -271,11 +274,16 @@ func TestRunGeneratedFailureFallsBackUnlessRequired(t *testing.T) {
 	configuration := writeDiagnosisConfig(t, server.URL+"/v1/chat/completions")
 	baseArguments := []string{
 		"--from-evidence", evidencePath, "--json", "--ai", "--diagnosis-config", configuration,
+		"--progress", "plain",
 	}
-	var stdout bytes.Buffer
-	if err := Run(baseArguments, bytes.NewReader(nil), &stdout, &bytes.Buffer{}); err != nil {
+	var stdout, progress bytes.Buffer
+	if err := Run(baseArguments, bytes.NewReader(nil), &stdout, &progress); err != nil {
 		t.Fatal(err)
 	}
+	assertContainsAll(t, progress.String(), []string{
+		"collecting Jobman evidence", "preparing bounded, redacted evidence",
+		"waiting for profile test", "using the deterministic fallback",
+	})
 	report, err := diagnosis.Decode(&stdout, diagnosis.DecodeLimits{})
 	if err != nil {
 		t.Fatal(err)
@@ -336,6 +344,30 @@ func TestParseAIShortcutsAndLogSharing(t *testing.T) {
 	}
 	if _, err := parse([]string{"--ai-logs", "--logs", "none", "demo"}, &bytes.Buffer{}); !errors.Is(err, errUsage) {
 		t.Fatalf("conflicting log options error = %v", err)
+	}
+}
+
+func TestParseProgressModes(t *testing.T) {
+	t.Parallel()
+
+	parsed, err := parse([]string{"demo"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.progress != progressAuto {
+		t.Fatalf("default progress = %q, want %q", parsed.progress, progressAuto)
+	}
+	for _, mode := range []progressMode{progressAuto, progressPlain, progressOff} {
+		parsed, err = parse([]string{"--progress", string(mode), "demo"}, &bytes.Buffer{})
+		if err != nil {
+			t.Fatalf("parse progress %q: %v", mode, err)
+		}
+		if parsed.progress != mode {
+			t.Fatalf("parsed progress = %q, want %q", parsed.progress, mode)
+		}
+	}
+	if _, err = parse([]string{"--progress", "animated", "demo"}, &bytes.Buffer{}); !errors.Is(err, errUsage) {
+		t.Fatalf("invalid progress error = %v, want usage", err)
 	}
 }
 
@@ -438,4 +470,14 @@ profiles:
 	}
 
 	return path
+}
+
+func assertContainsAll(t *testing.T, actual string, expected []string) {
+	t.Helper()
+
+	for _, value := range expected {
+		if !strings.Contains(actual, value) {
+			t.Fatalf("output = %q, want %q", actual, value)
+		}
+	}
 }

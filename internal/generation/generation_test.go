@@ -218,7 +218,7 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	augmenter, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, false)
+	augmenter, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +272,7 @@ func TestReconcileSuppressesGeneratedDuplicateOfDeterministicFinding(t *testing.
 			JSON: encoded, Provider: "openai_compatible", Model: profile.Model, RequestID: request.RequestID,
 		}, marshalErr
 	}}
-	augmenter, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, false)
+	augmenter, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestAugmenterFallsBackOrFailsClosed(t *testing.T) {
 		return provider.Response{}, errors.New("provider included secret-looking implementation detail")
 	}}
 	for _, required := range []bool{false, true} {
-		augmenter, newErr := NewAugmenter(deterministic(t), fake, "test", profile, []string{"metadata"}, required)
+		augmenter, newErr := NewAugmenter(deterministic(t), fake, "test", profile, []string{"metadata"}, required, nil)
 		if newErr != nil {
 			t.Fatal(newErr)
 		}
@@ -319,6 +319,76 @@ func TestAugmenterFallsBackOrFailsClosed(t *testing.T) {
 	}
 }
 
+func TestAugmenterEmitsProgressEvents(t *testing.T) {
+	t.Parallel()
+
+	evidence, err := testevidence.Failed("nonzero_exit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(t, false)
+	failureEvidence := wrapEvidence(t, evidence)
+	for _, test := range []struct {
+		name     string
+		required bool
+		generate func(provider.Request) (provider.Response, error)
+		want     []ProgressEvent
+	}{
+		{
+			name: "validated response",
+			generate: func(request provider.Request) (provider.Response, error) {
+				proposal, marshalErr := json.Marshal(provider.Proposal{
+					Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+					Hypotheses: []provider.Hypothesis{}, RecommendedActions: []string{},
+					MissingEvidence: []provider.MissingEvidence{{
+						Code: "generated.more_context", Description: "More context may distinguish alternatives.",
+					}},
+				})
+				return provider.Response{
+					JSON: proposal, Provider: "openai_compatible", Model: profile.Model, RequestID: request.RequestID,
+				}, marshalErr
+			},
+			want: []ProgressEvent{ProgressPreparing, ProgressWaiting, ProgressValidating},
+		},
+		{
+			name: "optional failure", generate: func(provider.Request) (provider.Response, error) {
+				return provider.Response{}, errors.New("unavailable")
+			},
+			want: []ProgressEvent{ProgressPreparing, ProgressWaiting, ProgressFallback},
+		},
+		{
+			name: "required failure", required: true, generate: func(provider.Request) (provider.Response, error) {
+				return provider.Response{}, errors.New("unavailable")
+			},
+			want: []ProgressEvent{ProgressPreparing, ProgressWaiting},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var events []ProgressEvent
+			fake := &fakeGenerator{profile: profile, generate: test.generate}
+			augmenter, newErr := NewAugmenter(
+				deterministic(t), fake, "test", profile, []string{"metadata"}, test.required,
+				func(event ProgressEvent) { events = append(events, event) },
+			)
+			if newErr != nil {
+				t.Fatal(newErr)
+			}
+			_, diagnoseErr := augmenter.Diagnose(t.Context(), failureEvidence)
+			if test.required && diagnoseErr == nil {
+				t.Fatal("Diagnose() error = nil for required provider failure")
+			}
+			if !test.required && diagnoseErr != nil {
+				t.Fatalf("Diagnose() error = %v", diagnoseErr)
+			}
+			if !slices.Equal(events, test.want) {
+				t.Fatalf("progress events = %v, want %v", events, test.want)
+			}
+		})
+	}
+}
+
 func TestAugmenterReportsClassifiedFailureWithoutItsCause(t *testing.T) {
 	t.Parallel()
 
@@ -332,7 +402,7 @@ func TestAugmenterReportsClassifiedFailureWithoutItsCause(t *testing.T) {
 	fake := &fakeGenerator{profile: profile, generate: func(provider.Request) (provider.Response, error) {
 		return provider.Response{}, provider.NewFailure(provider.FailureResponseIncomplete, errors.New(secret))
 	}}
-	augmenter, err := NewAugmenter(deterministic(t), fake, "test", profile, []string{"metadata"}, true)
+	augmenter, err := NewAugmenter(deterministic(t), fake, "test", profile, []string{"metadata"}, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

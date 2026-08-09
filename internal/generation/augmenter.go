@@ -32,6 +32,7 @@ type Augmenter struct {
 	profile     config.Profile
 	approved    []string
 	required    bool
+	progress    ProgressObserver
 }
 
 // NewAugmenter validates generator capabilities without making a request.
@@ -42,6 +43,7 @@ func NewAugmenter(
 	profile config.Profile,
 	approved []string,
 	required bool,
+	progress ProgressObserver,
 ) (*Augmenter, error) {
 	if base == nil || generator == nil || strings.TrimSpace(profileName) == "" {
 		return nil, errors.New("construct generated diagnosis: base, generator, and profile are required")
@@ -54,7 +56,7 @@ func NewAugmenter(
 
 	return &Augmenter{
 		base: base, generator: generator, profileName: profileName, profile: profile,
-		approved: slices.Clone(approved), required: required,
+		approved: slices.Clone(approved), required: required, progress: progress,
 	}, nil
 }
 
@@ -68,6 +70,7 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 	if err != nil {
 		return diagnosis.Report{}, err
 	}
+	augmenter.notify(ProgressPreparing)
 	approved, err := augmenter.profile.ApprovedClasses(augmenter.approved)
 	if err != nil {
 		return diagnosis.Report{}, err
@@ -78,6 +81,7 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 	}
 	requestContext, cancel := context.WithTimeout(ctx, augmenter.profile.TimeoutDuration())
 	defer cancel()
+	augmenter.notify(ProgressWaiting)
 	response, generateErr := augmenter.generator.Generate(requestContext, prepared.Request)
 	if generateErr != nil {
 		if contextErr := ctx.Err(); contextErr != nil {
@@ -86,6 +90,7 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 
 		return augmenter.handleFailure(report, evidence, prepared, "generator_failed", generatorFailureDetail(generateErr))
 	}
+	augmenter.notify(ProgressValidating)
 	if response.RequestID != prepared.Request.RequestID || response.Provider != augmenter.generator.Name() ||
 		response.Model != augmenter.profile.Model {
 		return augmenter.handleFailure(
@@ -101,6 +106,7 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 		)
 	}
 	if len(proposal.Hypotheses) == 0 && len(proposal.RecommendedActions) == 0 && len(proposal.MissingEvidence) == 0 {
+		augmenter.notify(ProgressFallback)
 		return sealFallback(
 			report, evidence, prepared, "generator_abstained",
 			"model returned no hypotheses, recommended actions, or missing-evidence items",
@@ -124,8 +130,15 @@ func (augmenter *Augmenter) handleFailure(
 
 		return diagnosis.Report{}, fmt.Errorf("generated diagnosis required: %s", code)
 	}
+	augmenter.notify(ProgressFallback)
 
 	return sealFallback(report, evidence, prepared, code, detail)
+}
+
+func (augmenter *Augmenter) notify(event ProgressEvent) {
+	if augmenter.progress != nil {
+		augmenter.progress(event)
+	}
 }
 
 func generatorFailureDetail(err error) string {

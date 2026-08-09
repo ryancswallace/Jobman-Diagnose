@@ -48,6 +48,16 @@ func ExitCode(err error) int {
 // Run parses one invocation, obtains evidence, diagnoses it, and renders the
 // result. It never calls os.Exit.
 func Run(arguments []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return runWithEnvironment(arguments, stdin, stdout, stderr, defaultRuntimeEnvironment())
+}
+
+func runWithEnvironment(
+	arguments []string,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	environment runtimeEnvironment,
+) error {
 	if handled, err := runInspectionCommand(arguments, stdout, stderr); handled {
 		return commandLineError(err)
 	}
@@ -67,7 +77,7 @@ func Run(arguments []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	return runDiagnosis(parsed, selection, stdin, stdout)
+	return runDiagnosis(parsed, selection, stdin, stdout, stderr, environment)
 }
 
 type generatorSelection struct {
@@ -119,9 +129,46 @@ func selectGenerator(parsed options) (generatorSelection, error) {
 }
 
 //nolint:cyclop,gocognit // This command boundary owns acquisition, enrichment, optional generation, exports, and rendering.
-func runDiagnosis(parsed options, selection generatorSelection, stdin io.Reader, stdout io.Writer) error {
+func runDiagnosis(
+	parsed options,
+	selection generatorSelection,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	environment runtimeEnvironment,
+) (resultErr error) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	descriptor := progressDescriptor{}
+	if selection.profile != nil {
+		descriptor = progressDescriptor{
+			profile: selection.name, model: selection.profile.Model, timeout: selection.profile.TimeoutDuration(),
+		}
+	}
+	interactive := false
+	if environment.interactive != nil {
+		interactive = environment.interactive(stderr)
+	}
+	progress := newProgressReporter(
+		parsed.progress, selection.profile != nil, parsed.jsonOutput, interactive,
+		stderr, descriptor, environment.newProgressTiming,
+	)
+	progressClosed := false
+	var progressErr error
+	closeProgress := func() error {
+		if !progressClosed {
+			progressClosed = true
+			progressErr = progress.Close()
+		}
+
+		return progressErr
+	}
+	defer func() {
+		if err := closeProgress(); err != nil && resultErr == nil {
+			resultErr = fmt.Errorf("write AI progress: %w", err)
+		}
+	}()
+	progress.Phase(progressCollecting)
 	evidence, err := obtainEvidence(ctx, parsed, stdin)
 	if err != nil {
 		return err
@@ -133,6 +180,7 @@ func runDiagnosis(parsed options, selection generatorSelection, stdin io.Reader,
 			return fmt.Errorf("export evidence: %w", exportErr)
 		}
 	}
+	progress.Phase(progressPreparing)
 	failureEvidence, err := enrichment.Collect(ctx, evidence)
 	if err != nil {
 		return err
@@ -149,6 +197,7 @@ func runDiagnosis(parsed options, selection generatorSelection, stdin io.Reader,
 		}
 		augmented, augmenterErr := generation.NewAugmenter(
 			deterministic, generator, selection.name, *selection.profile, parsed.share, parsed.requireModel,
+			generationProgressObserver(progress),
 		)
 		if augmenterErr != nil {
 			return augmenterErr
@@ -158,6 +207,9 @@ func runDiagnosis(parsed options, selection generatorSelection, stdin io.Reader,
 	report, err := diagnostician.Diagnose(ctx, failureEvidence)
 	if err != nil {
 		return err
+	}
+	if err := closeProgress(); err != nil {
+		return fmt.Errorf("write AI progress: %w", err)
 	}
 	if parsed.supportBundle != "" {
 		bundle, bundleErr := supportbundle.New(failureEvidence, report, supportbundle.Build{
@@ -228,6 +280,7 @@ type options struct {
 	profile         string
 	requireModel    bool
 	deterministic   bool
+	progress        progressMode
 	diagnosisConfig string
 	supportBundle   string
 	bundleDryRun    bool
@@ -238,7 +291,10 @@ type options struct {
 func (parsed options) aiEnabled() bool { return parsed.ai || parsed.aiLogs || parsed.profile != "" }
 
 func parse(arguments []string, stderr io.Writer) (options, error) {
-	parsed := options{request: diagnostic.EvidenceRequest{Logs: diagnostic.LogsMetadata}}
+	parsed := options{
+		request:  diagnostic.EvidenceRequest{Logs: diagnostic.LogsMetadata},
+		progress: progressAuto,
+	}
 	flags := flag.NewFlagSet("jobman-diagnose", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	var usageWriteErr error
@@ -309,6 +365,7 @@ func registerFlags(flags *flag.FlagSet, parsed *options) {
 	flags.StringVar(&parsed.profile, "profile", "", "use a named AI profile instead of the configured default")
 	flags.Var(&parsed.share, "share", "approve an additional disclosure class; log_content collects a live tail")
 	flags.BoolVar(&parsed.requireModel, "require-model", false, "fail rather than degrade when generated analysis is unavailable")
+	flags.Var((*progressModeValue)(&parsed.progress), "progress", "show AI progress as auto, plain, or off")
 }
 
 func normalizeAIOptions(parsed *options) error {

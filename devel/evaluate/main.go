@@ -78,7 +78,7 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 			return approvalErr
 		}
 		augmenter, augmenterErr := generation.NewAugmenter(
-			deterministic, generator, profileName, profile, approved, !parsed.allowFallback,
+			deterministic, generator, profileName, profile, approved, !parsed.allowFallback, nil,
 		)
 		if augmenterErr != nil {
 			return augmenterErr
