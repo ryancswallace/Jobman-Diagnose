@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -179,6 +180,9 @@ func readRepositoryFile(t *testing.T, path string) string {
 
 func assertExecutable(t *testing.T, name string) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
 	info, err := os.Stat(name)
 	if err != nil {
 		t.Fatal(err)
