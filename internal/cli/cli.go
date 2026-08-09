@@ -182,7 +182,7 @@ func runDiagnosis(parsed options, selection generatorSelection, stdin io.Reader,
 		if parsed.jsonOutput {
 			return diagnosis.Encode(destination, report)
 		}
-		if err := presentation.Human(destination, report); err != nil {
+		if err := presentation.Human(destination, report, failureEvidence); err != nil {
 			return err
 		}
 		if parsed.supportBundle != "" {

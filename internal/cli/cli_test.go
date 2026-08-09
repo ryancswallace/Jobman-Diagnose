@@ -138,8 +138,8 @@ func TestRunHumanOutputAndUsage(t *testing.T) {
 	if err := Run([]string{"--from-evidence", path}, bytes.NewReader(nil), &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "Diagnosis:") || !strings.Contains(stdout.String(), "Retry:") ||
-		!strings.Contains(stdout.String(), "NEXT ACTIONS") {
+	if !strings.Contains(stdout.String(), "Diagnosis\n") || !strings.Contains(stdout.String(), "Retry\n") ||
+		!strings.Contains(stdout.String(), "Recommended next steps\n") {
 		t.Fatalf("human report = %q", stdout.String())
 	}
 	if err := Run(nil, bytes.NewReader(nil), &stdout, &stderr); !errors.Is(err, errUsage) || ExitCode(err) != 2 {

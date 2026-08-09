@@ -84,7 +84,7 @@ func testCopiedFixture(t *testing.T, root string, fixture entry, diagnostician d
 		t.Fatal(err)
 	}
 	var human bytes.Buffer
-	if err := presentation.Human(&human, report); err != nil {
+	if err := presentation.Human(&human, report, failureEvidence); err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains(human.Bytes(), []byte(forbiddenFixtureCanary)) {
