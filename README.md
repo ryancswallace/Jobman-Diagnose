@@ -142,6 +142,18 @@ jobman diagnose config show
 jobman diagnose profiles
 ```
 
+Interactive human-output runs show a delayed AI progress indicator on standard
+error, including the current phase, elapsed phase time, selected profile/model,
+provider timeout while waiting, and a cancellation reminder. Fast calls finish
+before the 300 ms delay without flicker. Automatic progress is silent for JSON
+and redirected output. Use `--progress plain` for durable milestone lines or
+`--progress off` to suppress progress explicitly:
+
+```console
+jobman diagnose --ai --progress plain JOB
+jobman diagnose --ai --progress off JOB
+```
+
 The initial adapters are an absolute local command bridge, an exact
 OpenAI-compatible Chat Completions endpoint, and local Ollama `/api/chat`.
 Endpoints are never discovered or changed, HTTP proxies are not used,

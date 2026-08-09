@@ -117,6 +117,13 @@ warning on a sealed deterministic report unless `--require-model` was set.
 Cancellation from the caller always stops the operation rather than degrading
 to a fallback report.
 
+AI progress is rendered only by the CLI and always on standard error. Automatic
+progress is disabled for JSON and non-interactive output. It contains a
+controlled phase plus bounded, terminal-sanitized profile/model labels and the
+configured timeout; it never contains endpoints, credentials, evidence,
+prompts, provider responses, or log bytes. Generation and provider packages
+emit typed lifecycle events but cannot write to process-global streams.
+
 ## Files
 
 `--output`, `--export-evidence`, and `--support-bundle` require a path other

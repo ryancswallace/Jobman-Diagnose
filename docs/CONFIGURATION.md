@@ -13,6 +13,26 @@ boundaries; environment evidence contains names and roles but never values or
 secret-reference identifiers. AI never activates merely because a
 configuration or credential exists.
 
+## AI progress output
+
+`--progress` accepts `auto`, `plain`, or `off` and defaults to `auto`. Progress
+is emitted only when an AI profile is selected and always goes to standard
+error, leaving report output on standard output unchanged.
+
+- `auto` starts a spinner after 300 ms only when standard error is an
+  interactive terminal and the report is human-readable. It shows evidence
+  collection, bounded evidence preparation, provider waiting, response
+  validation, and optional deterministic fallback. The provider-waiting phase
+  includes elapsed time, the profile/model, configured timeout, and a `Ctrl-C`
+  reminder.
+- `plain` writes one non-animated line for each distinct phase. It is explicit,
+  so it also works with `--json` or redirected output for CI troubleshooting.
+- `off` always suppresses progress.
+
+Automatic JSON and non-interactive runs remain silent. Profile and model labels
+are bounded and stripped of terminal control characters; progress never shows
+an endpoint, credential, evidence value, prompt, response, or log content.
+
 ## Configuration paths and precedence
 
 AI mode resolves its configuration in this order:
@@ -164,12 +184,12 @@ credential:
   file: /absolute/private/path/provider-token
 ```
 
-Credential files must be regular, no larger than 64 KiB, and grant no group or
-other permission bits. A final newline is removed. Literal token, key, header,
-or password fields are unknown and therefore rejected. URLs with user
-information, query strings, or fragments are also rejected. Provider response
-bodies and command stderr are never copied into errors because they may echo a
-credential or evidence.
+Credential files must be regular and no larger than 64 KiB. On Unix-like
+systems they must grant no group or other permission bits. A final newline is
+removed. Literal token, key, header, or password fields are unknown and
+therefore rejected. URLs with user information, query strings, or fragments
+are also rejected. Provider response bodies and command stderr are never copied
+into errors because they may echo a credential or evidence.
 
 ## Provider profiles
 

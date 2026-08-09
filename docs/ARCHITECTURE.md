@@ -115,6 +115,13 @@ records the projection as disclosed even if transport or proposal validation
 fails. Optional provider-stage failure reseals the complete deterministic
 report with a controlled warning. `--require-model` instead returns an error.
 
+The generation orchestrator also emits typed preparation, provider-waiting,
+response-validation, and fallback lifecycle events. These events carry no
+evidence or generated content. The CLI is the only renderer: it combines them
+with evidence-collection state for delayed interactive animation or explicit
+plain milestones on standard error. Engines and provider adapters never write
+progress directly.
+
 ## Extension seams
 
 The public `diagnosis.Diagnostician` interface accepts `FailureEvidence`

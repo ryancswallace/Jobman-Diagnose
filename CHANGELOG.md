@@ -40,6 +40,9 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 - Added per-user diagnosis configuration discovery, a configured default
   profile, `--ai`/`-a`, `--profile`, and `--ai-logs`, with metadata implied by
   AI activation and live log-tail collection implied by log-content approval.
+- Added delayed interactive AI progress with elapsed phase time, provider
+  timeout and cancellation context, plus `--progress auto|plain|off`; automatic
+  JSON and redirected output remain silent.
 - Added `config paths`, `config validate`, `config show`, and `profiles`
   inspection commands that never resolve credentials or invoke a provider.
 - Added typed execution-context disclosure for direct executable/argument
@@ -64,6 +67,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Honor Windows file-mode semantics for exports, credentials, and executable
+  validation, and preserve byte-exact evidence fixtures across Windows checkouts.
 - Pin coordinated GitHub Actions jobs to the exact compatible Jobman core
   revision so the unreleased sibling module always contains evidence schema 1.
 - Distinguish terminal completion reasons such as `failure_limit` from an
