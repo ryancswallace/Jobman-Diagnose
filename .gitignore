@@ -9,10 +9,14 @@ coverage.*
 .env
 .env.*
 !.env.example
+/.devcontainer/.env.local
 /diagnosis*.yml
 /diagnosis*.yaml
 !/diagnosis.example.yml
 !/diagnosis.example.yaml
+/evidence*.json
+/report*.json
+/diagnosis-support*.tar.gz
 
 # Workspace and editor files
 go.work
