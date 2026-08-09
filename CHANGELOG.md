@@ -1,0 +1,78 @@
+# Changelog
+
+All notable user-visible changes to `jobman-diagnose` are documented here. The
+format follows [Keep a Changelog], and releases use [Semantic Versioning].
+
+## [Unreleased]
+
+### Added
+
+- Added bounded live evidence acquisition through `jobman show evidence` and
+  offline import of raw evidence or the core CLI envelope.
+- Added deterministic diagnoses for direct launch failures, timeouts,
+  cancellation, ownership loss, signals, nonzero exits, log degradation,
+  notification failures, repeated failures, and conservative target-log
+  signatures.
+- Added sealed diagnosis report schema 1 with controlled findings, confidence,
+  citations, actions, retry advice, limitations, provenance, and disclosure.
+- Added human and JSON output plus private, atomic, no-overwrite evidence and
+  report exports.
+- Added explicit generated augmentation with strict schema-2 profile configuration,
+  per-class CLI disclosure approval, exact projection manifests, bounded
+  request/proposal protocols, semantic citation validation, contradiction
+  handling, and deterministic fallback.
+- Added an absolute local command bridge, a strict OpenAI-compatible Chat
+  Completions adapter, and a loopback-only Ollama adapter without adding a
+  provider SDK.
+- Added environment/private-file credential references, transport locality
+  enforcement, proxy-free and redirect-free HTTP, and `--require-model`.
+- Added copied Jobman evidence schema 1 fixtures and offline compatibility
+  tests, including a maximum-budget and secret-canary case.
+- Added deterministic use of typed process resource observations and exact
+  store-local failure-fingerprint history, including cited recurrence
+  findings, partial/truncated-history warnings, and history-aware retry advice.
+- Added pinned standalone development tools, vulnerability and workflow checks,
+  native race CI, supported-architecture builds, and a GoReleaser archive,
+  checksum, and SBOM configuration.
+- Added per-user diagnosis configuration discovery, a configured default
+  profile, `--ai`/`-a`, `--profile`, and `--ai-logs`, with metadata implied by
+  AI activation and live log-tail collection implied by log-content approval.
+- Added `config paths`, `config validate`, `config show`, and `profiles`
+  inspection commands that never resolve credentials or invoke a provider.
+- Added typed execution-context disclosure for direct executable/argument
+  vectors, filesystem paths, resolved executables, and value-free environment
+  names, enabled by AI activation, plus an exact deterministic diagnosis for
+  the standard `false` utility.
+- Added a sealed analysis-evidence wrapper with deterministic exact-range
+  Python, Go, JVM, and compiler enrichment; reports expose collector/analyzer
+  provenance and models receive enrichment only with its approved source log.
+- Added current-policy-aware retry reasons, stable diagnosis grouping
+  fingerprints, generator descriptors, and allowlisted read-only Jobman
+  argument-vector actions.
+- Added deterministic private support bundles with dry-run inventories,
+  per-member hashes, capability/build metadata, and no-overwrite creation.
+- Added a checked-in evaluation corpus and deterministic/live runner with
+  separate correctness and safety metrics, plus decoder fuzz targets and
+  scheduled CodeQL/fuzz workflows.
+- Restricted generated findings to a host-owned hypothesis taxonomy included
+  in every sealed request.
+- Added keyless checksum signing, SBOM packaging, build metadata, and an
+  attested draft-release workflow that rejects development module replacements.
+
+### Fixed
+
+- Made `--help` a successful informational invocation instead of returning the
+  command-usage exit status.
+- Honor each generation profile's configured timeout while waiting for HTTP
+  response headers, allowing non-streaming local inference to run beyond the
+  previous fixed 30-second transport limit.
+- Report stable, nonsecret provider failure classifications in required-model
+  errors and deterministic fallback warnings without exposing response bodies,
+  generated content, evidence, or credentials.
+- Use greedy generation and concise proposal guidance for OpenAI-compatible
+  providers, reducing long or incomplete outputs from smaller local models.
+- Suppress generated findings that merely duplicate an existing deterministic
+  finding with the same citations.
+
+[Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
+[Semantic Versioning]: https://semver.org/spec/v2.0.0.html
