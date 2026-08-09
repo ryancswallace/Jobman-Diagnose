@@ -5,6 +5,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-09
+
 ### Added
 
 - Added bounded live evidence acquisition through `jobman show evidence` and
@@ -100,3 +102,5 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0

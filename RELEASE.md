@@ -1,18 +1,18 @@
 # Release process
 
-Jobman Diagnose has not published its first release. Releases are deliberately
-maintainer-triggered semantic-version tags rather than automatic releases from
-every merge. This leaves an explicit compatibility and live-provider
-evaluation gate while the evidence and generation contracts mature.
+Jobman Diagnose releases are deliberately maintainer-triggered semantic-version
+tags rather than automatic releases from every merge. This preserves an
+explicit compatibility and live-provider evaluation gate while the evidence
+and generation contracts mature. The initial pre-v1 release is v0.1.0.
 
-## First-release prerequisites
+## Release prerequisites
 
 Jobman v1.4.0 is the immutable core compatibility baseline: it publishes
 diagnostic evidence schema 1, the module requires its tag directly, copied
 fixtures record that origin and exact hashes, and continuous integration builds
 without a sibling checkout.
 
-Before creating the first companion tag:
+Before creating a companion tag:
 
 1. Confirm `CHANGELOG.md`, `docs/COMPATIBILITY.md`, `SECURITY.md`, and
    `docs/INSTALLATION.md` describe the final supported versions and
@@ -65,13 +65,43 @@ GitHub. The protected Release workflow:
 
 Inspect the draft before publishing. Verify archive contents, an installation
 on each operating-system family, checksums, the Sigstore bundle, SBOMs,
-attestations, generated release notes, and the `jobman-diagnose version` output.
+attestations, generated release notes, and the `jobman-diagnose --version`
+output.
 Publish only after those artifacts agree with the tag and commit.
 
 Generated analysis remains explicit opt-in. Do not describe an adapter as
 release-supported until its structured-output behavior, locality boundary,
 failure behavior, and disclosure manifest pass the provider security and
 compatibility gate.
+
+## Verify published artifacts
+
+Download the archive, checksum manifest, and Sigstore bundle from the same
+release. For v0.1.0 on Apple silicon, for example:
+
+```console
+gh release download v0.1.0 \
+  --repo ryancswallace/Jobman-Diagnose \
+  --pattern 'jobman-diagnose_0.1.0_darwin_arm64.tar.gz' \
+  --pattern 'jobman-diagnose_0.1.0_checksums.txt' \
+  --pattern 'jobman-diagnose_0.1.0_checksums.txt.sigstore.json'
+cosign verify-blob \
+  --bundle jobman-diagnose_0.1.0_checksums.txt.sigstore.json \
+  --certificate-identity \
+    'https://github.com/ryancswallace/Jobman-Diagnose/.github/workflows/release.yml@refs/tags/v0.1.0' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  jobman-diagnose_0.1.0_checksums.txt
+grep '  jobman-diagnose_0.1.0_darwin_arm64.tar.gz$' \
+  jobman-diagnose_0.1.0_checksums.txt | shasum -a 256 -c -
+gh attestation verify \
+  jobman-diagnose_0.1.0_darwin_arm64.tar.gz \
+  --repo ryancswallace/Jobman-Diagnose
+```
+
+Use `sha256sum -c -` instead of `shasum -a 256 -c -` on systems that provide
+the GNU checksum tool. Verification must use the canonical, case-sensitive repository
+identity shown above. Substitute another archive name from the installation
+guide when testing a different platform.
 
 ## Post-release
 
