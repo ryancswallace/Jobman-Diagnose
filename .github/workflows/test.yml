@@ -18,30 +18,18 @@ jobs:
     name: Quality and race tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: jobman-diagnose
     steps:
-      - name: Checkout coordinated Jobman core
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ryancswallace/jobman
-          ref: 44b90e597264534f3b64486e1d7b8ff2b5c13e15 # Diagnostic evidence schema 1
-          path: jobman
-          persist-credentials: false
-
-      - name: Checkout companion
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: jobman-diagnose
           persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: jobman-diagnose/go.version
+          go-version-file: go.version
           check-latest: true
-          cache-dependency-path: jobman-diagnose/go.sum
+          cache-dependency-path: go.sum
 
       - name: Verify module files
         run: make mod-check
@@ -62,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-profile
-          path: jobman-diagnose/coverage.txt
+          path: coverage.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -82,30 +70,18 @@ jobs:
         os:
           - macos-latest
           - windows-latest
-    defaults:
-      run:
-        working-directory: jobman-diagnose
     steps:
-      - name: Checkout coordinated Jobman core
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ryancswallace/jobman
-          ref: 44b90e597264534f3b64486e1d7b8ff2b5c13e15 # Diagnostic evidence schema 1
-          path: jobman
-          persist-credentials: false
-
-      - name: Checkout companion
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: jobman-diagnose
           persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: jobman-diagnose/go.version
+          go-version-file: go.version
           check-latest: true
-          cache-dependency-path: jobman-diagnose/go.sum
+          cache-dependency-path: go.sum
 
       - name: Run native race tests
         run: go test -race -shuffle=on ./...
@@ -139,30 +115,18 @@ jobs:
             goarch: arm64
           - goos: windows
             goarch: "386"
-    defaults:
-      run:
-        working-directory: jobman-diagnose
     steps:
-      - name: Checkout coordinated Jobman core
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ryancswallace/jobman
-          ref: 44b90e597264534f3b64486e1d7b8ff2b5c13e15 # Diagnostic evidence schema 1
-          path: jobman
-          persist-credentials: false
-
-      - name: Checkout companion
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: jobman-diagnose
           persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: jobman-diagnose/go.version
+          go-version-file: go.version
           check-latest: true
-          cache-dependency-path: jobman-diagnose/go.sum
+          cache-dependency-path: go.sum
 
       - name: Compile release architecture
         run: go build -trimpath -mod=readonly ./...
@@ -175,31 +139,19 @@ jobs:
     name: Release configuration
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: jobman-diagnose
     steps:
-      - name: Checkout coordinated Jobman core
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ryancswallace/jobman
-          ref: 44b90e597264534f3b64486e1d7b8ff2b5c13e15 # Diagnostic evidence schema 1
-          path: jobman
-          persist-credentials: false
-
-      - name: Checkout companion
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          path: jobman-diagnose
           persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: jobman-diagnose/go.version
+          go-version-file: go.version
           check-latest: true
-          cache-dependency-path: jobman-diagnose/go.sum
+          cache-dependency-path: go.sum
 
       - name: Validate and compile release matrix
         run: make release-check release-build
