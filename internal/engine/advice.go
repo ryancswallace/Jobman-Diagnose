@@ -169,14 +169,19 @@ func existingPolicy(view evidenceView) diagnosis.ExistingPolicy {
 	if len(view.byCode[diagnostic.CodeRuntimeNextRunAt]) != 0 {
 		return diagnosis.PolicyBackoff
 	}
-	for _, item := range view.byCode[diagnostic.CodeRuntimeWaitingReason] {
-		var reason string
-		if json.Unmarshal(item.Value, &reason) == nil && reason != "" {
-			return diagnosis.PolicyWaitingPrerequisite
-		}
-	}
-	if view.evidence.Subject.Phase != "completed" {
+	switch view.evidence.Subject.Phase {
+	case "waiting":
+		return diagnosis.PolicyWaitingPrerequisite
+	case "submitting", "queued", "starting", "running", "active", "backoff", "stopping":
 		return diagnosis.PolicyScheduled
+	case "paused":
+		return diagnosis.PolicyUnknown
+	case "completed":
+		// Completion reasons are also retained in waiting_reason. Inspect the
+		// immutable policy and counters below instead of misclassifying terminal
+		// failure_limit or run_limit reasons as unmet prerequisites.
+	default:
+		return diagnosis.PolicyUnknown
 	}
 	policyItems := view.byCode[diagnostic.CodeExecutionPolicy]
 	if len(policyItems) == 0 {

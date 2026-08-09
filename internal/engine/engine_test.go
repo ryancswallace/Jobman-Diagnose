@@ -221,6 +221,42 @@ func TestEngineSemanticFingerprintIsStableAcrossEvidenceInputOrder(t *testing.T)
 	}
 }
 
+func TestExistingPolicyUsesPhaseBeforeWaitingReason(t *testing.T) {
+	t.Parallel()
+
+	waitingReason, err := diagnostic.JSONValue("failure_limit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name  string
+		phase string
+		want  diagnosis.ExistingPolicy
+	}{
+		{name: "terminal completion reason", phase: "completed", want: diagnosis.PolicyUnknown},
+		{name: "unmet prerequisite", phase: "waiting", want: diagnosis.PolicyWaitingPrerequisite},
+		{name: "queued run", phase: "queued", want: diagnosis.PolicyScheduled},
+		{name: "legacy active run", phase: "active", want: diagnosis.PolicyScheduled},
+		{name: "paused job", phase: "paused", want: diagnosis.PolicyUnknown},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			view := evidenceView{
+				evidence: diagnostic.Evidence{Subject: diagnostic.Subject{Phase: test.phase}},
+				byCode: map[string][]diagnostic.Item{
+					diagnostic.CodeRuntimeWaitingReason: {{
+						ID: "ev:runtime:waiting_reason", Code: diagnostic.CodeRuntimeWaitingReason,
+						Value: waitingReason,
+					}},
+				},
+			}
+			if got := existingPolicy(view); got != test.want {
+				t.Fatalf("existingPolicy(%s) = %q, want %q", test.phase, got, test.want)
+			}
+		})
+	}
+}
+
 func evidenceWithResourceAndHistory(t *testing.T) diagnostic.Evidence {
 	t.Helper()
 
