@@ -39,6 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ryancswallace/jobman
+          ref: 44b90e597264534f3b64486e1d7b8ff2b5c13e15 # Diagnostic evidence schema 1
           path: jobman
           persist-credentials: false
 
