@@ -9,15 +9,23 @@ GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.6.0
 GORELEASER_VERSION ?= v2.17.0
+SYFT_VERSION ?= v1.46.0
+CSPELL_VERSION ?= 10.0.1
+
+DOCKER ?= docker
+DOCKER_PROGRESS ?= plain
 
 GOLANGCI_LINT ?= $(BIN_DIR)/golangci-lint
 ACTIONLINT ?= $(BIN_DIR)/actionlint
 GOVULNCHECK ?= $(BIN_DIR)/govulncheck
 GORELEASER ?= $(BIN_DIR)/goreleaser
+SYFT ?= $(BIN_DIR)/syft
+SYFT_VERSION_FILE := $(BIN_DIR)/.syft-$(SYFT_VERSION)
 
 FUZZ_PACKAGE ?= ./diagnosis
 FUZZ_TARGET ?= FuzzDecodeReport
 FUZZ_TIME ?= 10s
+COVERAGE_MIN ?= 70
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || printf '%s' dev)
 COMMIT ?= $(shell commit_value=$$(git rev-parse --verify HEAD 2>/dev/null) && printf '%s' "$$commit_value" || printf '%s' unknown)
@@ -30,6 +38,20 @@ LDFLAGS := -s -w -buildid= \
 .PHONY: help
 help: ## Show available targets.
 	@awk 'BEGIN {FS = ":.*## "; printf "Usage: make <target>\n\nTargets:\n"} /^[a-zA-Z0-9_.-]+:.*## / {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+.PHONY: all ci
+all: check ## Run the complete local validation gate.
+ci: check ## Alias for the complete continuous-integration gate.
+
+.PHONY: versions
+versions: ## Show the selected project and development-tool versions.
+	@printf 'Go:              %s\n' '$(GO_VERSION)'
+	@printf 'golangci-lint:   %s\n' '$(GOLANGCI_LINT_VERSION)'
+	@printf 'actionlint:      %s\n' '$(ACTIONLINT_VERSION)'
+	@printf 'govulncheck:     %s\n' '$(GOVULNCHECK_VERSION)'
+	@printf 'GoReleaser:     %s\n' '$(GORELEASER_VERSION)'
+	@printf 'Syft:           %s\n' '$(SYFT_VERSION)'
+	@printf 'cspell:         %s\n' '$(CSPELL_VERSION)'
 
 .PHONY: setup
 setup: go-version-check tools download ## Install pinned tools and download modules.
@@ -44,7 +66,7 @@ go-version-check: ## Verify that the exact pinned Go toolchain is active.
 	fi
 
 .PHONY: tools
-tools: tool-golangci-lint tool-actionlint tool-govulncheck tool-goreleaser ## Install all pinned development tools.
+tools: tool-golangci-lint tool-actionlint tool-govulncheck tool-goreleaser tool-syft ## Install all pinned development tools.
 
 .PHONY: tool-golangci-lint
 tool-golangci-lint:
@@ -84,6 +106,16 @@ tool-goreleaser:
 		mkdir -p $(BIN_DIR); \
 		GOBIN=$(abspath $(BIN_DIR)) $(GO) install \
 			github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION); \
+	fi
+
+.PHONY: tool-syft
+tool-syft:
+	@if ! test -x '$(SYFT)' || ! test -f '$(SYFT_VERSION_FILE)'; then \
+		echo "Installing Syft $(SYFT_VERSION) into $(BIN_DIR)/"; \
+		mkdir -p $(BIN_DIR); \
+		GOBIN=$(abspath $(BIN_DIR)) $(GO) install \
+			github.com/anchore/syft/cmd/syft@$(SYFT_VERSION); \
+		touch '$(SYFT_VERSION_FILE)'; \
 	fi
 
 .PHONY: download
@@ -128,6 +160,38 @@ fuzz: ## Fuzz one decoder target for a bounded duration.
 coverage: ## Write an atomic coverage profile to coverage.txt.
 	$(GO) test -race -shuffle=on -covermode=atomic -coverpkg=./... -coverprofile=coverage.txt ./...
 
+.PHONY: coverage-check
+coverage-check: coverage ## Enforce the aggregate statement coverage floor.
+	$(GO) tool cover -func=coverage.txt | awk -v minimum='$(COVERAGE_MIN)' -f devel/check-coverage.awk
+
+.PHONY: docs-check
+docs-check: ## Verify repository-relative links in Markdown documentation.
+	@if git --no-pager grep -nI -E '[[:blank:]]+$$' -- '*.md'; then \
+		echo 'Markdown files contain trailing whitespace.' >&2; \
+		exit 1; \
+	fi
+	$(GO) run ./devel/docscheck -root .
+
+.PHONY: spellcheck
+spellcheck: ## Spell-check the repository with a pinned cspell version.
+	@if command -v cspell >/dev/null 2>&1 \
+		&& [ "$$(cspell --version)" = '$(CSPELL_VERSION)' ]; then \
+		cspell lint --dot .; \
+	elif command -v npx >/dev/null 2>&1; then \
+		npx --yes cspell@$(CSPELL_VERSION) lint --dot .; \
+	elif $(DOCKER) info >/dev/null 2>&1; then \
+		$(DOCKER) build --progress=$(DOCKER_PROGRESS) \
+			--file Dockerfile.cspell \
+			--build-arg CSPELL_VERSION=$(CSPELL_VERSION) \
+			--output type=cacheonly .; \
+	else \
+		echo 'cspell requires cspell $(CSPELL_VERSION), npx, or a running Docker daemon.' >&2; \
+		exit 2; \
+	fi
+
+.PHONY: docs
+docs: docs-check spellcheck ## Validate authored documentation.
+
 .PHONY: evaluate
 evaluate: ## Run the checked-in deterministic diagnosis quality corpus.
 	$(GO) run ./devel/evaluate --corpus testdata/evaluation/manifest.json --summary
@@ -136,6 +200,10 @@ evaluate: ## Run the checked-in deterministic diagnosis quality corpus.
 build: ## Build the companion binary.
 	mkdir -p $(BIN_DIR)
 	$(GO) build -trimpath -mod=readonly -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/jobman-diagnose ./cmd/jobman-diagnose
+
+.PHONY: install
+install: ## Install the companion with the active Go toolchain.
+	$(GO) install -trimpath -mod=readonly -ldflags '$(LDFLAGS)' ./cmd/jobman-diagnose
 
 .PHONY: cross-build
 cross-build: ## Compile every supported release OS and architecture.
@@ -155,8 +223,18 @@ release-check: tool-goreleaser ## Validate the release configuration.
 release-build: tool-goreleaser ## Compile every target declared to GoReleaser.
 	$(GORELEASER) build --snapshot --clean
 
+.PHONY: snapshot
+snapshot: tool-goreleaser tool-syft ## Build a complete local release snapshot without publishing.
+	PATH='$(abspath $(BIN_DIR))':$$PATH \
+		$(GORELEASER) release --snapshot --clean --parallelism 2 --skip=sign
+	@test -n "$$(find dist -maxdepth 1 -type f -name 'jobman-diagnose_*_checksums.txt' -print -quit)"
+
+.PHONY: clean
+clean: ## Remove build, release, and test artifacts.
+	rm -rf $(BIN_DIR) dist coverage.txt
+
 .PHONY: quick-check
-quick-check: go-version-check mod-check format-check lint test build ## Run the fast local validation loop.
+quick-check: go-version-check mod-check format-check lint test docs build ## Run the fast local validation loop.
 
 .PHONY: check
-check: go-version-check mod-check format-check lint workflow-check vulncheck test evaluate cross-build release-check release-build build ## Run the complete local validation gate.
+check: go-version-check mod-check format-check lint workflow-check vulncheck coverage-check evaluate docs cross-build release-check release-build build ## Run the complete local validation gate.
