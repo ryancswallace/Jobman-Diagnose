@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.26"
+  tests: true
+  relative-path-mode: gomod
+  modules-download-mode: readonly
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/ryancswallace/jobman-diagnose
+
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - bodyclose
+    - copyloopvar
+    - cyclop
+    - errcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - gocognit
+    - gocritic
+    - godot
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+    - usetesting
+
+  settings:
+    cyclop:
+      max-complexity: 15
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    gocognit:
+      min-complexity: 20
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

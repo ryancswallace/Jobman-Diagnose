@@ -1,0 +1,21 @@
+# Build and test output
+bin/
+dist/
+*.test
+*.out
+coverage.*
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+/diagnosis*.yml
+/diagnosis*.yaml
+!/diagnosis.example.yml
+!/diagnosis.example.yaml
+
+# Workspace and editor files
+go.work
+go.work.sum
+.DS_Store
+*.code-workspace

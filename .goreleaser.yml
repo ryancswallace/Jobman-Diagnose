@@ -1,0 +1,97 @@
+---
+version: 2
+
+project_name: jobman-diagnose
+
+before:
+  hooks:
+    - go mod download
+    - go mod verify
+
+builds:
+  - id: jobman-diagnose
+    main: ./cmd/jobman-diagnose
+    binary: jobman-diagnose
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+      - -mod=readonly
+    ldflags:
+      - -s -w -buildid=
+      - -X github.com/ryancswallace/jobman-diagnose/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/ryancswallace/jobman-diagnose/internal/buildinfo.Commit={{ .FullCommit }}
+      - -X github.com/ryancswallace/jobman-diagnose/internal/buildinfo.Date={{ .Date }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    ignore:
+      - goos: darwin
+        goarch: "386"
+
+archives:
+  - id: jobman-diagnose
+    ids:
+      - jobman-diagnose
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{- with .Arm }}v{{ . }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+      - RELEASE.md
+      - SECURITY.md
+      - docs/*.md
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+sboms:
+  - id: archives
+    artifacts: archive
+
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - --yes
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^chore(?:\([^)]*\))?:'
+      - '^ci(?:\([^)]*\))?:'
+      - '^docs(?:\([^)]*\))?:'
+      - '^test(?:\([^)]*\))?:'
+      - '^Merge '
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot.{{ .ShortCommit }}"
+
+release:
+  github:
+    owner: ryancswallace
+    name: jobman-diagnose
+  draft: true
+  prerelease: auto
+  footer: |
+    **Install and verify:** see [RELEASE.md](https://github.com/ryancswallace/jobman-diagnose/blob/main/RELEASE.md).

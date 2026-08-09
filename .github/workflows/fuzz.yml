@@ -1,0 +1,64 @@
+---
+name: Fuzz
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "29 2 * * 3"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jobman-diagnose-fuzz-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: ./diagnosis
+            target: FuzzDecodeReport
+          - package: ./provider
+            target: FuzzDecodeProposal
+          - package: ./internal/coreclient
+            target: FuzzDecodeEvidence
+    steps:
+      - name: Checkout coordinated Jobman core
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryancswallace/jobman
+          path: jobman
+          persist-credentials: false
+
+      - name: Checkout companion
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: jobman-diagnose
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: jobman-diagnose/go.version
+          check-latest: true
+          cache-dependency-path: jobman-diagnose/go.sum
+
+      - name: Fuzz decoder
+        run: >-
+          make fuzz
+          FUZZ_PACKAGE=${{ matrix.package }}
+          FUZZ_TARGET=${{ matrix.target }}
+          FUZZ_TIME=30s
+        working-directory: jobman-diagnose
