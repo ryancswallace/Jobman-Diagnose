@@ -135,7 +135,6 @@ jobs:
         run: |
           formula=generated-formula/jobman-diagnose.rb
           test -s "${formula}"
-          grep -Fq "version \"${RELEASE_TAG#v}\"" "${formula}"
           grep -Fq "/releases/download/${RELEASE_TAG}/" "${formula}"
           install -m 0644 "${formula}" homebrew-tap/Formula/jobman-diagnose.rb
           cd homebrew-tap

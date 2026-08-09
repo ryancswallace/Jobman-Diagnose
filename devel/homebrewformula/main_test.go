@@ -31,7 +31,6 @@ func TestRun(t *testing.T) {
 		`# typed: strict`,
 		`# frozen_string_literal: true`,
 		`class JobmanDiagnose < Formula`,
-		`version "1.2.3"`,
 		`depends_on "jobman"`,
 		`depends_on :macos`,
 		"/releases/download/v1.2.3/jobman-diagnose_1.2.3_darwin_amd64.tar.gz",
@@ -44,6 +43,9 @@ func TestRun(t *testing.T) {
 		if !strings.Contains(string(formula), want) {
 			t.Errorf("formula does not contain %q", want)
 		}
+	}
+	if strings.Contains(string(formula), `version "1.2.3"`) {
+		t.Error("formula contains a redundant explicit version")
 	}
 }
 

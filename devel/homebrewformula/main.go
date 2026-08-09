@@ -138,7 +138,6 @@ var formulaTemplate = template.Must(template.New("formula").Parse(`# typed: stri
 class JobmanDiagnose < Formula
   desc "Deterministic and AI-assisted diagnostics for Jobman failures"
   homepage "https://github.com/ryancswallace/Jobman-Diagnose"
-  version "{{ .Version }}"
   license "MIT"
 
   depends_on "jobman"
