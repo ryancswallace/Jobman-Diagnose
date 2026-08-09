@@ -1,0 +1,59 @@
+changed-files-labels-limit: "8"
+max-files-changed: "200"
+
+go:
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.go", "go.mod", "go.sum", "go.version"]
+cli:
+  - changed-files:
+      - any-glob-to-any-file: ["cmd/**", "internal/cli/**", "internal/presentation/**"]
+api:
+  - changed-files:
+      - any-glob-to-any-file: ["diagnosis/**", "provider/*.go", "provider/*.json"]
+configuration:
+  - changed-files:
+      - any-glob-to-any-file: ["internal/config/**", "docs/CONFIGURATION.md"]
+providers:
+  - changed-files:
+      - any-glob-to-any-file: ["provider/**", "internal/generation/**", "internal/providerhttp/**"]
+evaluation:
+  - changed-files:
+      - any-glob-to-any-file: ["devel/evaluate/**", "internal/evaluation/**", "testdata/evaluation/**"]
+documentation:
+  - head-branch: ["^docs?(?:/|$)"]
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.md", "docs/**", "CITATION.cff"]
+tests:
+  - head-branch: ["^tests?(?:/|$)"]
+  - changed-files:
+      - any-glob-to-any-file: ["**/*_test.go", "testdata/**", "coverage.txt"]
+ci:
+  - changed-files:
+      - any-glob-to-any-file: [".github/workflows/**", ".github/dependabot.yml", ".github/labeler.yml", ".github/labels.yml"]
+github-actions:
+  - changed-files:
+      - any-glob-to-any-file: [".github/workflows/**"]
+dependencies:
+  - head-branch: ["^dependabot/", "^deps?(?:/|$)"]
+  - changed-files:
+      - any-glob-to-any-file: ["go.mod", "go.sum", "go.version", ".github/dependabot.yml", ".devcontainer/**"]
+packaging:
+  - changed-files:
+      - any-glob-to-any-file: [".goreleaser.yml", "RELEASE.md", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+security:
+  - changed-files:
+      - any-glob-to-any-file: ["SECURITY.md", "docs/SECURITY_MODEL.md", ".github/workflows/codeql.yml", ".github/workflows/scorecard.yml"]
+automation:
+  - changed-files:
+      - any-glob-to-any-file: ["Makefile", "devel/**", ".golangci.yml", ".editorconfig", ".gitattributes", "cspell.json"]
+dev-environment:
+  - changed-files:
+      - any-glob-to-any-file: [".devcontainer/**", ".editorconfig"]
+release:
+  - head-branch: ["^(?:release|prepare-release)(?:/|$)"]
+  - changed-files:
+      - any-glob-to-any-file: ["CHANGELOG.md", "RELEASE.md", ".goreleaser.yml", ".github/workflows/release.yml"]
+maintenance:
+  - head-branch: ["^(?:chore|maintenance)(?:/|$)"]
+  - changed-files:
+      - any-glob-to-any-file: [".github/**", "AGENTS.md", ".gitattributes", ".gitignore"]

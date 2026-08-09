@@ -1,0 +1,12 @@
+---
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/ryancswallace/jobman-diagnose/security/advisories/new
+    about: Report suspected vulnerabilities privately.
+  - name: Documentation
+    url: https://github.com/ryancswallace/jobman-diagnose/blob/main/docs/README.md
+    about: Check the documentation and troubleshooting guide first.
+  - name: Core Jobman issue
+    url: https://github.com/ryancswallace/jobman/issues/new/choose
+    about: Report execution, persistence, or core evidence-collection problems in Jobman.

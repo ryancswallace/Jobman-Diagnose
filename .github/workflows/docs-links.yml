@@ -1,0 +1,69 @@
+---
+name: Docs links
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/workflows/docs-links.yml"
+      - "CHANGELOG.md"
+      - "CITATION.cff"
+      - "CODE_OF_CONDUCT.md"
+      - "CONTRIBUTING.md"
+      - "README.md"
+      - "RELEASE.md"
+      - "SECURITY.md"
+      - "SUPPORT.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "docs/**"
+  schedule:
+    - cron: "41 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-links-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  links:
+    name: Check documentation links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check HTTPS links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-concurrency 16
+            --max-retries 3
+            --retry-wait-time 2
+            --timeout 30
+            --accept '100..=103,200..=299,500,502,503,504'
+            --scheme https
+            --exclude '^https://([^.]+\.)?example\.com/'
+            --exclude '^https://api\.securityscorecards\.dev/'
+            --exclude '^https://github\.com/ryancswallace/jobman-diagnose/actions/workflows/[^/]+/badge\.svg$'
+            --exclude '^https://img\.shields\.io/'
+            --exclude '^https://token\.actions\.githubusercontent\.com/?$'
+            './*.md'
+            './docs/**/*.md'
+            './.github/**/*.md'
+          fail: true
+          failIfEmpty: true
+          lycheeVersion: v0.24.2
+          token: ${{ github.token }}
