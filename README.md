@@ -10,9 +10,9 @@
 core evidence into a cited diagnosis report with confidence, limitations,
 recommended next actions, and explicit retry advice.
 
-Status: deterministic diagnosis, generated augmentation, and initial provider
-adapters are implemented on `main`; not yet released. Live provider evaluation
-and release packaging remain gates before a first tag.
+Status: v0.1.0 is the initial pre-v1 release. It includes deterministic
+diagnosis, optional generated augmentation, and the command, strict
+OpenAI-compatible, and local Ollama provider adapters.
 
 [Documentation](docs/README.md) · [Installation](docs/INSTALLATION.md) ·
 [Contributing](CONTRIBUTING.md) · [Support](SUPPORT.md) ·
@@ -52,6 +52,15 @@ Confidence measures the strength of a controlled rule and its cited evidence.
 It is not presented as a probability. A report is advisory: the companion
 cannot signal, rerun, mutate, or repair a Jobman job.
 
+## Install
+
+Download the appropriate CGO-free archive from the [v0.1.0 release], verify its
+checksum and provenance, and put `jobman-diagnose` on `PATH`. See the
+[installation guide](docs/INSTALLATION.md) for exact Linux, macOS, and Windows
+asset names and verification commands.
+
+[v0.1.0 release]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0
+
 ## Build from source
 
 Jobman Diagnose requires Jobman v1.4.0 or newer for diagnostic evidence schema
@@ -61,6 +70,7 @@ normally, so the repositories do not need to be adjacent:
 ```console
 git clone https://github.com/ryancswallace/jobman-diagnose.git
 cd jobman-diagnose
+git checkout v0.1.0
 make setup
 make check
 ```

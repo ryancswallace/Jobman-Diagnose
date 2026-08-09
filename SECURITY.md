@@ -2,14 +2,13 @@
 
 ## Supported versions
 
-Jobman Diagnose has not published its first release. Security fixes currently
-land on `main`; source builds from arbitrary historical commits are not
-supported. After the first release, this table will identify the maintained
-release lines explicitly.
+Security fixes land on `main` and are released from the currently maintained
+pre-v1 line. Source builds from arbitrary historical commits are not supported.
 
 | Version | Supported |
 | --- | --- |
-| `main` before v1 | Yes |
+| `0.1.x` | Yes |
+| `< 0.1.0` | No |
 
 ## Reporting a vulnerability
 

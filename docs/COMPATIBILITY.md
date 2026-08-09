@@ -1,12 +1,13 @@
 # Compatibility
 
-Status: unreleased development matrix
+Status: Jobman Diagnose v0.1.0 compatibility matrix
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
+| Jobman Diagnose release | v0.1.0 |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schema 1 |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
