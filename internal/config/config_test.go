@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -116,12 +117,14 @@ func TestResolveCredentialByEnvironmentOrPrivateFile(t *testing.T) {
 	if err != nil || string(value) != "file-secret" {
 		t.Fatalf("ResolveCredential(file) = %q, %v", value, err)
 	}
-	// #nosec G302 -- intentionally make the test fixture unsafe and assert rejection.
-	if err := os.Chmod(path, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ResolveCredential(&SecretReference{File: path}, nil); err == nil {
-		t.Fatal("ResolveCredential(public file) error = nil")
+	if runtime.GOOS != "windows" {
+		// #nosec G302 -- intentionally make the test fixture unsafe and assert rejection.
+		if err := os.Chmod(path, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ResolveCredential(&SecretReference{File: path}, nil); err == nil {
+			t.Fatal("ResolveCredential(public file) error = nil")
+		}
 	}
 }
 
@@ -157,12 +160,14 @@ func TestResolvePathAndSelectDefaultProfile(t *testing.T) {
 
 func TestLoadFileRejectsWritableOrIndirectConfiguration(t *testing.T) {
 	path := writeConfig(t, validOpenAIConfig())
-	// #nosec G302 -- the test deliberately grants unsafe write permissions.
-	if err := os.Chmod(path, 0o666); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadFile(path); err == nil {
-		t.Fatal("LoadFile(group/world writable) error = nil")
+	if runtime.GOOS != "windows" {
+		// #nosec G302 -- the test deliberately grants unsafe write permissions.
+		if err := os.Chmod(path, 0o666); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadFile(path); err == nil {
+			t.Fatal("LoadFile(group/world writable) error = nil")
+		}
 	}
 	target := writeConfig(t, validOpenAIConfig())
 	link := filepath.Join(t.TempDir(), "diagnosis-link.yml")

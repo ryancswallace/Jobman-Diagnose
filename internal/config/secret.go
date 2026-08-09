@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -39,7 +40,8 @@ func ResolveCredential(reference *SecretReference, getenv func(string) (string, 
 	if err != nil {
 		return nil, fmt.Errorf("resolve provider credential: inspect private file: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > maximumSecretBytes {
+	if !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 ||
+		info.Size() > maximumSecretBytes {
 		return nil, errors.New("resolve provider credential: file must be private, regular, and bounded")
 	}
 	// #nosec G304 -- the path was an explicit validated secret reference.

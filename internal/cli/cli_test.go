@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -63,7 +64,7 @@ func TestRunWritesPrivateExportsWithoutOverwrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if info.Mode().Perm() != 0o600 {
+		if !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 			t.Fatalf("%s permissions = %o", file, info.Mode().Perm())
 		}
 	}
@@ -124,7 +125,7 @@ func TestRunSupportBundleDryRunAndPrivateCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 || info.Size() == 0 {
+	if !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 || info.Size() == 0 {
 		t.Fatalf("support bundle mode/size = %o/%d", info.Mode().Perm(), info.Size())
 	}
 	if err := Run(arguments, bytes.NewReader(nil), &bytes.Buffer{}, &bytes.Buffer{}); !errors.Is(err, os.ErrExist) {

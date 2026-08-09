@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -197,7 +198,7 @@ func resolveOptions(options Options, environment []string) (string, string, stri
 	if err != nil {
 		return "", "", "", fmt.Errorf("inspect Jobman executable: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+	if !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
 		return "", "", "", errors.New("jobman executable is not an executable regular file")
 	}
 
