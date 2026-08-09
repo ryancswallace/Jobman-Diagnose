@@ -54,3 +54,7 @@ retained as the oldest schema-1 fixture set.
 The development `go.mod` uses a sibling checkout because the public evidence
 package has not yet been tagged. This replacement is not a release contract and
 will be removed before publishing the first companion module version.
+Coordinated development workflows pin that sibling checkout to an exact Jobman
+revision rather than its moving default branch. A compatible core revision must
+be pushed before a companion change that selects it; the checked-in
+compatibility test keeps all workflow pins aligned.

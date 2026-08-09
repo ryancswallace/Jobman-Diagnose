@@ -39,6 +39,22 @@ and `mixed` when validated generated hypotheses are appended. `generated` is a
 reserved schema value for a future engine that still preserves deterministic
 safety policy; the current implementation never emits it.
 
+## Human presentation
+
+The human renderer validates the report against the same sealed failure
+evidence before writing output. It uses report-local `[F1]` and `[E1]` aliases
+instead of exposing zero-padded canonical identifiers throughout the terminal.
+Aliases are assigned deterministically and are unambiguous within one report;
+they are not part of schema 1 and must not be persisted as evidence identity.
+
+The renderer uses allowlisted typed evidence to show job name, selected runs,
+sanitized command arguments, working directory, exit details, resource units,
+policy state, and exact enrichment ranges. It groups each cited fact once and
+references its alias from findings, retry advice, and actions. Raw artifact
+bytes are never rendered. Technical details retain complete report, core
+evidence, and analysis evidence digests, while `--json` remains the source for
+canonical evidence/finding IDs and all machine provenance.
+
 ## Controlled values
 
 Finding severity is `info`, `warning`, `error`, or `critical`. Action kind is

@@ -26,7 +26,8 @@ Each report contains:
 
 - a controlled primary diagnosis and any secondary observations;
 - a 0–100 confidence score, readable band, and basis statement;
-- exact Jobman evidence IDs supporting or contradicting each finding;
+- exact Jobman evidence IDs supporting or contradicting each finding, with
+  compact report-local aliases in human output;
 - prose actions and allowlisted read-only Jobman argument vectors (displayed,
   never executed);
 - `now`, `after_delay`, `after_change`, `no`, `not_applicable`, or `unknown`
@@ -53,6 +54,13 @@ git clone https://github.com/ryancswallace/jobman-diagnose.git
 cd jobman-diagnose
 make check
 ```
+
+Until that package has a release tag, coordinated GitHub Actions workflows pin
+their Jobman checkout to the exact compatible core revision. When the evidence
+contract changes, first push the corresponding Jobman commit, then update the
+pin in `test.yml`, `codeql.yml`, `fuzz.yml`, and the compatibility test before
+pushing the companion. This order ensures every companion workflow can resolve
+the sibling module reproducibly.
 
 Before the first companion release, the local replacement will be removed and
 the module will require the first tagged Jobman version containing diagnostic
@@ -174,22 +182,45 @@ operation error. See [configuration](docs/CONFIGURATION.md) and the
 ## Example human output
 
 ```text
-Diagnosis:        The target exited with a nonzero status
-Confidence:       82/100 (high)
-Why:              The exit status confirms target failure, but does not by itself identify the target's root cause.
-Retry:            after change
-Retry rationale:  The cited condition is expected to persist until the command, environment, resources, or policy changes.
+Diagnosis
 
-EVIDENCE
--  The observed process exit code. [ev:run:00000000000000000001:exit:code]
+  [F1] The target exited with a nonzero status
+  Confidence: High (82/100)
+  Why: The exit status confirms target failure, but does not by itself identify the target's
+       root cause.
+  Evidence: [E1], [E2], [E3]
 
-NEXT ACTIONS
-1.  Inspect the cited evidence and bounded target logs — Identify the target-specific error before changing configuration or creating another run.
+Job
+
+  Name: test
+  ID: 019fe6ab-0e59-72bf-bdca-40f7ac7c5faa
+  Run: 1
+  Command: /usr/bin/example --mode batch
+  State: Failed (job completed)
+
+Retry
+
+  Recommendation: Retry after changing the command, environment, resources, or policy
+  Automatic policy: The current policy will not retry this failure
+
+Evidence
+
+  [E1] Observed fact — Job outcome: failure
+  [E2] Observed fact — Run 1 exit code: 2
+  [E3] Confirmed fact — Run 1 failure class: nonzero exit
+
+Recommended next steps
+
+  1. Inspect the cited evidence and bounded target logs
+     Identify the target-specific error before changing configuration or creating another run.
+     Suggested command: jobman show evidence --logs=metadata test
 ```
 
 Human wording is for people. Automation should consume the sealed
 `jobman.diagnosis_report` schema 1 JSON value documented in
-[`docs/REPORT_SCHEMA.md`](docs/REPORT_SCHEMA.md).
+[`docs/REPORT_SCHEMA.md`](docs/REPORT_SCHEMA.md). Human evidence aliases such
+as `[E2]` and finding aliases such as `[F1]` are local to one rendering; JSON
+retains every canonical ID and digest unchanged.
 
 ## Trust and privacy boundary
 

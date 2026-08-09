@@ -63,6 +63,9 @@ bounded.
 8. Build citations only for evidence IDs present in the source bundle.
 9. Seal the report and validate every provenance value and reference against
    the original evidence.
+10. For human output, build a non-persistent presentation view from that
+    validated report and evidence, assign compact local aliases, format safe
+    typed values, and never render raw artifact bytes.
 
 Report identity excludes only generation wall time. A fixed evidence bundle,
 engine version, companion version, and accepted generated proposal therefore

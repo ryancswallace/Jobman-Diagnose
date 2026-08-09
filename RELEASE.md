@@ -34,6 +34,11 @@ and identify released compatibility fixtures, and rerun `make check` before
 tagging. Releases are drafts so a maintainer can verify archives, SBOMs, the
 checksum Sigstore bundle, and attestations before publication.
 
+During unreleased coordinated development, push a compatible Jobman core
+revision before updating the exact core pin in the companion's test, CodeQL,
+and fuzz workflows. Once the tagged module dependency replaces the sibling
+checkout, remove those development-only checkouts and their pin guard together.
+
 Run the checked-in corpus for every candidate:
 
 ```console

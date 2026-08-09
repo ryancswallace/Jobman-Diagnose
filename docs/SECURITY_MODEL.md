@@ -32,8 +32,11 @@ Explicit AI activation requests bounded, field-redacted direct command
 specifications (including ordered arguments), filesystem context, and
 environment variable names/roles. A profile must allow each class before
 projection. Log content is separately opt-in and bounded.
-The companion does not echo artifact bytes in the human report, and its
-citations contain only a controlled summary and evidence ID.
+The companion does not echo artifact bytes in the human report. Human output
+may render allowlisted typed values from the already sealed evidence, including
+sanitized command arguments, outcomes, exit details, resource observations,
+and exact enrichment ranges. It uses report-local citation aliases; canonical
+evidence IDs and controlled citation summaries remain unchanged in JSON.
 
 Core failure fingerprints are HMAC values created with a private key held in
 the Jobman state store. The key never enters evidence or this process. Command

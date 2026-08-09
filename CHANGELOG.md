@@ -17,6 +17,9 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
   citations, actions, retry advice, limitations, provenance, and disclosure.
 - Added human and JSON output plus private, atomic, no-overwrite evidence and
   report exports.
+- Added evidence-aware human output with compact finding/citation aliases,
+  readable policy text, typed fact values, wrapped sections, suggested command
+  rendering, and complete technical provenance without raw log content.
 - Added explicit generated augmentation with strict schema-2 profile configuration,
   per-class CLI disclosure approval, exact projection manifests, bounded
   request/proposal protocols, semantic citation validation, contradiction
@@ -61,6 +64,10 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Pin coordinated GitHub Actions jobs to the exact compatible Jobman core
+  revision so the unreleased sibling module always contains evidence schema 1.
+- Distinguish terminal completion reasons such as `failure_limit` from an
+  active job that is waiting for prerequisites when summarizing retry policy.
 - Made `--help` a successful informational invocation instead of returning the
   command-usage exit status.
 - Honor each generation profile's configured timeout while waiting for HTTP
