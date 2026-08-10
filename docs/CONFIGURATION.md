@@ -15,6 +15,29 @@ point-in-time state-filesystem and Linux cgroup-v2 context in the `metadata`
 class. AI never activates merely because a
 configuration or credential exists.
 
+## Human output detail
+
+The default human report is an answer-first summary. In mixed mode it presents
+validated AI-assisted likely causes first, immediately followed by Jobman's
+confirmed deterministic finding. Recommendations, retry guidance, job context,
+and up to four relevant evidence highlights follow. Generated confidence is
+shown as advisory and uncalibrated rather than as the internal ranking score.
+
+Use `--details` to include the complete cited evidence inventory, confidence
+bases, action classifications, retry-policy reasons, report identities,
+component versions, analyzers, and disclosure accounting. `--details` is a
+human-output option and cannot be combined with `--json`; automation should
+continue consuming the sealed JSON report.
+
+Human output uses a consistent hierarchy: `•` separates peer findings,
+retry statements, job context, and evidence; numbered items preserve action
+priority; and `-` introduces details subordinate to a finding, job, or action.
+`--color` accepts `auto`, `always`, or `never` and defaults to `auto`.
+Automatic color is enabled only when the report destination is an interactive
+terminal. It is disabled for redirected output, `TERM=dumb`, and a nonempty
+`NO_COLOR`; `always` and `never` provide explicit overrides. JSON output never
+contains terminal styling, including when `--color=always` is supplied.
+
 ## AI progress output
 
 `--progress` accepts `auto`, `plain`, or `off` and defaults to `auto`. Progress

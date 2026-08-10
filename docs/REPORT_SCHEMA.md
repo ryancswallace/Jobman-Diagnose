@@ -47,13 +47,30 @@ instead of exposing zero-padded canonical identifiers throughout the terminal.
 Aliases are assigned deterministically and are unambiguous within one report;
 they are not part of schema 1 and must not be persisted as evidence identity.
 
-The renderer uses allowlisted typed evidence to show job name, selected runs,
-sanitized command arguments, working directory, exit details, resource units,
-policy state, and exact enrichment ranges. It groups each cited fact once and
-references its alias from findings, retry advice, and actions. Raw artifact
-bytes are never rendered. Technical details retain complete report, core
-evidence, and analysis evidence digests, while `--json` remains the source for
-canonical evidence/finding IDs and all machine provenance.
+The default renderer is an answer-first summary. Validated generated findings
+are labeled as AI-assisted, advisory likely causes and appear beside the
+deterministic primary finding without replacing its canonical authority.
+Recommendations and retry advice precede job context and a source-aware set of
+up to four evidence highlights. Repeated generated summary/explanation text is
+shown once, and the internal fixed generated ranking score is not presented as
+model confidence.
+
+Peer conclusions, retry statements, job context, and evidence use bullets;
+recommended actions remain numbered; and subordinate facts use a nested dash.
+This hierarchy is present in plain output and does not depend on color. For an
+interactive terminal, semantic styling distinguishes section headings,
+AI-assisted and deterministic labels, advisory text, failed state, and
+suggested commands. `--color=auto|always|never` controls styling; automatic
+mode honors `NO_COLOR` and `TERM=dumb`, and JSON is always free of terminal
+escape sequences.
+
+`--details` adds the complete cited evidence inventory, confidence bases,
+action classifications, retry reasons, report identities, component versions,
+analyzers, and disclosure accounting. The renderer uses allowlisted typed
+evidence for sanitized command arguments, outcomes, exit details, resource
+units, policy state, and exact enrichment ranges. Raw artifact bytes are never
+rendered. `--json` remains the source for canonical evidence/finding IDs and
+all machine provenance.
 
 ## Controlled values
 
@@ -79,10 +96,13 @@ uncalibrated basis and rank below observed or exact deterministic findings.
 
 Actions are never marked safe to automate. `read_only_argv` contains only a
 host-validated direct Jobman inspection vector; it is displayed but never run.
-A true `requires_confirmation`
-indicates that the described change would need user authority if a future
-workflow offered it; the report itself cannot perform it. A generator can
-only reorder action IDs already present in the deterministic report.
+A true `requires_confirmation` indicates that the described change would need
+user authority if a future workflow offered it; the report itself cannot
+perform it. A generator can only reorder action IDs already present in the
+deterministic report. Reconciliation may also map the first supported
+generated hypothesis code to fixed, host-authored guidance. That guidance has
+no execution vector, is never safe to automate, and cannot contain
+model-authored commands or URLs.
 
 ## Disclosure manifest
 

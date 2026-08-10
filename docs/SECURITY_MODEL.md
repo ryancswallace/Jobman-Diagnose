@@ -39,6 +39,10 @@ may render allowlisted typed values from the already sealed evidence, including
 sanitized command arguments, outcomes, exit details, resource observations,
 and exact enrichment ranges. It uses report-local citation aliases; canonical
 evidence IDs and controlled citation summaries remain unchanged in JSON.
+Generated summaries are labeled advisory and are instructed not to quote
+artifact content verbatim. Contextual recommendations are selected from fixed
+host-authored text by a validated controlled hypothesis code; model output
+still cannot introduce commands, URLs, tools, or execution vectors.
 
 Core failure fingerprints are HMAC values created with a private key held in
 the Jobman state store. The key never enters evidence or this process. Command
@@ -140,6 +144,13 @@ controlled phase plus bounded, terminal-sanitized profile/model labels and the
 configured timeout; it never contains endpoints, credentials, evidence,
 prompts, provider responses, or log bytes. Generation and provider packages
 emit typed lifecycle events but cannot write to process-global streams.
+
+Human-report color adds only fixed, host-authored ANSI styling around trusted
+presentation labels and already-sanitized typed values. It never interprets
+provider or artifact bytes as styling. Automatic color requires an interactive
+report destination and is disabled by `TERM=dumb` or a nonempty `NO_COLOR`;
+redirected and JSON output remain plain unless color is explicitly forced for
+human output.
 
 ## Files
 

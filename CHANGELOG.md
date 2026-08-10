@@ -18,6 +18,17 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Changed
 
+- Reworked human diagnosis output into an answer-first summary that places
+  validated AI-assisted causes beside Jobman's confirmed finding, prioritizes
+  recommendations and retry guidance, shows a small relevant evidence set,
+  and moves the complete evidence and provenance audit to `--details`.
+- Added a consistent bullet and indentation hierarchy plus semantic terminal
+  color controlled by `--color=auto|always|never`. Automatic color is
+  terminal-aware, honors `NO_COLOR` and `TERM=dumb`, and never affects JSON.
+- Added specific hypothesis taxonomy guidance, minimal-citation guidance, and
+  trusted non-executing recommendations authored by Jobman for supported
+  generated cause codes. Generated commands, URLs, and arbitrary actions
+  remain prohibited.
 - Documented installing Jobman and Jobman Diagnose together from Cloudsmith's
   Debian, RPM, and Alpine repositories beginning with Jobman v1.5.0.
 

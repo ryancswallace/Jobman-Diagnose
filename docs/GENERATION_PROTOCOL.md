@@ -74,12 +74,22 @@ descriptions state those relational rules explicitly so smaller local models
 can satisfy them even though the grammar cannot encode cross-field equality.
 An empty proposal is an abstention.
 
+The fixed instructions define the intended meaning of each generated code,
+reserve `generated.unknown_target_error` for cases where no specific supplied
+code is supported, ask for distinct cause and reasoning text, prohibit
+verbatim artifact quotation, and request the smallest directly relevant
+evidence set. These are content-quality constraints in addition to the
+request-specific structural authority enforced by JSON Schema and the host.
+
 ## Reconciliation
 
 The deterministic report exists before the provider call. Valid hypotheses are
 appended at fixed uncalibrated confidence 40 and can explicitly contradict,
 but cannot replace, deterministic findings. Action IDs may reorder only the
-existing deterministic action list. Missing-evidence descriptions are
+existing deterministic action list. For the first recognized generated cause
+code, reconciliation may prepend fixed, non-executing guidance written by
+Jobman; the model supplies neither its prose nor an execution vector. Unknown
+target errors receive no specific guidance. Missing-evidence descriptions are
 advisory. Retry advice and the primary finding remain deterministic.
 
 Provider or proposal failure produces a sealed deterministic fallback with an
