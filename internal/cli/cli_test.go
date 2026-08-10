@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -140,11 +141,89 @@ func TestRunHumanOutputAndUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(stdout.String(), "Diagnosis\n") || !strings.Contains(stdout.String(), "Retry\n") ||
-		!strings.Contains(stdout.String(), "Recommended next steps\n") {
+		!strings.Contains(stdout.String(), "Recommended next steps\n") ||
+		strings.Contains(stdout.String(), "Technical details\n") {
 		t.Fatalf("human report = %q", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run([]string{"--from-evidence", path, "--details"}, bytes.NewReader(nil), &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "Technical details\n") || !strings.Contains(stdout.String(), "Evidence\n") {
+		t.Fatalf("detailed human report = %q", stdout.String())
 	}
 	if err := Run(nil, bytes.NewReader(nil), &stdout, &stderr); !errors.Is(err, errUsage) || ExitCode(err) != 2 {
 		t.Fatalf("Run(no args) error/code = %v/%d", err, ExitCode(err))
+	}
+}
+
+func TestRunColorStylesOnlyHumanOutput(t *testing.T) {
+	_, path := writeEvidenceFixture(t)
+	var stdout, stderr bytes.Buffer
+	if err := Run(
+		[]string{"--from-evidence", path, "--color", "always"},
+		bytes.NewReader(nil), &stdout, &stderr,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "\x1b[1mDiagnosis\x1b[0m") {
+		t.Fatalf("forced-color human report = %q", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(
+		[]string{"--from-evidence", path, "--json", "--color", "always"},
+		bytes.NewReader(nil), &stdout, &stderr,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stdout.String(), "\x1b[") || !json.Valid(stdout.Bytes()) {
+		t.Fatalf("forced color contaminated JSON = %q", stdout.String())
+	}
+}
+
+func TestColorEnabledRespectsModeTerminalAndEnvironment(t *testing.T) {
+	t.Parallel()
+
+	destination := &bytes.Buffer{}
+	environment := runtimeEnvironment{
+		interactive: func(io.Writer) bool { return true },
+		lookupEnv:   func(string) (string, bool) { return "", false },
+	}
+	if !colorEnabled(colorAuto, destination, environment) || !colorEnabled(colorAlways, destination, runtimeEnvironment{}) {
+		t.Fatal("interactive auto or explicit always color was disabled")
+	}
+	if colorEnabled(colorNever, destination, environment) || colorEnabled("invalid", destination, environment) {
+		t.Fatal("never or invalid color mode was enabled")
+	}
+
+	for _, test := range []struct {
+		name   string
+		lookup func(string) (string, bool)
+	}{
+		{name: "NO_COLOR", lookup: func(name string) (string, bool) {
+			return map[string]string{"NO_COLOR": "1"}[name], name == "NO_COLOR"
+		}},
+		{name: "dumb terminal", lookup: func(name string) (string, bool) {
+			return map[string]string{"TERM": " DUMB "}[name], name == "TERM"
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			blocked := environment
+			blocked.lookupEnv = test.lookup
+			if colorEnabled(colorAuto, destination, blocked) {
+				t.Fatal("automatic color ignored environment opt-out")
+			}
+		})
+	}
+
+	noninteractive := environment
+	noninteractive.interactive = func(io.Writer) bool { return false }
+	if colorEnabled(colorAuto, destination, noninteractive) {
+		t.Fatal("automatic color was enabled for redirected output")
 	}
 }
 

@@ -46,7 +46,7 @@ func TestExitCodeClassifiesPublicFailures(t *testing.T) {
 
 func fmtWrap(err error) error { return errors.Join(errors.New("outer"), err) }
 
-//nolint:cyclop,gocognit // The test keeps all three CLI flag.Value contracts together.
+//nolint:cyclop,gocognit // The test keeps the small CLI flag.Value contracts together.
 func TestFlagValueParsers(t *testing.T) {
 	t.Parallel()
 
@@ -61,6 +61,19 @@ func TestFlagValueParsers(t *testing.T) {
 	}
 	if err := mode.Set("complete"); err == nil {
 		t.Fatal("invalid log mode error = nil")
+	}
+
+	var color colorModeValue
+	for _, encoded := range []string{"auto", " ALWAYS ", "never"} {
+		if err := color.Set(encoded); err != nil {
+			t.Fatalf("color mode Set(%q): %v", encoded, err)
+		}
+	}
+	if color.String() != "never" || (*colorModeValue)(nil).String() != "" {
+		t.Fatalf("color mode strings = %q/%q", color.String(), (*colorModeValue)(nil).String())
+	}
+	if err := color.Set("sometimes"); err == nil {
+		t.Fatal("invalid color mode error = nil")
 	}
 
 	byteSizes := []struct {
@@ -122,6 +135,7 @@ func TestValidateOptionsRejectsConflictingContracts(t *testing.T) {
 		{name: "deterministic AI", mutate: func(value *options) { value.deterministic, value.ai = true, true }},
 		{name: "model not enabled", mutate: func(value *options) { value.requireModel = true }},
 		{name: "sharing not enabled", mutate: func(value *options) { value.share = []string{"metadata"} }},
+		{name: "details with JSON", mutate: func(value *options) { value.details, value.jsonOutput = true, true }},
 		{name: "dry run without bundle", mutate: func(value *options) { value.bundleDryRun = true }},
 		{name: "dry run creates output", mutate: func(value *options) {
 			value.bundleDryRun, value.supportBundle, value.output = true, "bundle", "report"

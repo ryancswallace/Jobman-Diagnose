@@ -90,22 +90,106 @@ func (view *reportView) assignAliases() {
 			}
 		}
 	}
-	add(view.primary.SupportingEvidence)
-	add(view.primary.ContradictingEvidence)
-	add(view.report.Retry.SupportingEvidence)
+	addRanked := func(values []string) {
+		values = slices.Clone(values)
+		slices.SortFunc(values, func(left, right string) int {
+			leftPriority, rightPriority := view.evidencePriority(left), view.evidencePriority(right)
+			if leftPriority != rightPriority {
+				return leftPriority - rightPriority
+			}
+
+			return strings.Compare(left, right)
+		})
+		add(values)
+	}
 	for _, finding := range view.report.Findings {
-		add(finding.SupportingEvidence)
-		add(finding.ContradictingEvidence)
+		if isGeneratedFinding(finding) {
+			addRanked(finding.SupportingEvidence)
+			addRanked(finding.ContradictingEvidence)
+		}
+	}
+	addRanked(view.primary.SupportingEvidence)
+	addRanked(view.primary.ContradictingEvidence)
+	for _, finding := range view.report.Findings {
+		if !isGeneratedFinding(finding) {
+			addRanked(finding.SupportingEvidence)
+			addRanked(finding.ContradictingEvidence)
+		}
 	}
 	for _, action := range view.report.Actions {
-		add(action.SupportingEvidence)
+		addRanked(action.SupportingEvidence)
 	}
+	addRanked(view.report.Retry.SupportingEvidence)
 	for _, citation := range view.report.Citations {
 		add([]string{citation.EvidenceID})
 	}
 	view.evidenceOrder = ordered
 	for index, id := range ordered {
 		view.evidenceAliases[id] = "E" + strconv.Itoa(index+1)
+	}
+}
+
+func (view reportView) evidenceHighlights(limit int) []string {
+	if limit <= 0 || len(view.evidenceOrder) == 0 {
+		return nil
+	}
+	result := make([]string, 0, limit)
+	add := func(values []string, maximum int) {
+		added := 0
+		for _, value := range view.orderedEvidenceReferences(values) {
+			if len(result) == limit || added == maximum {
+				return
+			}
+			if !slices.Contains(result, value) {
+				result = append(result, value)
+				added++
+			}
+		}
+	}
+	for _, finding := range view.report.Findings {
+		if isGeneratedFinding(finding) {
+			add(finding.SupportingEvidence, 2)
+		}
+	}
+	add(view.primary.SupportingEvidence, 2)
+	for _, finding := range view.report.Findings {
+		if finding.ID != view.primary.ID && !isGeneratedFinding(finding) {
+			add(finding.SupportingEvidence, 1)
+		}
+	}
+	for _, action := range view.report.Actions {
+		add(action.SupportingEvidence, 1)
+	}
+	add(view.evidenceOrder, limit)
+
+	return result
+}
+
+func (view reportView) evidencePriority(id string) int {
+	if _, ok := view.artifacts[id]; ok {
+		return 0
+	}
+	if _, ok := view.enrichment[id]; ok {
+		return 1
+	}
+	item, ok := view.items[id]
+	if !ok {
+		return 8
+	}
+	switch item.Code {
+	case diagnostic.CodeRunExitCode, diagnostic.CodeRunExitSignal, diagnostic.CodeRunExitPlatformReason,
+		diagnostic.CodeRunStopReason, diagnostic.CodeRunTimeoutScope, diagnostic.CodeFailureClass:
+		return 2
+	case diagnostic.CodeJobOutcome, diagnostic.CodeRunOutcome, diagnostic.CodeRunPhase,
+		diagnostic.CodeLogRecordingHealth, diagnostic.CodeLogIntegrity:
+		return 3
+	case diagnostic.CodeTargetCommand, diagnostic.CodeTargetWorkingDirectory,
+		diagnostic.CodeTargetEnvironmentNames, diagnostic.CodeLogStderrBytes, diagnostic.CodeLogStdoutBytes:
+		return 4
+	case diagnostic.CodeResourceObservation:
+		return 7
+	default:
+		return 6
 	}
 }
 
@@ -148,12 +232,22 @@ func (view reportView) findingAlias(id string) string {
 }
 
 func (view reportView) referenceList(ids []string) string {
-	values := make([]string, 0, len(ids))
-	for _, id := range ids {
+	ordered := view.orderedEvidenceReferences(ids)
+	values := make([]string, 0, len(ordered))
+	for _, id := range ordered {
 		values = append(values, "["+view.evidenceAlias(id)+"]")
 	}
 
 	return strings.Join(values, ", ")
+}
+
+func (view reportView) orderedEvidenceReferences(ids []string) []string {
+	ordered := slices.Clone(ids)
+	slices.SortFunc(ordered, func(left, right string) int {
+		return slices.Index(view.evidenceOrder, left) - slices.Index(view.evidenceOrder, right)
+	})
+
+	return ordered
 }
 
 func (view reportView) findingReferenceList(ids []string) string {
@@ -487,11 +581,18 @@ func safeScalarDetail(citation diagnosis.Citation, raw json.RawMessage) (string,
 		return "", "", false
 	}
 	label := strings.TrimSuffix(citation.Summary, ".")
-	if label == "" {
-		label = titleWords(citation.Code)
+	if label == "" || label == "A projected structured Jobman evidence item" {
+		label = evidenceCodeLabel(citation.Code)
 	}
 
 	return label, value, true
+}
+
+func evidenceCodeLabel(code string) string {
+	code = strings.TrimPrefix(code, "jobman.")
+	code = strings.NewReplacer(".", " ", "_", " ", "-", " ").Replace(code)
+
+	return titleWords(code)
 }
 
 func scalarText(raw json.RawMessage) (string, bool) {

@@ -234,7 +234,10 @@ func runDiagnosis(
 		if parsed.jsonOutput {
 			return diagnosis.Encode(destination, report)
 		}
-		if err := presentation.Human(destination, report, failureEvidence); err != nil {
+		if err := presentation.HumanWithOptions(destination, report, failureEvidence, presentation.HumanOptions{
+			Details: parsed.details,
+			Color:   colorEnabled(parsed.color, destination, environment),
+		}); err != nil {
 			return err
 		}
 		if parsed.supportBundle != "" {
@@ -274,6 +277,8 @@ type options struct {
 	configPath      string
 	request         diagnostic.EvidenceRequest
 	jsonOutput      bool
+	details         bool
+	color           colorMode
 	version         bool
 	ai              bool
 	aiLogs          bool
@@ -295,6 +300,7 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 	parsed := options{
 		request:  diagnostic.EvidenceRequest{Logs: diagnostic.LogsMetadata},
 		progress: progressAuto,
+		color:    colorAuto,
 	}
 	flags := flag.NewFlagSet("jobman-diagnose", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -357,6 +363,8 @@ func registerFlags(flags *flag.FlagSet, parsed *options) {
 	flags.StringVar(&parsed.stateDir, "state-dir", "", "pass an explicit core state directory")
 	flags.StringVar(&parsed.configPath, "config", "", "pass an explicit core redaction configuration")
 	flags.BoolVar(&parsed.jsonOutput, "json", false, "emit the versioned diagnosis report as JSON")
+	flags.BoolVar(&parsed.details, "details", false, "include all evidence and technical provenance in human output")
+	flags.Var((*colorModeValue)(&parsed.color), "color", "color human output as auto, always, or never")
 	flags.BoolVar(&parsed.version, "version", false, "print version and supported schemas")
 	flags.BoolVar(&parsed.deterministic, "deterministic", false, "force local deterministic analysis (the default)")
 	flags.BoolVar(&parsed.ai, "ai", false, "use the default AI profile and share bounded execution context")
@@ -415,6 +423,9 @@ func validateOptions(parsed options) error {
 	}
 	if parsed.deterministic && (parsed.aiEnabled() || parsed.requireModel || len(parsed.share) != 0) {
 		return usageError(errors.New("--deterministic cannot be combined with AI options"))
+	}
+	if parsed.details && parsed.jsonOutput {
+		return usageError(errors.New("--details cannot be combined with --json"))
 	}
 	if parsed.requireModel && !parsed.aiEnabled() {
 		return usageError(errors.New("--require-model requires --ai, --ai-logs, or --profile"))

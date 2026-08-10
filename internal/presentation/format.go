@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/ryancswallace/jobman/diagnostic"
 
@@ -46,7 +45,33 @@ func appendWrapped(output *strings.Builder, prefix, continuation, value string, 
 	}
 }
 
-func visibleWidth(value string) int { return utf8.RuneCountInString(value) }
+func visibleWidth(value string) int {
+	width := 0
+	escapeState := 0
+	for _, character := range value {
+		switch escapeState {
+		case 1:
+			if character == '[' {
+				escapeState = 2
+			} else {
+				escapeState = 0
+			}
+			continue
+		case 2:
+			if character >= '@' && character <= '~' {
+				escapeState = 0
+			}
+			continue
+		}
+		if character == '\x1b' {
+			escapeState = 1
+			continue
+		}
+		width++
+	}
+
+	return width
+}
 
 func titleWords(value string) string {
 	words := strings.Fields(strings.NewReplacer("_", " ", "-", " ").Replace(value))

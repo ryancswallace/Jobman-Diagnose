@@ -54,12 +54,14 @@ type progressTiming struct {
 
 type runtimeEnvironment struct {
 	interactive       func(io.Writer) bool
+	lookupEnv         func(string) (string, bool)
 	newProgressTiming func() progressTiming
 }
 
 func defaultRuntimeEnvironment() runtimeEnvironment {
 	return runtimeEnvironment{
 		interactive: terminalWriter,
+		lookupEnv:   os.LookupEnv,
 		newProgressTiming: func() progressTiming {
 			timer := time.NewTimer(progressDelay)
 			ticker := time.NewTicker(progressInterval)

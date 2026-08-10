@@ -140,6 +140,9 @@ func TestProgressBoundaryHelpers(t *testing.T) {
 	if environment.interactive(&bytes.Buffer{}) {
 		t.Fatal("ordinary writer reported as interactive")
 	}
+	if environment.lookupEnv == nil {
+		t.Fatal("default environment lookup is nil")
+	}
 	timing := environment.newProgressTiming()
 	if timing.now == nil || timing.delay == nil || timing.ticks == nil || timing.stop == nil {
 		t.Fatalf("default timing is incomplete: %#v", timing)

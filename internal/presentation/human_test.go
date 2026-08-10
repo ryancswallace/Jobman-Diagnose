@@ -13,6 +13,7 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/internal/engine"
 	"github.com/ryancswallace/jobman-diagnose/internal/enrichment"
 	"github.com/ryancswallace/jobman-diagnose/internal/testevidence"
+	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
 func TestHumanRendersReadableEvidenceAwareReport(t *testing.T) {
@@ -25,14 +26,12 @@ func TestHumanRendersReadableEvidenceAwareReport(t *testing.T) {
 	}
 	rendered := output.String()
 	for _, wanted := range []string{
-		"Diagnosis\n", "[F1] The command was explicitly configured to report failure",
-		"Confidence: Very high (100/100)", "Job\n", "Name: presentation-test",
-		"ID: " + testevidence.JobID, "Run: 1", `Command: /usr/bin/false --mode "batch size"`,
-		"State: Failed (job completed)", "Retry\n", "current policy will not retry this failure",
-		"Evidence\n", "[E1] Observed fact", "Run 1 exit code: 2",
-		"Peak resident memory: 64 MiB", "Recommended next steps\n",
-		"Technical details\n", "Report ID: " + report.ReportID,
-		"Core evidence ID: " + report.CoreEvidenceID, "Evidence aliases: Report-local display labels",
+		"Diagnosis\n", "  • Primary finding [F1]\n    The command was explicitly configured to report failure",
+		"      - Confidence: Very high (100/100)", "Job\n", "  • presentation-test · Run 1",
+		"    - ID: " + testevidence.JobID, `    - Command: /usr/bin/false --mode "batch size"`,
+		"Failed (job completed)", "Retry\n", "  • Automatic retries: The current policy will not retry this failure",
+		"Evidence highlights\n", "  • [E1] Observed fact", "Run 1 exit code: 2",
+		"additional facts are available with --details", "Recommended next steps\n",
 	} {
 		if !strings.Contains(rendered, wanted) {
 			t.Fatalf("Human() output missing %q:\n%s", wanted, rendered)
@@ -40,6 +39,7 @@ func TestHumanRendersReadableEvidenceAwareReport(t *testing.T) {
 	}
 	for _, unwanted := range []string{
 		"ev:run:00000000000000000001", "analysis:000001", "DIRECT ARGUMENTS", "NEXT ACTIONS",
+		"Technical details", "Report ID: " + report.ReportID, "Peak resident memory: 64 MiB", "\x1b[",
 	} {
 		if strings.Contains(rendered, unwanted) {
 			t.Fatalf("Human() output contains %q:\n%s", unwanted, rendered)
@@ -49,6 +49,29 @@ func TestHumanRendersReadableEvidenceAwareReport(t *testing.T) {
 		if len([]rune(line)) > humanOutputWidth && !strings.Contains(line, "sha256:") {
 			t.Fatalf("Human() line exceeds %d columns: %q", humanOutputWidth, line)
 		}
+	}
+}
+
+func TestHumanDetailsRetainCompleteEvidenceAndProvenance(t *testing.T) {
+	t.Parallel()
+
+	report, evidence := presentationFixture(t, nil)
+	var output bytes.Buffer
+	if err := HumanWithOptions(&output, report, evidence, HumanOptions{Details: true}); err != nil {
+		t.Fatal(err)
+	}
+	rendered := output.String()
+	for _, wanted := range []string{
+		"Evidence\n", "Peak resident memory: 64 MiB", "Technical details\n",
+		"Report ID: " + report.ReportID, "Core evidence ID: " + report.CoreEvidenceID,
+		"Confidence basis:", "Type: Configuration or environment change",
+	} {
+		if !strings.Contains(rendered, wanted) {
+			t.Fatalf("detailed human output missing %q:\n%s", wanted, rendered)
+		}
+	}
+	if strings.Contains(rendered, "Evidence highlights") || strings.Contains(rendered, "available with --details") {
+		t.Fatalf("detailed human output retained concise-view hints:\n%s", rendered)
 	}
 }
 
@@ -64,7 +87,7 @@ func TestHumanRendersEnrichmentWithoutRawArtifactContent(t *testing.T) {
 	}
 	rendered := output.String()
 	for _, wanted := range []string{
-		"Other findings", "Deterministic finding: A Python exception traceback is present",
+		"Additional observation [F3]\n    A Python exception traceback is present",
 		"Python traceback detected in run 1 stderr", "Exact derivation", "Caveats",
 		"Target log artifacts are untrusted data",
 	} {
@@ -74,6 +97,67 @@ func TestHumanRendersEnrichmentWithoutRawArtifactContent(t *testing.T) {
 	}
 	if strings.Contains(rendered, "<untrusted instructions>") || strings.Contains(rendered, "ValueError: bad") {
 		t.Fatalf("Human() copied raw artifact content:\n%s", rendered)
+	}
+}
+
+func TestHumanMakesGeneratedDiagnosisProminent(t *testing.T) {
+	t.Parallel()
+
+	report, evidence := mixedPresentationFixture(t)
+	var output bytes.Buffer
+	if err := Human(&output, report, evidence); err != nil {
+		t.Fatal(err)
+	}
+	rendered := output.String()
+	for _, wanted := range []string{
+		"  • AI-assisted likely cause [F3]\n    The application rejected a deployment configuration value",
+		"      - Status: Advisory; confidence not calibrated",
+		"      - Why: The bounded stderr evidence identifies a configuration rejection",
+		"  • Confirmed by Jobman [F1]",
+		"Correct the rejected application configuration",
+		"AI disclosure\n", "Validated generated hypotheses from jobman-llama contributed",
+	} {
+		if !strings.Contains(rendered, wanted) {
+			t.Fatalf("mixed human output missing %q:\n%s", wanted, rendered)
+		}
+	}
+	if strings.Index(rendered, "AI-assisted likely cause") > strings.Index(rendered, "Confirmed by Jobman") {
+		t.Fatalf("generated diagnosis is not answer-first:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "Medium (40/100)") || strings.Contains(rendered, "generated_content_uncalibrated") {
+		t.Fatalf("mixed human output exposes internal AI ranking details:\n%s", rendered)
+	}
+}
+
+func TestHumanColorStylesSemanticsWithoutChangingWrapping(t *testing.T) {
+	t.Parallel()
+
+	report, evidence := mixedPresentationFixture(t)
+	var output bytes.Buffer
+	if err := HumanWithOptions(&output, report, evidence, HumanOptions{Color: true}); err != nil {
+		t.Fatal(err)
+	}
+	rendered := output.String()
+	for _, wanted := range []string{
+		"\x1b[1mDiagnosis\x1b[0m",
+		"\x1b[1m\x1b[35mAI-assisted likely cause\x1b[0m",
+		"\x1b[1m\x1b[36mConfirmed by Jobman\x1b[0m",
+		"\x1b[33mAdvisory; confidence not calibrated\x1b[0m",
+		"\x1b[31mFailed (job completed)\x1b[0m",
+		"\x1b[36m/usr/bin/false --mode \"batch size\"\x1b[0m",
+	} {
+		if !strings.Contains(rendered, wanted) {
+			t.Fatalf("colored human output missing %q:\n%q", wanted, rendered)
+		}
+	}
+	for _, line := range strings.Split(rendered, "\n") {
+		if visibleWidth(line) > humanOutputWidth && !strings.Contains(line, "sha256:") {
+			t.Fatalf("colored line exceeds %d visible columns: %q", humanOutputWidth, line)
+		}
+	}
+	styled := "\x1b[1m\x1b[35m" + "colored" + "\x1b[0m"
+	if visibleWidth(styled) != len("colored") {
+		t.Fatal("visibleWidth counted ANSI styling bytes")
 	}
 }
 
@@ -153,6 +237,78 @@ func presentationFixture(t *testing.T, stderr []byte) (diagnosis.Report, diagnos
 	}
 
 	return report, failureEvidence
+}
+
+func mixedPresentationFixture(t *testing.T) (diagnosis.Report, diagnosis.FailureEvidence) {
+	t.Helper()
+	report, evidence := presentationFixture(t, []byte("configuration rejected by target\n"))
+	if len(evidence.Core.Artifacts) == 0 {
+		t.Fatal("mixed presentation fixture has no artifact")
+	}
+	artifact := evidence.Core.Artifacts[0]
+	exitID := ""
+	for _, item := range evidence.Core.Items {
+		if item.Code == diagnostic.CodeRunExitCode {
+			exitID = item.ID
+			break
+		}
+	}
+	if exitID == "" {
+		t.Fatal("mixed presentation fixture has no exit code")
+	}
+	artifactCited := false
+	for _, citation := range report.Citations {
+		artifactCited = artifactCited || citation.EvidenceID == artifact.ID
+	}
+	if !artifactCited {
+		report.Citations = append(report.Citations, diagnosis.Citation{
+			EvidenceID: artifact.ID, Code: artifact.Role,
+			Summary: "A bounded, sanitized, untrusted target log excerpt.", Kind: "artifact",
+		})
+	}
+	confidence, err := diagnosis.NewConfidence(40, "Generated hypotheses are advisory and uncalibrated.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	support := []string{artifact.ID, exitID}
+	report.Findings = append(report.Findings, diagnosis.Finding{
+		ID: "finding:999:generated-application-configuration", Code: "generated.application_configuration",
+		Category: "application", Severity: diagnosis.SeverityWarning,
+		Summary:     "The application rejected a deployment configuration value",
+		Explanation: "The bounded stderr evidence identifies a configuration rejection that explains the nonzero exit.",
+		Confidence:  confidence, SupportingEvidence: support,
+		ContradictingEvidence: []string{}, ContradictingFindings: []string{}, Analyzer: "generator.proposal/1",
+	})
+	report.Actions = append([]diagnosis.Action{{
+		ID: "action:000:generated-guidance", Code: "review_application_configuration", Kind: diagnosis.ActionChange,
+		Summary:            "Correct the rejected application configuration",
+		Description:        "Compare the affected setting with values enabled for the target deployment before creating a new run.",
+		SupportingEvidence: support, Execution: diagnosis.ActionExecutionNone, Arguments: []string{},
+		RequiresConfirmation: true, SafeToAutomate: false,
+	}}, report.Actions...)
+	report.Mode = diagnosis.ModeMixed
+	report.Versions.GenerationRequestSchemaVersion = provider.RequestSchemaVersion
+	report.Versions.ProposalSchemaVersion = provider.ProposalSchemaVersion
+	report.Disclosure = diagnosis.DisclosureManifest{
+		ProviderInvoked: true, GeneratedContentUsed: true, Locality: diagnosis.ProviderLocal,
+		Profile: "local-vllm", Provider: "openai_compatible", Model: "jobman-llama",
+		RequestID: "sha256:" + strings.Repeat("a", 64), Classes: []string{"metadata", "log_content"},
+		ItemIDs: []string{exitID}, ArtifactIDs: []string{artifact.ID}, EnrichmentIDs: []string{},
+		ItemCount: 1, ArtifactCount: 1, ArtifactBytes: artifact.ContentBytes, RequestBytes: 1024,
+	}
+	report.Generators = []diagnosis.GeneratorDescriptor{{
+		Provider: "openai_compatible", Model: "jobman-llama", Profile: "local-vllm", Locality: diagnosis.ProviderLocal,
+	}}
+	report.Warnings = append(report.Warnings, diagnosis.Warning{
+		Code:    uncalibratedWarningCode,
+		Message: "Generated hypotheses are advisory and uncalibrated; deterministic facts remain authoritative.",
+	})
+	sealed, err := diagnosis.Seal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return sealed, evidence
 }
 
 func fixtureItem(

@@ -13,10 +13,35 @@ import (
 
 const humanOutputWidth = 100
 
+const (
+	defaultFindingLimit     = 2
+	defaultActionLimit      = 3
+	defaultEvidenceLimit    = 4
+	uncalibratedWarningCode = "generated_content_uncalibrated"
+)
+
+// HumanOptions controls presentation-only detail without changing the sealed
+// report or its canonical JSON representation.
+type HumanOptions struct {
+	Details bool
+	Color   bool
+}
+
 // Human writes a readable, evidence-aware report for an interactive user.
 // Canonical identifiers and schemas remain available through JSON output; the
 // human view uses report-local aliases and never renders raw artifact bytes.
 func Human(destination io.Writer, report diagnosis.Report, evidence diagnosis.FailureEvidence) error {
+	return HumanWithOptions(destination, report, evidence, HumanOptions{})
+}
+
+// HumanWithOptions writes an answer-first human report. Details retains the
+// complete evidence inventory and machine provenance for interactive audits.
+func HumanWithOptions(
+	destination io.Writer,
+	report diagnosis.Report,
+	evidence diagnosis.FailureEvidence,
+	options HumanOptions,
+) error {
 	if destination == nil {
 		return fmt.Errorf("write diagnosis: nil destination")
 	}
@@ -24,7 +49,10 @@ func Human(destination io.Writer, report diagnosis.Report, evidence diagnosis.Fa
 	if err != nil {
 		return fmt.Errorf("write diagnosis: %w", err)
 	}
-	renderer := humanRenderer{view: view, width: humanOutputWidth}
+	renderer := humanRenderer{
+		view: view, width: humanOutputWidth, details: options.Details,
+		style: newHumanStyle(options.Color),
+	}
 	renderer.render()
 	if _, err := io.WriteString(destination, renderer.output.String()); err != nil {
 		return fmt.Errorf("write diagnosis: %w", err)
@@ -34,76 +62,149 @@ func Human(destination io.Writer, report diagnosis.Report, evidence diagnosis.Fa
 }
 
 type humanRenderer struct {
-	view   reportView
-	width  int
-	output strings.Builder
+	view    reportView
+	width   int
+	details bool
+	style   humanStyle
+	output  strings.Builder
 }
 
 func (renderer *humanRenderer) render() {
 	renderer.renderDiagnosis()
-	renderer.renderJob()
-	renderer.renderRetry()
-	renderer.renderEvidence()
-	renderer.renderOtherFindings()
 	renderer.renderActions()
+	renderer.renderRetry()
+	renderer.renderJob()
+	if renderer.details {
+		renderer.renderEvidence()
+	} else {
+		renderer.renderEvidenceHighlights()
+	}
 	renderer.renderMissingEvidence()
 	renderer.renderCaveats()
-	renderer.renderTechnicalDetails()
+	renderer.renderAIDisclosure()
+	if renderer.details {
+		renderer.renderTechnicalDetails()
+	}
 }
 
 func (renderer *humanRenderer) renderDiagnosis() {
 	primary := renderer.view.primary
 	renderer.section("Diagnosis")
-	renderer.paragraph("  ["+renderer.view.findingAlias(primary.ID)+"] ", "       ", primary.Summary)
-	renderer.field("Confidence", formatConfidence(primary.Confidence, primary.Analyzer))
-	renderer.field("Why", primary.Explanation)
-	if primary.Confidence.Basis != "" && primary.Confidence.Basis != primary.Explanation {
-		renderer.field("Confidence basis", primary.Confidence.Basis)
+	generated := renderer.generatedFindings()
+	limit := len(generated)
+	if !renderer.details && limit > defaultFindingLimit {
+		limit = defaultFindingLimit
 	}
-	if references := renderer.view.referenceList(primary.SupportingEvidence); references != "" {
-		renderer.field("Evidence", references)
+	for index, finding := range generated[:limit] {
+		label := "AI-assisted likely cause"
+		if index != 0 {
+			label = "AI-assisted alternative"
+		}
+		renderer.renderFinding(finding, label)
 	}
-	if references := renderer.view.referenceList(primary.ContradictingEvidence); references != "" {
-		renderer.field("Contradicting evidence", references)
+	if remaining := len(generated) - limit; remaining > 0 {
+		renderer.subparagraph(fmt.Sprintf("%d additional AI hypotheses are available with --details.", remaining))
+	}
+
+	label := "Confirmed by Jobman"
+	if len(generated) == 0 {
+		label = "Primary finding"
+	}
+	renderer.renderFinding(primary, label)
+
+	additional := renderer.additionalDeterministicFindings()
+	limit = len(additional)
+	if !renderer.details && limit > defaultFindingLimit {
+		limit = defaultFindingLimit
+	}
+	for _, finding := range additional[:limit] {
+		renderer.renderFinding(finding, "Additional observation")
+	}
+	if remaining := len(additional) - limit; remaining > 0 {
+		renderer.subparagraph(fmt.Sprintf("%d additional observations are available with --details.", remaining))
+	}
+}
+
+func (renderer *humanRenderer) renderFinding(finding diagnosis.Finding, label string) {
+	alias := renderer.style.muted("[" + renderer.view.findingAlias(finding.ID) + "]")
+	styledLabel := renderer.style.confirmed(label)
+	if isGeneratedFinding(finding) {
+		styledLabel = renderer.style.ai(label)
+	}
+	renderer.paragraph("  • "+styledLabel+" "+alias, "    ", "")
+	renderer.paragraph("    ", "    ", finding.Summary)
+	confidenceLabel := "Confidence"
+	confidenceValue := formatConfidence(finding.Confidence, finding.Analyzer)
+	if isGeneratedFinding(finding) {
+		confidenceLabel = "Status"
+		confidenceValue = renderer.style.warning(confidenceValue)
+	}
+	renderer.findingDetail(confidenceLabel, confidenceValue)
+	if !equivalentText(finding.Explanation, finding.Summary) {
+		renderer.findingDetail("Why", finding.Explanation)
+	}
+	if renderer.details && finding.Confidence.Basis != "" &&
+		!equivalentText(finding.Confidence.Basis, finding.Explanation) {
+		renderer.findingDetail("Confidence basis", finding.Confidence.Basis)
+	}
+	if references := renderer.referenceList(finding.SupportingEvidence); references != "" {
+		renderer.findingDetail("Evidence", references)
+	}
+	if references := renderer.referenceList(finding.ContradictingEvidence); references != "" {
+		renderer.findingDetail("Contradicting evidence", references)
+	}
+	if findings := renderer.view.findingReferenceList(finding.ContradictingFindings); findings != "" {
+		renderer.findingDetail("Conflicts with", findings)
 	}
 }
 
 func (renderer *humanRenderer) renderJob() {
 	renderer.section("Job")
+	headline := make([]string, 0, 3)
 	if renderer.view.jobName != "" {
-		renderer.field("Name", renderer.view.jobName)
+		headline = append(headline, renderer.view.jobName)
+	} else {
+		headline = append(headline, "Selected job")
 	}
-	renderer.field("ID", renderer.view.report.Subject.JobID)
 	if runs := formatRuns(renderer.view.report.Subject.SelectedRuns); runs != "" {
-		renderer.field(runLabel(len(renderer.view.report.Subject.SelectedRuns)), runs)
+		headline = append(headline, runLabel(len(renderer.view.report.Subject.SelectedRuns))+" "+runs)
 	}
+	state := formatState(renderer.view.report.Subject.Phase, renderer.view.report.Subject.Outcome)
+	if renderer.view.report.Subject.Outcome == "failure" || renderer.view.report.Subject.Outcome == "start_failed" ||
+		renderer.view.report.Subject.Outcome == "timed_out" || renderer.view.report.Subject.Outcome == "lost" {
+		state = renderer.style.failure(state)
+	}
+	headline = append(headline, state)
+	renderer.paragraph("  • ", "    ", strings.Join(headline, " · "))
+	renderer.subfield("ID", renderer.view.report.Subject.JobID)
 	if renderer.view.targetCommand != nil {
-		renderer.field("Command", formatCommand(*renderer.view.targetCommand))
+		renderer.subfieldStyled("Command", renderer.style.command(formatCommand(*renderer.view.targetCommand)))
 	}
 	if renderer.view.workingDirectory != "" {
-		renderer.field("Working directory", formatArgument(renderer.view.workingDirectory))
+		renderer.subfield("Working directory", formatArgument(renderer.view.workingDirectory))
 	}
-	renderer.field("State", formatState(renderer.view.report.Subject.Phase, renderer.view.report.Subject.Outcome))
 }
 
 func (renderer *humanRenderer) renderRetry() {
 	retry := renderer.view.report.Retry
 	renderer.section("Retry")
-	renderer.field("Recommendation", retryVerdictText(retry.Verdict))
-	renderer.field("Automatic policy", existingPolicyText(retry.ExistingPolicy))
-	renderer.field("Reason", retry.Rationale)
-	if retry.Confidence.Basis != "" {
-		renderer.field("Confidence", formatConfidence(retry.Confidence, ""))
-		renderer.field("Confidence basis", retry.Confidence.Basis)
+	renderer.statement("Recommendation", renderer.style.warning(retryVerdictText(retry.Verdict)))
+	renderer.statement("Automatic retries", existingPolicyText(retry.ExistingPolicy))
+	renderer.statement("Why", retry.Rationale)
+	if renderer.details && retry.Confidence.Basis != "" {
+		renderer.statement("Confidence", formatConfidence(retry.Confidence, ""))
+		renderer.statement("Confidence basis", retry.Confidence.Basis)
 	}
 	if retry.EarliestAt != nil {
-		renderer.field("Eligible", formatRelativeTime(*retry.EarliestAt, renderer.view.report.GeneratedAt))
+		renderer.statement("Eligible", formatRelativeTime(*retry.EarliestAt, renderer.view.report.GeneratedAt))
 	}
-	for _, reason := range retry.Reasons {
-		renderer.bullet("Reason", retryReasonText(reason))
-	}
-	if references := renderer.view.referenceList(retry.SupportingEvidence); references != "" {
-		renderer.field("Evidence", references)
+	if renderer.details {
+		for _, reason := range retry.Reasons {
+			renderer.nestedBullet("Reason", retryReasonText(reason))
+		}
+		if references := renderer.view.referenceList(retry.SupportingEvidence); references != "" {
+			renderer.statement("Evidence", references)
+		}
 	}
 }
 
@@ -115,35 +216,23 @@ func (renderer *humanRenderer) renderEvidence() {
 	for _, id := range renderer.view.evidenceOrder {
 		alias := renderer.view.evidenceAlias(id)
 		detail := renderer.view.evidenceDetail(id)
-		renderer.paragraph("  ["+alias+"] ", "       ", detail)
+		renderer.paragraph("  • "+renderer.style.muted("["+alias+"]")+" ", "    ", detail)
 	}
 }
 
-func (renderer *humanRenderer) renderOtherFindings() {
-	if len(renderer.view.report.Findings) < 2 {
+func (renderer *humanRenderer) renderEvidenceHighlights() {
+	identifiers := renderer.view.evidenceHighlights(defaultEvidenceLimit)
+	if len(identifiers) == 0 {
 		return
 	}
-	renderer.section("Other findings")
-	for _, finding := range renderer.view.report.Findings {
-		if finding.ID == renderer.view.primary.ID {
-			continue
-		}
-		prefix := "  [" + renderer.view.findingAlias(finding.ID) + "] " + findingSource(finding.Analyzer) + ": "
-		renderer.paragraph(prefix, strings.Repeat(" ", visibleWidth(prefix)), finding.Summary)
-		renderer.subfield("Confidence", formatConfidence(finding.Confidence, finding.Analyzer))
-		renderer.subfield("Why", finding.Explanation)
-		if finding.Confidence.Basis != "" && finding.Confidence.Basis != finding.Explanation {
-			renderer.subfield("Confidence basis", finding.Confidence.Basis)
-		}
-		if references := renderer.view.referenceList(finding.SupportingEvidence); references != "" {
-			renderer.subfield("Evidence", references)
-		}
-		if references := renderer.view.referenceList(finding.ContradictingEvidence); references != "" {
-			renderer.subfield("Contradicting evidence", references)
-		}
-		if findings := renderer.view.findingReferenceList(finding.ContradictingFindings); findings != "" {
-			renderer.subfield("Conflicts with", findings)
-		}
+	renderer.section("Evidence highlights")
+	for _, id := range identifiers {
+		alias := renderer.view.evidenceAlias(id)
+		detail := renderer.view.evidenceDetail(id)
+		renderer.paragraph("  • "+renderer.style.muted("["+alias+"]")+" ", "    ", detail)
+	}
+	if remaining := len(renderer.view.evidenceOrder) - len(identifiers); remaining > 0 {
+		renderer.paragraph("  • ", "    ", fmt.Sprintf("%d additional facts are available with --details.", remaining))
 	}
 }
 
@@ -152,21 +241,30 @@ func (renderer *humanRenderer) renderActions() {
 		return
 	}
 	renderer.section("Recommended next steps")
-	for index, action := range renderer.view.report.Actions {
+	limit := len(renderer.view.report.Actions)
+	if !renderer.details && limit > defaultActionLimit {
+		limit = defaultActionLimit
+	}
+	for index, action := range renderer.view.report.Actions[:limit] {
 		prefix := "  " + strconv.Itoa(index+1) + ". "
-		renderer.paragraph(prefix, strings.Repeat(" ", visibleWidth(prefix)), action.Summary)
-		renderer.subparagraph(action.Description)
-		renderer.subfield("Type", actionKindText(action.Kind))
-		if references := renderer.view.referenceList(action.SupportingEvidence); references != "" {
-			renderer.subfield("Evidence", references)
+		renderer.paragraph(prefix, "     ", renderer.style.action(action.Summary))
+		renderer.actionParagraph(action.Description)
+		if renderer.details {
+			renderer.actionDetail("Type", actionKindText(action.Kind))
+			if references := renderer.view.referenceList(action.SupportingEvidence); references != "" {
+				renderer.actionDetail("Evidence", references)
+			}
 		}
 		if action.Execution == diagnosis.ActionExecutionReadOnly {
-			renderer.subfield("Suggested command", formatArguments(action.Arguments))
-			renderer.subfield("Execution", "Read-only suggestion; Jobman Diagnose will not run it")
+			renderer.actionDetailStyled("Suggested command", renderer.style.command(formatArguments(action.Arguments)))
+			renderer.actionDetail("Execution", "Read-only suggestion; not run automatically")
 		}
 		if action.RequiresConfirmation {
-			renderer.subfield("Confirmation", "Required before taking this action")
+			renderer.actionDetail("Confirmation", "Required; Jobman Diagnose will not make this change")
 		}
+	}
+	if remaining := len(renderer.view.report.Actions) - limit; remaining > 0 {
+		renderer.paragraph("  • ", "    ", fmt.Sprintf("%d additional recommendations are available with --details.", remaining))
 	}
 }
 
@@ -181,13 +279,39 @@ func (renderer *humanRenderer) renderMissingEvidence() {
 }
 
 func (renderer *humanRenderer) renderCaveats() {
-	if len(renderer.view.report.Warnings) == 0 {
+	warnings := make([]diagnosis.Warning, 0, len(renderer.view.report.Warnings))
+	for _, warning := range renderer.view.report.Warnings {
+		if warning.Code != uncalibratedWarningCode {
+			warnings = append(warnings, warning)
+		}
+	}
+	if len(warnings) == 0 {
 		return
 	}
 	renderer.section("Caveats")
-	for _, value := range renderer.view.report.Warnings {
+	for _, value := range warnings {
 		renderer.bullet("", value.Message)
 	}
+}
+
+func (renderer *humanRenderer) renderAIDisclosure() {
+	report := renderer.view.report
+	if !report.Disclosure.ProviderInvoked {
+		return
+	}
+	renderer.section("AI disclosure")
+	if report.Disclosure.GeneratedContentUsed {
+		renderer.paragraph(
+			"  • ", "    ",
+			"Validated generated hypotheses from "+report.Disclosure.Model+" contributed to this diagnosis.",
+		)
+		renderer.paragraph(
+			"  • ", "    ",
+			"Generated conclusions are advisory; Jobman's observed facts and retry policy remain authoritative.",
+		)
+		return
+	}
+	renderer.paragraph("  • ", "    ", "No generated hypothesis was accepted; this is the complete deterministic diagnosis.")
 }
 
 func (renderer *humanRenderer) renderTechnicalDetails() {
@@ -221,11 +345,56 @@ func (renderer *humanRenderer) renderTechnicalDetails() {
 	}
 }
 
+func (renderer *humanRenderer) generatedFindings() []diagnosis.Finding {
+	result := make([]diagnosis.Finding, 0)
+	for _, finding := range renderer.view.report.Findings {
+		if isGeneratedFinding(finding) {
+			result = append(result, finding)
+		}
+	}
+
+	return result
+}
+
+func (renderer *humanRenderer) additionalDeterministicFindings() []diagnosis.Finding {
+	result := make([]diagnosis.Finding, 0)
+	for _, finding := range renderer.view.report.Findings {
+		if finding.ID != renderer.view.primary.ID && !isGeneratedFinding(finding) {
+			result = append(result, finding)
+		}
+	}
+
+	return result
+}
+
+func (renderer *humanRenderer) referenceList(ids []string) string {
+	ids = renderer.view.orderedEvidenceReferences(ids)
+	if renderer.details || len(ids) <= defaultEvidenceLimit {
+		return renderer.view.referenceList(ids)
+	}
+	visible := renderer.view.referenceList(ids[:defaultEvidenceLimit])
+
+	return visible + fmt.Sprintf(" (+%d more; --details)", len(ids)-defaultEvidenceLimit)
+}
+
+func isGeneratedFinding(finding diagnosis.Finding) bool {
+	return strings.HasPrefix(finding.Analyzer, "generator.")
+}
+
+func equivalentText(left, right string) bool {
+	normalize := func(value string) string {
+		value = strings.ToLower(strings.Join(strings.Fields(value), " "))
+		return strings.Trim(value, " .,:;!?-")
+	}
+
+	return normalize(left) == normalize(right)
+}
+
 func (renderer *humanRenderer) section(title string) {
 	if renderer.output.Len() != 0 {
 		renderer.output.WriteByte('\n')
 	}
-	renderer.output.WriteString(title)
+	renderer.output.WriteString(renderer.style.section(title))
 	renderer.output.WriteString("\n\n")
 }
 
@@ -234,38 +403,78 @@ func (renderer *humanRenderer) paragraph(prefix, continuation, value string) {
 }
 
 func (renderer *humanRenderer) field(label, value string) {
+	renderer.statement(label, value)
+}
+
+func (renderer *humanRenderer) statement(label, value string) {
 	if value == "" {
 		return
 	}
-	prefix := "  " + label + ": "
-	renderer.paragraph(prefix, strings.Repeat(" ", visibleWidth(prefix)), value)
+	prefix := "  • " + renderer.style.label(label) + ": "
+	renderer.paragraph(prefix, "    ", value)
 }
 
 func (renderer *humanRenderer) subfield(label, value string) {
+	renderer.subfieldStyled(label, value)
+}
+
+func (renderer *humanRenderer) subfieldStyled(label, value string) {
 	if value == "" {
 		return
 	}
-	prefix := "     " + label + ": "
+	prefix := "    - " + renderer.style.label(label) + ": "
 	renderer.paragraph(prefix, strings.Repeat(" ", visibleWidth(prefix)), value)
 }
 
 func (renderer *humanRenderer) subparagraph(value string) {
-	renderer.paragraph("     ", "     ", value)
+	renderer.paragraph("    ", "    ", value)
 }
 
 func (renderer *humanRenderer) bullet(label, value string) {
-	prefix := "  - "
+	prefix := "  • "
 	if label != "" {
-		prefix += label + ": "
+		prefix += renderer.style.label(label) + ": "
 	}
 	renderer.paragraph(prefix, "    ", value)
 }
 
-func formatConfidence(confidence diagnosis.Confidence, analyzer string) string {
-	value := titleWords(confidence.Band) + " (" + strconv.Itoa(confidence.Score) + "/100)"
-	if strings.HasPrefix(analyzer, "generator.") {
-		value += "; AI estimate, not calibrated"
+func (renderer *humanRenderer) nestedBullet(label, value string) {
+	prefix := "    - "
+	if label != "" {
+		prefix += renderer.style.label(label) + ": "
 	}
+	renderer.paragraph(prefix, "      ", value)
+}
+
+func (renderer *humanRenderer) findingDetail(label, value string) {
+	if value == "" {
+		return
+	}
+	prefix := "      - " + renderer.style.label(label) + ": "
+	renderer.paragraph(prefix, strings.Repeat(" ", visibleWidth(prefix)), value)
+}
+
+func (renderer *humanRenderer) actionParagraph(value string) {
+	renderer.paragraph("     ", "     ", value)
+}
+
+func (renderer *humanRenderer) actionDetail(label, value string) {
+	renderer.actionDetailStyled(label, value)
+}
+
+func (renderer *humanRenderer) actionDetailStyled(label, value string) {
+	if value == "" {
+		return
+	}
+	prefix := "     - " + renderer.style.label(label) + ": "
+	renderer.paragraph(prefix, strings.Repeat(" ", visibleWidth(prefix)), value)
+}
+
+func formatConfidence(confidence diagnosis.Confidence, analyzer string) string {
+	if strings.HasPrefix(analyzer, "generator.") {
+		return "Advisory; confidence not calibrated"
+	}
+	value := titleWords(confidence.Band) + " (" + strconv.Itoa(confidence.Score) + "/100)"
 
 	return value
 }

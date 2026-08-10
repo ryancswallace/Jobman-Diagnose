@@ -193,7 +193,7 @@ func TestScalarEvidenceRendering(t *testing.T) {
 		t.Fatal("safeScalarDetail(array) succeeded")
 	}
 	label, value, ok := safeScalarDetail(diagnosis.Citation{Code: "jobman.run.exit.code"}, json.RawMessage(`2`))
-	if !ok || label != "Jobman.run.exit.code" || value != "2" {
+	if !ok || label != "Run exit code" || value != "2" {
 		t.Fatalf("safeScalarDetail() = %q, %q, %t", label, value, ok)
 	}
 	if decode(nil, &struct{}{}) == nil || decode(json.RawMessage(`{}`), nil) == nil {
