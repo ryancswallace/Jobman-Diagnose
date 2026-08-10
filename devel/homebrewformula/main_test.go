@@ -38,7 +38,7 @@ func TestRun(t *testing.T) {
 		"/releases/download/v1.2.3/jobman-diagnose_1.2.3_darwin_arm64.tar.gz",
 		`sha256 "` + arm64Digest + `"`,
 		`bin.install "jobman-diagnose"`,
-		`assert_match "jobman-diagnose #{version}"`,
+		`assert_match "jobman-diagnose 1.2.3"`,
 	} {
 		if !strings.Contains(string(formula), want) {
 			t.Errorf("formula does not contain %q", want)

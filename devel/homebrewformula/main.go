@@ -161,7 +161,7 @@ class JobmanDiagnose < Formula
   end
 
   test do
-    assert_match "jobman-diagnose #{version}", shell_output("#{bin}/jobman-diagnose --version")
+    assert_match "jobman-diagnose {{ .Version }}", shell_output("#{bin}/jobman-diagnose --version")
   end
 end
 `))
