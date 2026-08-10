@@ -65,9 +65,14 @@ if [ "${mode}" = signed ]; then
     echo "release is missing $(basename "${bundle}")" >&2
     exit 1
   fi
-  file_count=$(find "${dist}" -maxdepth 1 -type f | wc -l | tr -d ' ')
+  # GoReleaser keeps internal build metadata (for example artifacts.json and
+  # metadata.json) in dist but does not upload those files to the release.
+  # Count only the release asset namespace so internal implementation details
+  # cannot make an otherwise complete public artifact set fail validation.
+  file_count=$(find "${dist}" -maxdepth 1 -type f \
+    -name 'jobman-diagnose_*' | wc -l | tr -d ' ')
   if [ "${file_count}" -ne 36 ]; then
-    echo "signed release contains ${file_count} files; expected exactly 36" >&2
+    echo "signed release contains ${file_count} public assets; expected exactly 36" >&2
     exit 1
   fi
 fi

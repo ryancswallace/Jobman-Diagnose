@@ -152,6 +152,7 @@ func TestReleaseWorkflowChecksCompleteArtifactSet(t *testing.T) {
 	t.Parallel()
 
 	workflow := readRepositoryFile(t, "../.github/workflows/release.yml")
+	checker := readRepositoryFile(t, "check-release.sh")
 	if !strings.Contains(workflow, "run: ./devel/check-release.sh dist signed") {
 		t.Error("release workflow does not validate the complete artifact set")
 	}
@@ -160,6 +161,9 @@ func TestReleaseWorkflowChecksCompleteArtifactSet(t *testing.T) {
 	}
 	assertExecutable(t, "check-release.sh")
 	assertExecutable(t, "package-smoke.sh")
+	if !strings.Contains(checker, "-name 'jobman-diagnose_*'") {
+		t.Error("release checker counts GoReleaser internal metadata as public assets")
+	}
 }
 
 func TestStagedReleaseWorkflowVerifiesBeforePublishingByID(t *testing.T) {
