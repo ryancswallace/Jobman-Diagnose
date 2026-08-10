@@ -66,6 +66,9 @@ brew install ryancswallace/tap/jobman-diagnose
 Stable releases beginning with v0.2.0 include signed `.deb`, `.rpm`, and `.apk`
 packages for Linux 386, amd64, and arm64. They are available from the public
 [Cloudsmith repository] as well as the GitHub release.
+The same repository provides Jobman in all three native package formats
+beginning with Jobman v1.5.0, so Linux package-manager installations can
+install both commands together.
 
 Portable CGO-free archives remain available for Linux, macOS, and Windows.
 See the [installation guide](docs/INSTALLATION.md) for package-repository setup,

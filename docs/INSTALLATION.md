@@ -34,7 +34,7 @@ curl -1sLf \
   'https://dl.cloudsmith.io/public/jobman/stable/cfg/setup/bash.deb.sh' \
   | sudo -E bash
 sudo apt update
-sudo apt install jobman-diagnose
+sudo apt install jobman jobman-diagnose
 ```
 
 Fedora, RHEL, Rocky Linux, AlmaLinux, and Amazon Linux:
@@ -53,12 +53,13 @@ sudo apk add --no-cache bash curl
 curl -1sLf \
   'https://dl.cloudsmith.io/public/jobman/stable/cfg/setup/bash.alpine.sh' \
   | sudo -E bash
-sudo apk add jobman-diagnose
+sudo apk add jobman jobman-diagnose
 ```
 
-The Cloudsmith RPM repository already distributes Jobman itself. Debian and
-Alpine users must install Jobman v1.4.0 or newer separately before using live
-diagnosis; offline `--from-evidence` diagnosis does not launch Jobman.
+Beginning with Jobman v1.5.0, the same Cloudsmith repository distributes
+Jobman and Jobman Diagnose as Debian, RPM, and Alpine packages. Install both
+packages together for live diagnosis on any of the supported repository
+formats. Offline `--from-evidence` diagnosis does not launch Jobman.
 
 Cloudsmith signs repository metadata and packages for native package-manager
 verification. RPM signing changes the uploaded RPM bytes, so verify a package

@@ -5,6 +5,11 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Changed
+
+- Documented installing Jobman and Jobman Diagnose together from Cloudsmith's
+  Debian, RPM, and Alpine repositories beginning with Jobman v1.5.0.
+
 ## [0.2.0] - 2026-08-09
 
 ### Added
