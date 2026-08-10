@@ -146,7 +146,7 @@ jobman-diagnose --version
 Windows users can expand the `.zip` archive and copy `jobman-diagnose.exe` to a
 directory on `PATH`.
 
-[v0.2.0 release]: https://github.com/ryancswallace/Jobman-Diagnose/releases
+[v0.2.0 release]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.2.0
 
 ## Build from source
 
