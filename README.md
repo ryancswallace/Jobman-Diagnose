@@ -19,10 +19,10 @@ It works locally without configuration, credentials, Python, network access,
 or a model. Optional AI augmentation adds schema-validated hypotheses through
 pluggable local or hosted providers without overriding deterministic facts.
 
-<!-- Terminal demo slot. Add the recording at docs/demo/diagnose.gif,
-then replace this comment with:
+<!-- Terminal demo slot. Generate the recording from
+docs/screencaps/tape/diagnose.tape, then replace this comment with:
 <p align="center">
-  <img src="docs/demo/diagnose.gif"
+  <img src="docs/screencaps/gif/diagnose.gif"
        alt="A Jobman-Diagnose terminal demo"
        width="900">
 </p>
@@ -60,6 +60,7 @@ then replace this comment with:
 | Share a bounded redacted log tail with AI | `jobman diagnose --ai-logs JOB` |
 | Include local system constraints | `jobman diagnose --system JOB` |
 | Produce stable machine output | `jobman diagnose --json JOB` |
+| Expand the human audit or control color | `jobman diagnose --details JOB`, `jobman diagnose --color=never JOB` |
 | Export or replay evidence | `jobman-diagnose --export-evidence FILE JOB`, `jobman-diagnose --from-evidence FILE` |
 | Create a private support archive | `jobman diagnose --support-bundle FILE JOB` |
 | Inspect AI configuration | `jobman diagnose config show`, `jobman diagnose profiles` |
