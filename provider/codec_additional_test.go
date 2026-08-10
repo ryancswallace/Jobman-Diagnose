@@ -257,7 +257,7 @@ func TestVerifyRequestRejectsDuplicateProjectionAuthority(t *testing.T) {
 			value.Projection.RedactionNotices = []ProjectedRedaction{notice, notice}
 			value.Manifest.RedactionNoticeCount = 2
 		}},
-		{name: "unprojected redaction target", want: "was not projected", edit: func(value *Request) {
+		{name: "missing redaction target", want: "was not projected", edit: func(value *Request) {
 			value.Projection.RedactionNotices = []ProjectedRedaction{{Code: "notice", Affects: []string{"missing"}, Count: 1}}
 			value.Manifest.RedactionNoticeCount = 1
 		}},
@@ -284,7 +284,7 @@ func TestProtocolValidationHelpers(t *testing.T) {
 	if validCode("") || validCode(strings.Repeat("a", 161)) || validCode("Bad") || !validCode("valid.code-1") {
 		t.Fatal("validCode() classification changed")
 	}
-	if validText("\n", 10) || validText("a\x00b", 10) || validText("toolong", 3) || !validText("valid", 10) {
+	if validText("\n", 10) || validText("a\x00b", 10) || validText("too-long", 3) || !validText("valid", 10) {
 		t.Fatal("validText() classification changed")
 	}
 	if sortedUnique([]string{"a", "a"}) || sortedUniqueUint64([]uint64{2, 1}) ||

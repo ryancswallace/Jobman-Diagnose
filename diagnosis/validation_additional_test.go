@@ -261,7 +261,7 @@ func TestNormalizeInitializesCanonicalCollections(t *testing.T) {
 		report.Disclosure.ItemIDs == nil || report.Disclosure.ArtifactIDs == nil ||
 		report.Disclosure.EnrichmentIDs == nil || report.Retry.EarliestAt == nil ||
 		report.Retry.EarliestAt.Location() != time.UTC {
-		t.Fatalf("normalize() left noncanonical values: %#v", report)
+		t.Fatalf("normalize() left values outside canonical form: %#v", report)
 	}
 	if len(report.Analyzers) != 1 || report.Analyzers[0] != (AnalyzerDescriptor{Name: "collector", Version: "unknown"}) {
 		t.Fatalf("normalize() analyzers = %#v", report.Analyzers)
