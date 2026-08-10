@@ -1,13 +1,13 @@
 # Jobman-Diagnose
 
 [![Test](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/test.yml/badge.svg)](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/test.yml)
+[![Codecov](https://codecov.io/gh/ryancswallace/Jobman-Diagnose/branch/main/graph/badge.svg)](https://codecov.io/gh/ryancswallace/Jobman-Diagnose)
 [![CodeQL](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/codeql.yml/badge.svg)](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ryancswallace/Jobman-Diagnose/badge)](https://scorecard.dev/viewer/?uri=github.com/ryancswallace/Jobman-Diagnose)
 [![Latest release](https://img.shields.io/github/v/release/ryancswallace/jobman-diagnose?sort=semver)](https://github.com/ryancswallace/jobman-diagnose/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/ryancswallace/jobman-diagnose)](https://github.com/ryancswallace/jobman-diagnose/blob/main/go.mod)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ryancswallace/jobman-diagnose/diagnosis.svg)](https://pkg.go.dev/github.com/ryancswallace/jobman-diagnose/diagnosis)
 [![Documentation](https://img.shields.io/badge/docs-reference-blue)](docs/README.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![OSS hosting by Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-Cloudsmith-blue?logo=cloudsmith)](https://cloudsmith.com/)
 
 Jobman-Diagnose explains why a [Jobman] job failed and what to do next. The
