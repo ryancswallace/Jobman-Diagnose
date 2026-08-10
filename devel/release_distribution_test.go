@@ -167,6 +167,7 @@ func TestStagedReleaseWorkflowVerifiesBeforePublishingByID(t *testing.T) {
 
 	workflow := readRepositoryFile(t, "../.github/workflows/publish-staged-release.yml")
 	for _, required := range []string{
+		"actions: write",
 		"./devel/check-release.sh dist signed",
 		"cosign verify-blob",
 		"gh attestation verify",
@@ -175,6 +176,9 @@ func TestStagedReleaseWorkflowVerifiesBeforePublishingByID(t *testing.T) {
 		"verify-bin/jobman-diagnose --version",
 		`"repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"`,
 		"-F draft=false",
+		"gh workflow run publish-homebrew-formula.yml",
+		"gh workflow run publish-cloudsmith-packages.yml",
+		`-f "tag=${RELEASE_TAG}"`,
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("staged release workflow is missing %q", required)

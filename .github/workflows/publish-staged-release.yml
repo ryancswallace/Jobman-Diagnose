@@ -25,6 +25,7 @@ jobs:
       name: main
       url: https://github.com/ryancswallace/jobman-diagnose/releases/tag/${{ inputs.tag }}
     permissions:
+      actions: write
       attestations: read
       contents: write
 
@@ -136,3 +137,22 @@ jobs:
             echo "GitHub did not publish the exact verified release ID." >&2
             exit 1
           fi
+
+      # Events created with GITHUB_TOKEN do not ordinarily start another
+      # workflow. workflow_dispatch is the documented exception, so explicitly
+      # start both post-release publishers after this workflow makes the draft
+      # public. A release published through the GitHub UI continues to use each
+      # publisher's release.published trigger instead.
+      - name: Dispatch post-release distribution
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh workflow run publish-homebrew-formula.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f "tag=${RELEASE_TAG}"
+          gh workflow run publish-cloudsmith-packages.yml \
+            --repo "${GITHUB_REPOSITORY}" \
+            --ref main \
+            -f "tag=${RELEASE_TAG}"
