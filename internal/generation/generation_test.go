@@ -235,6 +235,16 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 		!report.Disclosure.ProviderInvoked || !report.Disclosure.GeneratedContentUsed {
 		t.Fatalf("generated finding/disclosure = %#v / %#v", generated, report.Disclosure)
 	}
+	assertGeneratedGuidance(t, report.Actions, len(deterministicReport.Actions)+1, generated.SupportingEvidence)
+}
+
+func assertGeneratedGuidance(t *testing.T, actions []diagnosis.Action, wantCount int, wantEvidence []string) {
+	t.Helper()
+	if len(actions) != wantCount || actions[0].Code != "review_application_configuration" ||
+		actions[0].Execution != diagnosis.ActionExecutionNone || !actions[0].RequiresConfirmation ||
+		!slices.Equal(actions[0].SupportingEvidence, wantEvidence) {
+		t.Fatalf("host-authored generated guidance = %#v", actions)
+	}
 }
 
 func TestReconcileSuppressesGeneratedDuplicateOfDeterministicFinding(t *testing.T) {

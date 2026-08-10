@@ -216,6 +216,7 @@ func reconcile(
 		})
 	}
 	report.Actions = reorderActions(report.Actions, proposal.RecommendedActions)
+	report.Actions = prependGeneratedGuidance(report.Actions, proposal.Hypotheses)
 	for _, missing := range proposal.MissingEvidence {
 		report.MissingEvidence = append(report.MissingEvidence, diagnosis.MissingEvidence{
 			Code: missing.Code, Description: missing.Description,
@@ -290,6 +291,80 @@ func reorderActions(actions []diagnosis.Action, preferred []string) []diagnosis.
 	}
 
 	return result
+}
+
+func prependGeneratedGuidance(
+	actions []diagnosis.Action,
+	hypotheses []provider.Hypothesis,
+) []diagnosis.Action {
+	for _, hypothesis := range hypotheses {
+		action, ok := generatedGuidanceAction(hypothesis)
+		if !ok {
+			continue
+		}
+		for _, existing := range actions {
+			if existing.Code == action.Code {
+				return actions
+			}
+		}
+		result := make([]diagnosis.Action, 0, len(actions)+1)
+		result = append(result, action)
+
+		return append(result, actions...)
+	}
+
+	return actions
+}
+
+func generatedGuidanceAction(hypothesis provider.Hypothesis) (diagnosis.Action, bool) {
+	action := diagnosis.Action{
+		ID: "action:000:generated-guidance", Kind: diagnosis.ActionInspect,
+		SupportingEvidence: slices.Clone(hypothesis.SupportingEvidence),
+		Execution:          diagnosis.ActionExecutionNone, Arguments: []string{}, SafeToAutomate: false,
+	}
+	switch hypothesis.Code {
+	case "generated.application_configuration":
+		action.Code = "review_application_configuration"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Correct the rejected application configuration"
+		action.Description = "Compare the affected setting with values enabled for the target deployment, update it through the application's normal configuration path, and then create a new run."
+		action.RequiresConfirmation = true
+	case "generated.application_input":
+		action.Code = "review_application_input"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Correct or validate the target input"
+		action.Description = "Compare the supplied input with the target application's accepted format and constraints before creating another run."
+		action.RequiresConfirmation = true
+	case "generated.dependency_unavailable":
+		action.Code = "restore_required_dependency"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Restore or reconfigure the unavailable dependency"
+		action.Description = "Verify the dependency's availability and the target's connection configuration before retrying the unchanged workload."
+		action.RequiresConfirmation = true
+	case "generated.environment_mismatch":
+		action.Code = "review_target_environment"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Align the target environment with its runtime requirements"
+		action.Description = "Review the target's declared environment and runtime assumptions, correct the mismatch through the normal job configuration path, and then create a new run."
+		action.RequiresConfirmation = true
+	case "generated.external_service_failure":
+		action.Code = "inspect_external_service"
+		action.Summary = "Verify the external service before retrying"
+		action.Description = "Check the service's availability and the target's authorized connection settings before deciding whether another run is useful."
+	case "generated.resource_pressure":
+		action.Code = "inspect_resource_constraints"
+		action.Summary = "Inspect the constrained resource before retrying"
+		action.Description = "Compare the cited resource evidence with the target's expected workload and available host or container limits."
+	case "generated.transient_infrastructure":
+		action.Code = "confirm_infrastructure_recovery"
+		action.Kind = diagnosis.ActionWait
+		action.Summary = "Confirm that the infrastructure condition has cleared"
+		action.Description = "Wait for the cited infrastructure condition to recover or verify its health before creating another run."
+	default:
+		return diagnosis.Action{}, false
+	}
+
+	return action, true
 }
 
 func appendGeneratedCitations(

@@ -157,6 +157,46 @@ func TestGenerationFailureAndReconciliationHelpers(t *testing.T) {
 	}
 }
 
+func TestGeneratedGuidanceCatalogIsHostAuthoredAndNonExecuting(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		code         string
+		wantCode     string
+		wantKind     diagnosis.ActionKind
+		confirmation bool
+	}{
+		{"generated.application_configuration", "review_application_configuration", diagnosis.ActionChange, true},
+		{"generated.application_input", "review_application_input", diagnosis.ActionChange, true},
+		{"generated.dependency_unavailable", "restore_required_dependency", diagnosis.ActionChange, true},
+		{"generated.environment_mismatch", "review_target_environment", diagnosis.ActionChange, true},
+		{"generated.external_service_failure", "inspect_external_service", diagnosis.ActionInspect, false},
+		{"generated.resource_pressure", "inspect_resource_constraints", diagnosis.ActionInspect, false},
+		{"generated.transient_infrastructure", "confirm_infrastructure_recovery", diagnosis.ActionWait, false},
+	}
+	for _, test := range tests {
+		t.Run(test.code, func(t *testing.T) {
+			t.Parallel()
+			hypothesis := provider.Hypothesis{Code: test.code, SupportingEvidence: []string{"evidence"}}
+			action, ok := generatedGuidanceAction(hypothesis)
+			if !ok || action.Code != test.wantCode || action.Kind != test.wantKind ||
+				action.RequiresConfirmation != test.confirmation || action.Execution != diagnosis.ActionExecutionNone ||
+				action.SafeToAutomate || !slices.Equal(action.SupportingEvidence, hypothesis.SupportingEvidence) {
+				t.Fatalf("generatedGuidanceAction(%q) = %#v, %t", test.code, action, ok)
+			}
+		})
+	}
+	if _, ok := generatedGuidanceAction(provider.Hypothesis{Code: "generated.unknown_target_error"}); ok {
+		t.Fatal("unknown target error received specific host guidance")
+	}
+	existing := []diagnosis.Action{{Code: "review_application_configuration"}}
+	if got := prependGeneratedGuidance(existing, []provider.Hypothesis{{
+		Code: "generated.application_configuration",
+	}}); len(got) != 1 || got[0].Code != existing[0].Code {
+		t.Fatalf("duplicate host guidance = %#v", got)
+	}
+}
+
 func TestAppendGeneratedCitationsAttributesEveryEvidenceKind(t *testing.T) {
 	t.Parallel()
 
