@@ -25,3 +25,38 @@ func TestFailureSeparatesSafeDiagnosticFromCause(t *testing.T) {
 		t.Fatal("generic error unexpectedly produced a safe diagnostic")
 	}
 }
+
+func TestFailureDiagnosticCatalog(t *testing.T) {
+	t.Parallel()
+
+	codes := []FailureCode{
+		FailureInvalidRequest, FailureInputOversized, FailureRequestTimeout,
+		FailureRequestCanceled, FailureRequestFailed, FailureHTTPStatus,
+		FailureResponseContentType, FailureResponseRead, FailureResponseOversized,
+		FailureResponseInvalid, FailureResponseIncomplete, FailureResponseTruncated,
+		FailureModelRefused, FailureContentEmpty, FailureContentOversized,
+		FailureProviderExit, FailureOutputEmpty,
+	}
+	for _, code := range codes {
+		t.Run(string(code), func(t *testing.T) {
+			t.Parallel()
+			err := NewFailure(code, nil)
+			gotCode, message, ok := Diagnostic(err)
+			if !ok || gotCode != code || message == "" || err.Error() != message {
+				t.Fatalf("diagnostic = %q / %q / %t; error = %q", gotCode, message, ok, err)
+			}
+		})
+	}
+
+	unknown := NewFailure("future_failure", nil)
+	if got := unknown.Error(); got != "the provider failed without a recognized classification" {
+		t.Fatalf("unknown Error() = %q", got)
+	}
+	if _, _, ok := Diagnostic(unknown); ok {
+		t.Fatal("unknown failure produced a diagnostic")
+	}
+	var nilFailure *FailureError
+	if _, _, ok := Diagnostic(nilFailure); ok {
+		t.Fatal("nil failure produced a diagnostic")
+	}
+}

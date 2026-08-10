@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -127,5 +129,74 @@ func TestProgressSanitizesConfiguredLabels(t *testing.T) {
 	if strings.ContainsAny(text, "\n\r\x1b") || !strings.Contains(text, "local�profile") ||
 		!strings.Contains(text, "model�[31m") {
 		t.Fatalf("progress text = %q", text)
+	}
+}
+
+//nolint:cyclop // One table-free test keeps the small progress boundary helpers readable together.
+func TestProgressBoundaryHelpers(t *testing.T) {
+	t.Parallel()
+
+	environment := defaultRuntimeEnvironment()
+	if environment.interactive(&bytes.Buffer{}) {
+		t.Fatal("ordinary writer reported as interactive")
+	}
+	timing := environment.newProgressTiming()
+	if timing.now == nil || timing.delay == nil || timing.ticks == nil || timing.stop == nil {
+		t.Fatalf("default timing is incomplete: %#v", timing)
+	}
+	timing.stop()
+
+	file, err := os.CreateTemp(t.TempDir(), "progress-terminal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if terminalWriter(file) {
+		t.Fatal("regular file reported as terminal")
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if terminalWriter(file) {
+		t.Fatal("closed file reported as terminal")
+	}
+
+	if formatProgressElapsed(-time.Second) != "0s" || formatProgressElapsed(1500*time.Millisecond) != "1s" {
+		t.Fatal("elapsed time formatting changed")
+	}
+	if formatProgressDuration(2*time.Minute) != "2m" || formatProgressDuration(1500*time.Millisecond) != "2s" {
+		t.Fatal("duration formatting changed")
+	}
+	if progressPhaseText("unknown", progressDescriptor{}) != "working" ||
+		progressPhaseText(progressWaiting, progressDescriptor{profile: "local"}) != "waiting for profile local" {
+		t.Fatal("fallback progress labels changed")
+	}
+	if safeProgressLabel(strings.Repeat("a", 80)) != strings.Repeat("a", 64) {
+		t.Fatal("progress label was not bounded")
+	}
+
+	var mode progressModeValue
+	if err := mode.Set(" PLAIN "); err != nil || mode.String() != "plain" {
+		t.Fatalf("progress mode = %q, %v", mode.String(), err)
+	}
+	if err := mode.Set("animated"); err == nil || (*progressModeValue)(nil).String() != "" {
+		t.Fatalf("invalid/nil progress mode = %v/%q", err, (*progressModeValue)(nil).String())
+	}
+}
+
+func TestProgressStopsWritingAfterWriterFailure(t *testing.T) {
+	t.Parallel()
+
+	writeErr := errors.New("write failed")
+	plain := &plainProgress{destination: failingWriter{err: writeErr}}
+	plain.Phase(progressCollecting)
+	plain.Phase(progressWaiting)
+	if !errors.Is(plain.Close(), writeErr) || plain.last != progressCollecting {
+		t.Fatalf("plain progress state/error = %q/%v", plain.last, plain.Close())
+	}
+	if err := drawProgress(
+		failingWriter{err: writeErr}, progressDescriptor{}, progressCollecting,
+		time.Time{}, time.Time{}, 0, writeErr,
+	); !errors.Is(err, writeErr) {
+		t.Fatalf("drawProgress(previous error) = %v", err)
 	}
 }

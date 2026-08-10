@@ -200,3 +200,42 @@ func TestFormatSystemContextDistinguishesCumulativeCgroupEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestTechnicalDetailsExplainGeneratedAndFallbackDisclosure(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name       string
+		generated  bool
+		wantStatus string
+	}{
+		{name: "generated", generated: true, wantStatus: "Validated generated hypotheses included"},
+		{name: "fallback", wantStatus: "Deterministic fallback; no generated content was accepted"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			report := diagnosis.Report{
+				Mode: diagnosis.ModeMixed, ReportID: "report", CoreEvidenceID: "core", AnalysisEvidenceID: "analysis",
+				Findings: []diagnosis.Finding{{ID: "finding", Code: "core.failure", Analyzer: "builtin.rules/1"}},
+				Disclosure: diagnosis.DisclosureManifest{
+					ProviderInvoked: true, GeneratedContentUsed: test.generated, Locality: diagnosis.ProviderLocal,
+					Profile: "local", Provider: "ollama", Model: "model", Classes: []string{"metadata", "log_content"},
+					ItemCount: 2, ArtifactCount: 1, EnrichmentCount: 1, ArtifactBytes: 1024,
+				},
+			}
+			renderer := humanRenderer{view: reportView{
+				report: report, primary: report.Findings[0], findingAliases: map[string]string{"finding": "F1"},
+			}, width: humanOutputWidth}
+			renderer.renderTechnicalDetails()
+			rendered := renderer.output.String()
+			for _, wanted := range []string{
+				test.wantStatus, "ollama/model (local; profile local)", "metadata, log_content",
+				"2 facts, 1 artifacts, 1 enrichments; 1 KiB artifact content", "F1: core.failure via builtin.rules/1",
+			} {
+				if !strings.Contains(rendered, wanted) {
+					t.Fatalf("technical details missing %q:\n%s", wanted, rendered)
+				}
+			}
+		})
+	}
+}

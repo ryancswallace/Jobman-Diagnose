@@ -25,7 +25,7 @@ SYFT_VERSION_FILE := $(BIN_DIR)/.syft-$(SYFT_VERSION)
 FUZZ_PACKAGE ?= ./diagnosis
 FUZZ_TARGET ?= FuzzDecodeReport
 FUZZ_TIME ?= 10s
-COVERAGE_MIN ?= 70
+COVERAGE_MIN ?= 90
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || printf '%s' dev)
 COMMIT ?= $(shell commit_value=$$(git rev-parse --verify HEAD 2>/dev/null) && printf '%s' "$$commit_value" || printf '%s' unknown)
