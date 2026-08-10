@@ -13,11 +13,11 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "code": {"type": "string", "pattern": "^generated[.][a-z0-9_.-]{1,150}$"},
+          "code": {"type": "string", "description": "Select the most specific authorized code. generated.application_configuration covers rejected or unsupported settings; generated.application_input covers invalid target input; generated.dependency_unavailable covers unusable dependencies; generated.environment_mismatch covers incompatible runtime context; generated.external_service_failure covers remote-service failures; generated.resource_pressure covers constrained resources; generated.transient_infrastructure covers temporary infrastructure conditions; generated.unknown_target_error is only for evidence that supports no more specific code.", "pattern": "^generated[.][a-z0-9_.-]{1,150}$"},
           "category": {"type": "string", "minLength": 1, "maxLength": 160},
-          "summary": {"type": "string", "minLength": 1, "maxLength": 4096},
-          "explanation": {"type": "string", "minLength": 1, "maxLength": 8192},
-          "supporting_evidence": {"type": "array", "description": "Distinct supplied evidence IDs that directly support this hypothesis. Do not repeat an ID or also list it as contradicting evidence.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
+          "summary": {"type": "string", "description": "One concise statement of the likely target-specific cause; do not merely restate the exit mechanism.", "minLength": 1, "maxLength": 4096},
+          "explanation": {"type": "string", "description": "Distinct causal reasoning that explains how the smallest directly relevant evidence set supports the summary. Do not repeat the summary or quote artifact content verbatim.", "minLength": 1, "maxLength": 8192},
+          "supporting_evidence": {"type": "array", "description": "The smallest set of distinct supplied evidence IDs that directly supports this hypothesis, normally two to five. Do not repeat an ID, also list it as contradicting evidence, or cite unrelated timestamps, counters, or resources.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
           "contradicting_evidence": {"type": "array", "description": "Distinct supplied evidence IDs that directly conflict with this hypothesis. Leave empty when none conflict, and never reuse a supporting evidence ID.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
           "contradicts_findings": {"type": "array", "description": "Distinct supplied deterministic finding IDs that directly conflict with this hypothesis. Leave empty when none conflict.", "maxItems": 8, "items": {"type": "string", "maxLength": 256}}
         },

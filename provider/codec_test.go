@@ -136,8 +136,17 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 func TestRequiredInstructionsDescribeRelationalRules(t *testing.T) {
 	t.Parallel()
 
-	if instructions := strings.Join(RequiredInstructions(), "\n"); !strings.Contains(instructions, "never cite the same evidence as both supporting and contradicting") {
-		t.Fatal("request instructions omit the cross-list citation rule")
+	instructions := strings.Join(RequiredInstructions(), "\n")
+	for _, expected := range []string{
+		"never cite the same evidence as both supporting and contradicting",
+		"application_configuration means a rejected",
+		"unknown_target_error is a last resort",
+		"smallest directly relevant evidence set",
+		"do not repeat the summary",
+	} {
+		if !strings.Contains(instructions, expected) {
+			t.Fatalf("request instructions omit %q", expected)
+		}
 	}
 }
 
