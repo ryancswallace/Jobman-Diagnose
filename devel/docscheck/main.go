@@ -8,6 +8,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path"
@@ -23,21 +24,42 @@ var (
 )
 
 func main() {
-	root := flag.String("root", ".", "repository root to check")
-	flag.Parse()
+	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func execute(arguments []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("docscheck", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	root := flags.String("root", ".", "repository root to check")
+	if err := flags.Parse(arguments); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 {
+		if _, err := fmt.Fprintln(stderr, "docscheck does not accept positional arguments"); err != nil {
+			return 2
+		}
+		return 2
+	}
 
 	problems, err := check(*root)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+		if _, writeErr := fmt.Fprintln(stderr, err); writeErr != nil {
+			return 2
+		}
+		return 2
 	}
 	if len(problems) != 0 {
 		for _, problem := range problems {
-			fmt.Fprintln(os.Stderr, problem)
+			if _, err := fmt.Fprintln(stderr, problem); err != nil {
+				return 2
+			}
 		}
-		os.Exit(1)
+		return 1
 	}
-	fmt.Println("relative documentation links resolve")
+	if _, err := fmt.Fprintln(stdout, "relative documentation links resolve"); err != nil {
+		return 2
+	}
+	return 0
 }
 
 func check(root string) ([]string, error) {

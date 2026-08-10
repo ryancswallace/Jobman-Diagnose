@@ -149,6 +149,68 @@ func TestRunEvaluationErrors(t *testing.T) {
 	}
 }
 
+func TestExecuteEvaluation(t *testing.T) {
+	t.Parallel()
+
+	corpus := filepath.Join("..", "..", "testdata", "evaluation", "manifest.json")
+	var stdout, stderr bytes.Buffer
+	if status := execute([]string{"--corpus", corpus, "--summary"}, &stdout, &stderr); status != 0 {
+		t.Fatalf("execute(valid) = %d, stderr %q", status, stderr.String())
+	}
+	stderr.Reset()
+	if status := execute([]string{"--corpus", "missing.json"}, &stdout, &stderr); status != 1 || stderr.Len() == 0 {
+		t.Fatalf("execute(missing) = %d, stderr %q", status, stderr.String())
+	}
+}
+
+func TestRunLiveEvaluationValidatesProfileAndDisclosureBeforeInvocation(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	configuration := filepath.Join(root, "diagnosis.yml")
+	contents := `schema_version: 2
+defaults:
+  profile: test
+profiles:
+  test:
+    provider: openai_compatible
+    locality: remote
+    endpoint: https://example.com/v1/chat/completions
+    model: test-model
+    require_json_schema: true
+    timeout: 2s
+    maximum_input_bytes: 262144
+    maximum_output_bytes: 32768
+    disclosure:
+      metadata:
+        maximum_items: 256
+        maximum_bytes: 131072
+`
+	if err := os.WriteFile(configuration, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	corpus := filepath.Join("..", "..", "testdata", "evaluation", "manifest.json")
+	tests := []struct {
+		name  string
+		extra []string
+		want  string
+	}{
+		{name: "unknown profile", extra: []string{"--profile", "missing"}, want: "not defined"},
+		{name: "unknown disclosure", extra: []string{"--share", "metadata,unknown"}, want: "unsupported disclosure"},
+		{name: "metadata required", extra: []string{"--share", "command"}, want: "requires metadata"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			arguments := []string{"--corpus", corpus, "--live", "--diagnosis-config", configuration}
+			arguments = append(arguments, test.extra...)
+			if err := run(arguments, &bytes.Buffer{}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("run(live boundary) error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
 type errorWriter struct{}
 
 func (*errorWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }

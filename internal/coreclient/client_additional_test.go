@@ -3,6 +3,7 @@ package coreclient
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -55,6 +56,29 @@ func TestDecodeEvidenceRejectsMalformedInput(t *testing.T) {
 	} {
 		if _, err := DecodeEvidence(strings.NewReader(encoded)); err == nil {
 			t.Fatalf("DecodeEvidence(%q) error = nil", encoded)
+		}
+	}
+}
+
+func TestRequireEOFClassifiesTrailingValuesAndMalformedData(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		encoded string
+		want    string
+	}{
+		{encoded: "", want: ""},
+		{encoded: `{}`, want: "trailing JSON value"},
+		{encoded: `{`, want: "trailing data"},
+	} {
+		decoder := json.NewDecoder(strings.NewReader(test.encoded))
+		err := requireEOF(decoder)
+		if test.want == "" {
+			if err != nil {
+				t.Fatalf("requireEOF(empty) error = %v", err)
+			}
+		} else if err == nil || !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("requireEOF(%q) error = %v, want %q", test.encoded, err, test.want)
 		}
 	}
 }

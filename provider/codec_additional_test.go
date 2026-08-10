@@ -176,6 +176,134 @@ func TestProtocolIOBoundaries(t *testing.T) {
 	}
 }
 
+//nolint:cyclop // One assertion verifies every required protocol collection is initialized.
+func TestRequestNormalizationInitializesProtocolCollections(t *testing.T) {
+	t.Parallel()
+
+	normalized := normalizeRequest(Request{})
+	if normalized.Subject.SelectedRuns == nil || normalized.Projection.Items == nil ||
+		normalized.Projection.Artifacts == nil || normalized.Projection.Enrichment == nil ||
+		normalized.Projection.RedactionNotices == nil || normalized.Manifest.Classes == nil ||
+		normalized.Manifest.ItemIDs == nil || normalized.Manifest.ArtifactIDs == nil ||
+		normalized.Manifest.EnrichmentIDs == nil || normalized.Deterministic == nil ||
+		normalized.AllowedCategories == nil || normalized.AllowedHypothesisCodes == nil ||
+		normalized.AllowedActions == nil || normalized.Instructions == nil {
+		t.Fatalf("normalizeRequest() left nil collections: %#v", normalized)
+	}
+	proposal := normalizeProposal(Proposal{})
+	if proposal.Hypotheses == nil || proposal.RecommendedActions == nil || proposal.MissingEvidence == nil {
+		t.Fatalf("normalizeProposal() left nil collections: %#v", proposal)
+	}
+	if _, err := SealRequest(Request{}); err == nil {
+		t.Fatal("SealRequest(empty) error = nil")
+	}
+	request := validRequest(t)
+	request.RequestID = "sha256:" + strings.Repeat("b", 64)
+	if err := VerifyRequest(request); err == nil || !strings.Contains(err.Error(), "semantic content") {
+		t.Fatalf("VerifyRequest(mismatched digest) error = %v", err)
+	}
+}
+
+func TestVerifyRequestRejectsDuplicateProjectionAuthority(t *testing.T) {
+	t.Parallel()
+
+	artifact := ProjectedArtifact{
+		ID: "artifact", Role: "target_stderr", Run: 1, Stream: "stderr", Content: "x",
+		Encoding: "utf-8-lossy", Digest: "sha256:" + strings.Repeat("c", 64),
+		SelectedBytes: 1, ContentBytes: 1, Disclosure: "log_content",
+	}
+	tests := []struct {
+		name string
+		want string
+		edit func(*Request)
+	}{
+		{name: "duplicate item ID", want: "duplicate projected ID", edit: func(value *Request) {
+			value.Projection.Items = append(value.Projection.Items, value.Projection.Items[0])
+		}},
+		{name: "duplicate artifact ID", want: "duplicate projected ID", edit: func(value *Request) {
+			current := artifact
+			current.ID = value.Projection.Items[0].ID
+			value.Projection.Artifacts = []ProjectedArtifact{current}
+			value.Manifest.Classes = []string{"log_content", "metadata"}
+			value.Manifest.ArtifactIDs = []string{current.ID}
+			value.Manifest.ArtifactCount = 1
+		}},
+		{name: "artifact byte overflow", want: "byte count overflow", edit: func(value *Request) {
+			first, second := artifact, artifact
+			first.ID, first.ContentBytes = "artifact:one", ^uint64(0)
+			second.ID, second.ContentBytes = "artifact:two", 1
+			value.Projection.Artifacts = []ProjectedArtifact{first, second}
+			value.Manifest.Classes = []string{"log_content", "metadata"}
+			value.Manifest.ArtifactIDs = []string{first.ID, second.ID}
+			value.Manifest.ArtifactCount = 2
+		}},
+		{name: "duplicate enrichment ID", want: "duplicate projected ID", edit: func(value *Request) {
+			value.Projection.Artifacts = []ProjectedArtifact{artifact}
+			value.Projection.Enrichment = []ProjectedEnrichment{{
+				ID: value.Projection.Items[0].ID, Code: "enrichment.test", Format: "test",
+				SourceArtifactID: artifact.ID, ByteStart: 0, ByteEnd: 1,
+				Collector: "test", CollectorVersion: "1", Quality: "derived_exact", Disclosure: "log_content",
+			}}
+			value.Manifest.Classes = []string{"log_content", "metadata"}
+			value.Manifest.ArtifactIDs, value.Manifest.ArtifactCount = []string{artifact.ID}, 1
+			value.Manifest.EnrichmentIDs, value.Manifest.EnrichmentCount = []string{value.Projection.Items[0].ID}, 1
+		}},
+		{name: "invalid redaction", want: "invalid redaction notice", edit: func(value *Request) {
+			value.Projection.RedactionNotices = []ProjectedRedaction{{Code: "notice", Affects: nil}}
+			value.Manifest.RedactionNoticeCount = 1
+		}},
+		{name: "duplicate redaction", want: "duplicate redaction notice", edit: func(value *Request) {
+			notice := ProjectedRedaction{Code: "notice", Affects: []string{value.Manifest.ItemIDs[0]}, Count: 1}
+			value.Projection.RedactionNotices = []ProjectedRedaction{notice, notice}
+			value.Manifest.RedactionNoticeCount = 2
+		}},
+		{name: "unprojected redaction target", want: "was not projected", edit: func(value *Request) {
+			value.Projection.RedactionNotices = []ProjectedRedaction{{Code: "notice", Affects: []string{"missing"}, Count: 1}}
+			value.Manifest.RedactionNoticeCount = 1
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			request := validRequest(t)
+			test.edit(&request)
+			if err := VerifyRequest(request); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("VerifyRequest() error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+//nolint:cyclop // The compact checks exercise one cohesive set of protocol validation primitives.
+func TestProtocolValidationHelpers(t *testing.T) {
+	t.Parallel()
+
+	if validDigest("sha256:"+strings.Repeat("z", 64)) || !validDigest("sha256:"+strings.Repeat("a", 64)) {
+		t.Fatal("validDigest() hexadecimal classification changed")
+	}
+	if validCode("") || validCode(strings.Repeat("a", 161)) || validCode("Bad") || !validCode("valid.code-1") {
+		t.Fatal("validCode() classification changed")
+	}
+	if validText("\n", 10) || validText("a\x00b", 10) || validText("toolong", 3) || !validText("valid", 10) {
+		t.Fatal("validText() classification changed")
+	}
+	if sortedUnique([]string{"a", "a"}) || sortedUniqueUint64([]uint64{2, 1}) ||
+		!hasDuplicateUnsorted([]string{"b", "a", "b"}) || hasDuplicateUnsorted([]string{"a", "b"}) {
+		t.Fatal("collection uniqueness classification changed")
+	}
+	if referencesAvailable([]string{"missing"}, []string{"present"}) ||
+		!referencesAvailable([]string{"present"}, []string{"present"}) ||
+		!hasIntersection([]string{"a", "b"}, []string{"b"}) || hasIntersection([]string{"a"}, []string{"b"}) {
+		t.Fatal("authority-set classification changed")
+	}
+	var destination struct {
+		Count int `json:"count"`
+	}
+	if err := DecodeTransportJSON([]byte(`{"count":"wrong"}`), &destination); err == nil {
+		t.Fatal("DecodeTransportJSON(type mismatch) error = nil")
+	}
+}
+
 type errorReader struct{}
 
 func (errorReader) Read([]byte) (int, error) { return 0, errors.New("read failed") }

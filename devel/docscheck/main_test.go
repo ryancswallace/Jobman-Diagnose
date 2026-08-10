@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -60,6 +62,55 @@ func TestResolveDestinationUsesMarkdownRootSemantics(t *testing.T) {
 	}
 	if want := filepath.Join(root, "README.md"); resolved != want {
 		t.Fatalf("resolved = %q, want %q", resolved, want)
+	}
+}
+
+func TestExecuteReportsSuccessBrokenLinksAndUsage(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "README.md"), "[valid](guide.md)\n")
+	mustWrite(t, filepath.Join(root, "guide.md"), "guide\n")
+	var stdout, stderr bytes.Buffer
+	if status := execute([]string{"-root", root}, &stdout, &stderr); status != 0 ||
+		!strings.Contains(stdout.String(), "links resolve") {
+		t.Fatalf("execute(valid) = %d, stdout %q, stderr %q", status, stdout.String(), stderr.String())
+	}
+
+	mustWrite(t, filepath.Join(root, "README.md"), "[missing](missing.md)\n")
+	stdout.Reset()
+	stderr.Reset()
+	if status := execute([]string{"-root", root}, &stdout, &stderr); status != 1 ||
+		!strings.Contains(stderr.String(), "does not resolve") {
+		t.Fatalf("execute(broken) = %d, stderr %q", status, stderr.String())
+	}
+
+	for _, arguments := range [][]string{{"-unknown"}, {"positional"}, {"-root", filepath.Join(root, "missing")}} {
+		stderr.Reset()
+		if status := execute(arguments, &stdout, &stderr); status != 2 {
+			t.Errorf("execute(%q) status = %d", arguments, status)
+		}
+	}
+}
+
+func TestMarkdownDestinationClassification(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{".git", "bin", "dist", "site-build", "vendor"} {
+		if !skippedDirectory(name) {
+			t.Errorf("skippedDirectory(%q) = false", name)
+		}
+	}
+	if skippedDirectory("docs") {
+		t.Fatal("skippedDirectory(docs) = true")
+	}
+	for _, destination := range []string{"", "#fragment", "//example.com/path", "https://example.com", "%zz"} {
+		if resolved, local := resolveDestination("root", "source", destination); local || resolved != "" {
+			t.Errorf("resolveDestination(%q) = %q, %t", destination, resolved, local)
+		}
+	}
+	if got := markdownDestination("<guide.md> title"); got != "guide.md" {
+		t.Fatalf("markdownDestination(angle) = %q", got)
 	}
 }
 

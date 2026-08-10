@@ -1,7 +1,10 @@
 package supportbundle
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -46,6 +49,40 @@ func TestNewRequiresBuildVersion(t *testing.T) {
 	}
 }
 
+func TestInventoryWriterReportsFailuresAtEverySection(t *testing.T) {
+	t.Parallel()
+
+	inventory := supportBundleFixture(t).Inventory
+	for successfulWrites := 0; successfulWrites < len(inventory.Files)+3; successfulWrites++ {
+		writer := &failAfterWrites{remaining: successfulWrites}
+		if err := WriteInventory(writer, inventory); err == nil {
+			t.Fatalf("WriteInventory(writer failing after %d writes) error = nil", successfulWrites)
+		}
+	}
+}
+
+func TestArchiveCleanupPreservesWriteAndCloseFailures(t *testing.T) {
+	t.Parallel()
+
+	cause := errors.New("write failed")
+	compressed := gzip.NewWriter(failingBundleWriter{})
+	tape := tar.NewWriter(compressed)
+	if err := closeArchive(tape, compressed, cause); err == nil || !errors.Is(err, cause) {
+		t.Fatalf("closeArchive(tar) error = %v", err)
+	}
+	compressed = gzip.NewWriter(failingBundleWriter{})
+	if err := closeArchive(nil, compressed, cause); err == nil || !errors.Is(err, cause) {
+		t.Fatalf("closeArchive(compressor) error = %v", err)
+	}
+
+	for limit := 0; limit < 256; limit += 31 {
+		writer := &byteLimitWriter{remaining: limit}
+		if err := Encode(writer, supportBundleFixture(t)); err == nil {
+			t.Fatalf("Encode(writer limited to %d bytes) error = nil", limit)
+		}
+	}
+}
+
 func supportBundleFixture(t *testing.T) Bundle {
 	t.Helper()
 	bundle, err := New(bundleEvidence(t), bundleReport(t), Build{Version: "test"})
@@ -85,3 +122,25 @@ func bundleReport(t *testing.T) diagnosis.Report {
 type failingBundleWriter struct{}
 
 func (failingBundleWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+type failAfterWrites struct{ remaining int }
+
+func (writer *failAfterWrites) Write(data []byte) (int, error) {
+	if writer.remaining == 0 {
+		return 0, io.ErrClosedPipe
+	}
+	writer.remaining--
+	return len(data), nil
+}
+
+type byteLimitWriter struct{ remaining int }
+
+func (writer *byteLimitWriter) Write(data []byte) (int, error) {
+	if len(data) > writer.remaining {
+		written := writer.remaining
+		writer.remaining = 0
+		return written, io.ErrClosedPipe
+	}
+	writer.remaining -= len(data)
+	return len(data), nil
+}

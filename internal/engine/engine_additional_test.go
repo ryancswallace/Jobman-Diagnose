@@ -43,9 +43,9 @@ func TestCoreFailureCandidateCatalog(t *testing.T) {
 		"wait_evaluation_error", "log_recording_degraded", "future_failure",
 	}
 	for _, class := range classes {
-		candidate := coreFailureCandidate(class, "ev:class", "ev:related")
-		if candidate.finding.Code == "" || len(candidate.finding.SupportingEvidence) != 2 {
-			t.Fatalf("coreFailureCandidate(%q) = %#v", class, candidate)
+		current := coreFailureCandidate(class, "ev:class", "ev:related")
+		if current.finding.Code == "" || len(current.finding.SupportingEvidence) != 2 {
+			t.Fatalf("coreFailureCandidate(%q) = %#v", class, current)
 		}
 	}
 	if exactCandidate(101, "code", "category", diagnosis.SeverityError, "summary", "explanation", nil).finding.Confidence.Score != 100 {
@@ -213,5 +213,115 @@ func TestPolicyHelpersHandleInvalidAndValidValues(t *testing.T) {
 	items := []diagnostic.Item{{Value: json.RawMessage(`"bad"`)}, {Value: json.RawMessage(`4`)}}
 	if lastCounter(items) != 4 {
 		t.Fatal("lastCounter() did not skip invalid data")
+	}
+}
+
+func TestEvidenceViewSelectionAndAnalyzerCatalog(t *testing.T) {
+	t.Parallel()
+
+	collector1 := diagnosis.AnalyzerDescriptor{Name: "collector", Version: "1"}
+	collector2 := diagnosis.AnalyzerDescriptor{Name: "collector", Version: "2"}
+	evidence := diagnosis.FailureEvidence{
+		Core: diagnostic.Evidence{
+			Subject: diagnostic.Subject{SelectedRuns: []uint64{2}},
+			Items: []diagnostic.Item{
+				{ID: "ev:run:00000000000000000001:value", Code: "code"},
+				{ID: "ev:job:value", Code: "code"},
+			},
+			Artifacts: []diagnostic.Artifact{{ID: "artifact"}},
+			Omissions: []diagnostic.Omission{{Code: "omission"}},
+		},
+		Enrichment: []diagnosis.EnrichmentItem{
+			{ID: "one", Code: "enrichment", Collector: collector1},
+			{ID: "two", Code: "enrichment", Collector: collector1},
+			{ID: "three", Code: "enrichment", Collector: collector2},
+		},
+	}
+	view := newEvidenceView(evidence)
+	if selected := view.primaryItems("code"); len(selected) != 1 || selected[0].ID != "ev:job:value" {
+		t.Fatalf("primaryItems(selected run fallback) = %#v", selected)
+	}
+	view.evidence.Subject.SelectedRuns = nil
+	if selected := view.primaryItems("code"); len(selected) != 2 {
+		t.Fatalf("primaryItems(all runs) = %#v", selected)
+	}
+	descriptors := analyzerDescriptors(evidence)
+	if len(descriptors) != 3 || descriptors[1] != collector1 || descriptors[2] != collector2 {
+		t.Fatalf("analyzerDescriptors() = %#v", descriptors)
+	}
+}
+
+func TestCandidateSelectionHelperBranches(t *testing.T) {
+	t.Parallel()
+
+	view := evidenceView{evidence: diagnostic.Evidence{Subject: diagnostic.Subject{Outcome: "success"}}, byCode: map[string][]diagnostic.Item{
+		diagnostic.CodeJobOutcome: {{ID: "ev:job:outcome"}},
+	}}
+	state := stateCandidate(view)
+	if state.finding.Code != "core.no_target_failure" || len(state.finding.SupportingEvidence) != 1 {
+		t.Fatalf("stateCandidate(success) = %#v", state)
+	}
+
+	invalidHistory := evidenceView{byCode: map[string][]diagnostic.Item{
+		diagnostic.CodeSimilarFailure: {{ID: "invalid", Value: json.RawMessage(`{}`)}},
+	}}
+	if _, ok := sameFingerprintHistoryCandidate(invalidHistory); ok {
+		t.Fatal("sameFingerprintHistoryCandidate(invalid) returned a candidate")
+	}
+
+	repeated := evidenceView{byCode: map[string][]diagnostic.Item{
+		diagnostic.CodeFailureClass: {
+			{ID: "ev:job:class", Value: json.RawMessage(`{"class":"ignored"}`)},
+			{ID: "ev:run:1:class", Value: json.RawMessage(`{"class":"same"}`)},
+			{ID: "ev:run:2:class", Value: json.RawMessage(`{"class":"same"}`)},
+		},
+	}}
+	if got := repeatedFailureEvidence(repeated); got != "ev:run:2:class" {
+		t.Fatalf("repeatedFailureEvidence() = %q", got)
+	}
+	secondary := secondaryCandidates(repeated)
+	if len(secondary) != 1 || secondary[0].finding.Code != "secondary.repeated_failure" {
+		t.Fatalf("secondaryCandidates(repeated) = %#v", secondary)
+	}
+
+	left := observedCandidate(20, "b", "state", diagnosis.SeverityWarning, "B", "B", nil)
+	right := observedCandidate(10, "a", "state", diagnosis.SeverityWarning, "A", "A", nil)
+	if compareCandidates(left, right) != -1 || compareCandidates(right, left) != 1 {
+		t.Fatal("compareCandidates() priority ordering changed")
+	}
+	right.priority = left.priority
+	if compareCandidates(left, right) <= 0 {
+		t.Fatal("compareCandidates() code tie-break changed")
+	}
+	if got := uniqueCandidates([]candidate{left, left, right}); len(got) != 2 {
+		t.Fatalf("uniqueCandidates() = %#v", got)
+	}
+	if firstItemID(nil, []diagnostic.Item{{ID: "second"}}) != "second" || firstItemID(nil) != "" {
+		t.Fatal("firstItemID() fallback changed")
+	}
+	if len(optionalEvidence("")) != 0 || len(optionalEvidence("item")) != 1 {
+		t.Fatal("optionalEvidence() classification changed")
+	}
+}
+
+func TestAnalyzeSkipsMalformedFactsAndHonorsLateCancellation(t *testing.T) {
+	t.Parallel()
+
+	view := evidenceView{
+		evidence: diagnostic.Evidence{Subject: diagnostic.Subject{Outcome: "failure"}},
+		byCode: map[string][]diagnostic.Item{
+			diagnostic.CodeFailureClass: {{ID: "ev:run:1:class", Value: json.RawMessage(`not-json`)}},
+		},
+		byEnrichmentCode: map[string][]diagnosis.EnrichmentItem{},
+	}
+	candidates, err := analyze(t.Context(), view)
+	if err != nil || len(candidates) != 1 || candidates[0].finding.Code != "core.insufficient_structured_evidence" {
+		t.Fatalf("analyze(malformed fact) = %#v, %v", candidates, err)
+	}
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := analyze(canceled, view); err == nil {
+		t.Fatal("analyze(canceled) error = nil")
 	}
 }

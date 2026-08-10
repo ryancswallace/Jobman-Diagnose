@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,6 +148,37 @@ func TestWriteFormulaReportsFailures(t *testing.T) {
 	}
 	if err := writeFormula(&failingWriteCloser{closeErr: want}, formulaData{}); !errors.Is(err, want) {
 		t.Errorf("writeFormula(close failure) error = %v", err)
+	}
+	if err := writeFormula(&failingWriteCloser{writeErr: want, closeErr: io.ErrClosedPipe}, formulaData{}); !errors.Is(err, want) || !errors.Is(err, io.ErrClosedPipe) {
+		t.Errorf("writeFormula(joined failure) error = %v", err)
+	}
+}
+
+func TestRunAndReadFormulaDataAdditionalFilesystemFailures(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	missing := filepath.Join(root, "jobman-diagnose_1.2.3_checksums.txt")
+	if _, err := readFormulaData(missing); err == nil || !strings.Contains(err.Error(), "open checksums") {
+		t.Fatalf("readFormulaData(missing) error = %v", err)
+	}
+	checksums := writeChecksums(t, root, amd64Digest, arm64Digest)
+	outputDirectory := filepath.Join(root, "formula-directory")
+	if err := os.Mkdir(outputDirectory, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(checksums, outputDirectory); err == nil || !strings.Contains(err.Error(), "create output") {
+		t.Fatalf("run(directory output) error = %v", err)
+	}
+
+	contents := "invalid line\n" + strings.Repeat("c", 64) + " ignored archive\n" +
+		amd64Digest + "  jobman-diagnose_1.2.3_darwin_amd64.tar.gz\n" +
+		arm64Digest + "  jobman-diagnose_1.2.3_darwin_arm64.tar.gz\n"
+	if err := os.WriteFile(checksums, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := readFormulaData(checksums); err != nil || data.AMD64Digest != amd64Digest {
+		t.Fatalf("readFormulaData(mixed lines) = %#v, %v", data, err)
 	}
 }
 

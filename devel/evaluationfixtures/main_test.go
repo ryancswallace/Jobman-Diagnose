@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/ryancswallace/jobman/diagnostic"
@@ -63,5 +64,30 @@ func TestGenerateEvaluationFixturesRejectsInvalidOutput(t *testing.T) {
 	}
 	if err := generate(path); err == nil {
 		t.Fatal("generate(file) error = nil")
+	}
+}
+
+func TestExecuteEvaluationFixtures(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	var stderr bytes.Buffer
+	if status := execute([]string{"-output", filepath.Join(root, "fixtures")}, &stderr); status != 0 {
+		t.Fatalf("execute(valid) = %d, stderr %q", status, stderr.String())
+	}
+	for _, arguments := range [][]string{{"-unknown"}, {"positional"}} {
+		stderr.Reset()
+		if status := execute(arguments, &stderr); status != 2 {
+			t.Errorf("execute(%q) = %d", arguments, status)
+		}
+	}
+	blocked := filepath.Join(root, "blocked")
+	if err := os.WriteFile(blocked, []byte("file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stderr.Reset()
+	if status := execute([]string{"-output", blocked}, &stderr); status != 1 ||
+		!strings.Contains(stderr.String(), "generate evaluation fixtures") {
+		t.Fatalf("execute(blocked) = %d, stderr %q", status, stderr.String())
 	}
 }

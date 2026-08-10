@@ -11,6 +11,59 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 )
 
+func TestReportViewAliasesAndEvidenceKinds(t *testing.T) {
+	t.Parallel()
+
+	report := diagnosis.Report{
+		PrimaryFindingID: "primary",
+		Findings:         []diagnosis.Finding{{ID: "other"}, {ID: "primary"}},
+	}
+	primary, ok := findPrimary(report)
+	if !ok || primary.ID != "primary" {
+		t.Fatalf("findPrimary() = %#v, %t", primary, ok)
+	}
+	report.PrimaryFindingID = "missing"
+	if _, ok := findPrimary(report); ok {
+		t.Fatal("findPrimary(missing) found a value")
+	}
+
+	view := reportView{
+		evidenceAliases: map[string]string{"item": "E1", "enrichment": "E2", "artifact": "E3"},
+		findingAliases:  map[string]string{"primary": "F1"},
+		citations: map[string]diagnosis.Citation{
+			"item":       {Summary: "Item summary."},
+			"enrichment": {Summary: "Enrichment summary."},
+			"artifact":   {Summary: "Artifact summary."},
+			"fallback":   {Summary: "Fallback summary."},
+		},
+		items: map[string]diagnostic.Item{
+			"item": {ID: "item", Code: diagnostic.CodeJobName, Value: json.RawMessage(`"test"`), Quality: diagnostic.QualityObserved},
+		},
+		enrichment: map[string]diagnosis.EnrichmentItem{
+			"enrichment": {ID: "enrichment", Code: "enrichment.test", Format: "test", Quality: diagnostic.QualityDerivedExact},
+		},
+		artifacts: map[string]diagnostic.Artifact{
+			"artifact": {ID: "artifact", Role: "target_stderr", Run: 1, Stream: "stderr", Quality: diagnostic.QualityObserved},
+		},
+	}
+	if view.evidenceAlias("item") != "E1" || view.evidenceAlias("unknown") != "unknown" ||
+		view.findingAlias("primary") != "F1" || view.findingAlias("unknown") != "unknown" {
+		t.Fatal("report aliases changed")
+	}
+	if view.referenceList([]string{"item", "unknown"}) != "[E1], [unknown]" ||
+		view.findingReferenceList([]string{"primary", "unknown"}) != "[F1], [unknown]" {
+		t.Fatal("report reference formatting changed")
+	}
+	for _, id := range []string{"item", "enrichment", "artifact"} {
+		if detail := view.evidenceDetail(id); detail == "" {
+			t.Fatalf("evidenceDetail(%q) was empty", id)
+		}
+	}
+	if detail := view.evidenceDetail("fallback"); detail != "Fallback summary" || strings.HasSuffix(detail, ".") {
+		t.Fatalf("evidenceDetail(fallback) = %q", detail)
+	}
+}
+
 func TestEvidenceDisplayCatalog(t *testing.T) {
 	t.Parallel()
 

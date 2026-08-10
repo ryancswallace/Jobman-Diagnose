@@ -242,6 +242,132 @@ func TestReadOnlyActionArgumentAllowlist(t *testing.T) {
 	}
 }
 
+//nolint:cyclop // One assertion verifies every canonical collection initialized by normalization.
+func TestNormalizeInitializesCanonicalCollections(t *testing.T) {
+	t.Parallel()
+
+	earliest := time.Date(2026, 1, 2, 3, 4, 5, 6, time.FixedZone("offset", 3600))
+	report := normalize(Report{
+		GeneratedAt: earliest,
+		Findings:    []Finding{{Analyzer: "collector", SupportingEvidence: nil, ContradictingEvidence: nil, ContradictingFindings: nil}},
+		Actions:     []Action{{Execution: "", Arguments: nil}},
+		Retry:       RetryAdvice{EarliestAt: &earliest},
+	})
+	if report.Findings[0].SupportingEvidence == nil || report.Findings[0].ContradictingEvidence == nil ||
+		report.Findings[0].ContradictingFindings == nil || report.Actions[0].Execution != ActionExecutionNone ||
+		report.Actions[0].Arguments == nil || report.Retry.Reasons == nil ||
+		report.Retry.ExistingPolicy != PolicyUnknown || report.Generators == nil || report.Citations == nil ||
+		report.MissingEvidence == nil || report.Warnings == nil || report.Disclosure.Classes == nil ||
+		report.Disclosure.ItemIDs == nil || report.Disclosure.ArtifactIDs == nil ||
+		report.Disclosure.EnrichmentIDs == nil || report.Retry.EarliestAt == nil ||
+		report.Retry.EarliestAt.Location() != time.UTC {
+		t.Fatalf("normalize() left noncanonical values: %#v", report)
+	}
+	if len(report.Analyzers) != 1 || report.Analyzers[0] != (AnalyzerDescriptor{Name: "collector", Version: "unknown"}) {
+		t.Fatalf("normalize() analyzers = %#v", report.Analyzers)
+	}
+}
+
+func TestValidateAgainstEvidenceRejectsCrossBoundaryReferences(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		want string
+		edit func(*Report)
+	}{
+		{name: "unavailable fingerprint", want: "core fingerprint is unavailable", edit: func(value *Report) {
+			value.Fingerprints.Core = "hmac-sha256-v1:" + strings.Repeat("a", 64)
+		}},
+		{name: "action another job", want: "targets another job", edit: func(value *Report) {
+			value.Actions = []Action{{
+				ID: "action:other", Code: "inspect_job", Kind: ActionInspect, Summary: "Inspect job",
+				Description: "Inspect a different job.", Execution: ActionExecutionReadOnly,
+				Arguments: []string{"jobman", "show", "job", "00000000-0000-0000-0000-000000000001"},
+			}}
+		}},
+		{name: "action unavailable run", want: "unavailable run", edit: func(value *Report) {
+			value.Actions = []Action{{
+				ID: "action:run", Code: "inspect_logs", Kind: ActionInspect, Summary: "Inspect logs",
+				Description: "Inspect an unavailable run.", Execution: ActionExecutionReadOnly,
+				Arguments: []string{"jobman", "logs", "--run=2", "--stream=stderr", value.Subject.JobID},
+			}}
+		}},
+		{name: "unavailable citation", want: "citation \"missing\" is unavailable", edit: func(value *Report) {
+			value.Findings[0].SupportingEvidence = []string{"missing"}
+			value.Retry.SupportingEvidence = []string{"missing"}
+			value.Citations = []Citation{{EvidenceID: "missing", Code: "missing.code", Summary: "Missing evidence.", Kind: "item"}}
+		}},
+		{name: "wrong citation code", want: "wrong code", edit: func(value *Report) {
+			value.Citations[0].Code = "wrong.code"
+		}},
+		{name: "reference without citation", want: "lacks a citation", edit: func(value *Report) {
+			value.Citations = nil
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			report, evidence := validReportAndEvidence(t)
+			test.edit(&report)
+			sealed, err := Seal(report)
+			if err != nil {
+				t.Fatalf("Seal(test report): %v", err)
+			}
+			if err := ValidateAgainstEvidence(sealed, evidence); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ValidateAgainstEvidence() error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestReportCodecAdditionalReadAndIdentityBoundaries(t *testing.T) {
+	t.Parallel()
+
+	report, _ := validReportAndEvidence(t)
+	report.ReportID = "sha256:" + strings.Repeat("a", 64)
+	if err := Verify(report); err == nil || !strings.Contains(err.Error(), "semantic content") {
+		t.Fatalf("Verify(mismatched digest) error = %v", err)
+	}
+	if _, err := Seal(Report{}); err == nil {
+		t.Fatal("Seal(empty report) error = nil")
+	}
+	if _, err := Decode(errorReader{}, DecodeLimits{}); err == nil || !strings.Contains(err.Error(), "read") {
+		t.Fatalf("Decode(read error) = %v", err)
+	}
+	if _, err := Decode(strings.NewReader(`{"kind":"wrong","schema_version":1}`), DecodeLimits{}); err == nil ||
+		!strings.Contains(err.Error(), "unsupported kind") {
+		t.Fatalf("Decode(unsupported header) = %v", err)
+	}
+	if _, err := Decode(strings.NewReader(strings.Repeat("x", 20)), DecodeLimits{MaxBytes: 10}); err == nil ||
+		!strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("Decode(oversized) = %v", err)
+	}
+	if _, err := Decode(strings.NewReader(`{}`), DecodeLimits{MaxDepth: -1}); err == nil {
+		t.Fatal("Decode(invalid depth) error = nil")
+	}
+}
+
+func TestReportValidationHelpers(t *testing.T) {
+	t.Parallel()
+
+	if validCoreFingerprint("hmac-sha256-v1:"+strings.Repeat("z", 64)) ||
+		!validCoreFingerprint("hmac-sha256-v1:"+strings.Repeat("a", 64)) {
+		t.Fatal("validCoreFingerprint() hexadecimal classification changed")
+	}
+	if sortedUnique([]string{"a", "a"}) || !hasDuplicateStrings([]string{"a", "a"}) ||
+		hasDuplicateStrings([]string{"a", "b"}) || !hasDuplicates([]uint64{1, 1}) || hasDuplicates([]uint64{1, 2}) {
+		t.Fatal("duplicate classification changed")
+	}
+	if validActionArgument("") || validActionArgument("bad\nargument") || !validActionArgument("valid") {
+		t.Fatal("validActionArgument() classification changed")
+	}
+	if validAnalyzers(nil) || validAnalyzers([]AnalyzerDescriptor{{Name: "z", Version: "1"}, {Name: "a", Version: "1"}}) ||
+		!validAnalyzers([]AnalyzerDescriptor{{Name: "a", Version: "1"}}) {
+		t.Fatal("validAnalyzers() classification changed")
+	}
+}
+
 func validReportAndEvidence(t *testing.T) (Report, FailureEvidence) {
 	t.Helper()
 	core, err := testevidence.Failed("nonzero_exit", nil)
@@ -292,3 +418,7 @@ func validAction(report *Report) Action {
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+type errorReader struct{}
+
+func (errorReader) Read([]byte) (int, error) { return 0, io.ErrClosedPipe }

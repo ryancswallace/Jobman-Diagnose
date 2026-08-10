@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,16 +15,29 @@ import (
 )
 
 func main() {
-	output := flag.String("output", "testdata/evaluation/evidence", "fixture output directory")
-	flag.Parse()
-	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "evaluationfixtures does not accept positional arguments")
-		os.Exit(2)
+	os.Exit(execute(os.Args[1:], os.Stderr))
+}
+
+func execute(arguments []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("evaluationfixtures", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	output := flags.String("output", "testdata/evaluation/evidence", "fixture output directory")
+	if err := flags.Parse(arguments); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 {
+		if _, err := fmt.Fprintln(stderr, "evaluationfixtures does not accept positional arguments"); err != nil {
+			return 2
+		}
+		return 2
 	}
 	if err := generate(*output); err != nil {
-		fmt.Fprintf(os.Stderr, "generate evaluation fixtures: %v\n", err)
-		os.Exit(1)
+		if _, writeErr := fmt.Fprintf(stderr, "generate evaluation fixtures: %v\n", err); writeErr != nil {
+			return 1
+		}
+		return 1
 	}
+	return 0
 }
 
 func generate(output string) error {

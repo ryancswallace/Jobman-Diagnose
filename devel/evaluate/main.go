@@ -37,10 +37,17 @@ type options struct {
 }
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func execute(arguments []string, stdout, stderr io.Writer) int {
+	if err := run(arguments, stdout, stderr); err != nil {
+		if _, writeErr := fmt.Fprintln(stderr, err); writeErr != nil {
+			return 1
+		}
+		return 1
 	}
+	return 0
 }
 
 //nolint:cyclop,gocognit // The development command keeps mode selection, evaluation, output, and gate status in one auditable flow.
