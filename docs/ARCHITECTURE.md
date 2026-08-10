@@ -87,7 +87,8 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    allowance.
 2. `--ai`, `-a`, or `--profile` explicitly activates generation and requests
    and approves metadata plus bounded command argument vectors, filesystem
-   context, and environment variable names/roles. `--ai-logs` or
+   context, environment variable names/roles, and point-in-time
+   state-filesystem/cgroup constraints. `--ai-logs` or
    `--share log_content` additionally requests
    and approves a bounded live tail. The CLI approvals and profile disclosure
    allowlist are intersected; `local_only` evidence is never projected on its

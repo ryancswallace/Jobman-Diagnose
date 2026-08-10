@@ -310,6 +310,89 @@ func formatResource(observation diagnostic.ResourceObservation) string {
 	return metric + ": " + value + " (" + strings.ToLower(details) + ")"
 }
 
+type systemContextView struct {
+	Filesystem    *filesystemCapacityView `json:"filesystem,omitempty"`
+	LinuxCgroup   *linuxCgroupView        `json:"linux_cgroup,omitempty"`
+	ContainerHint string                  `json:"container_hint,omitempty"`
+}
+
+type filesystemCapacityView struct {
+	AvailableBytes uint64 `json:"available_bytes"`
+	TotalBytes     uint64 `json:"total_bytes"`
+}
+
+type linuxCgroupView struct {
+	MemoryCurrentBytes *uint64          `json:"memory_current_bytes,omitempty"`
+	MemoryMaximum      *systemLimitView `json:"memory_maximum,omitempty"`
+	CumulativeOOM      *uint64          `json:"cumulative_oom_events,omitempty"`
+	CumulativeOOMKills *uint64          `json:"cumulative_oom_kill_events,omitempty"`
+	PIDsCurrent        *uint64          `json:"pids_current,omitempty"`
+	PIDsMaximum        *systemLimitView `json:"pids_maximum,omitempty"`
+}
+
+type systemLimitView struct {
+	Value     uint64 `json:"value,omitempty"`
+	Unlimited bool   `json:"unlimited"`
+}
+
+func formatSystemContext(context systemContextView) string {
+	parts := make([]string, 0, 5)
+	if filesystem := context.Filesystem; filesystem != nil && filesystem.TotalBytes > 0 &&
+		filesystem.AvailableBytes <= filesystem.TotalBytes {
+		parts = append(parts, "state filesystem "+formatBytes(filesystem.AvailableBytes)+" available of "+
+			formatBytes(filesystem.TotalBytes))
+	}
+	if cgroup := context.LinuxCgroup; cgroup != nil {
+		if cgroup.MemoryCurrentBytes != nil || cgroup.MemoryMaximum != nil {
+			parts = append(parts, "cgroup memory "+formatCurrentLimit(cgroup.MemoryCurrentBytes, cgroup.MemoryMaximum, true))
+		}
+		if cgroup.PIDsCurrent != nil || cgroup.PIDsMaximum != nil {
+			parts = append(parts, "cgroup PIDs "+formatCurrentLimit(cgroup.PIDsCurrent, cgroup.PIDsMaximum, false))
+		}
+		if cgroup.CumulativeOOM != nil || cgroup.CumulativeOOMKills != nil {
+			parts = append(parts, "cumulative cgroup OOM events "+formatOptionalUint(cgroup.CumulativeOOM)+
+				" (kills "+formatOptionalUint(cgroup.CumulativeOOMKills)+")")
+		}
+	}
+	if context.ContainerHint != "" {
+		parts = append(parts, "container hint "+context.ContainerHint)
+	}
+	if len(parts) == 0 {
+		return "Point-in-time system context"
+	}
+
+	return "System context — " + strings.Join(parts, "; ")
+}
+
+func formatCurrentLimit(current *uint64, limit *systemLimitView, bytes bool) string {
+	format := func(value uint64) string { return strconv.FormatUint(value, 10) }
+	if bytes {
+		format = formatBytes
+	}
+	currentText := "unknown"
+	if current != nil {
+		currentText = format(*current)
+	}
+	limitText := "unknown limit"
+	if limit != nil {
+		if limit.Unlimited {
+			limitText = "unlimited"
+		} else {
+			limitText = format(limit.Value)
+		}
+	}
+
+	return currentText + " / " + limitText
+}
+
+func formatOptionalUint(value *uint64) string {
+	if value == nil {
+		return "unknown"
+	}
+
+	return strconv.FormatUint(*value, 10)
+}
+
 func formatRange(start, end uint64) string {
 	return fmt.Sprintf("bytes %d–%d", start, end)
 }

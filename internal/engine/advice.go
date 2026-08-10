@@ -11,6 +11,12 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 )
 
+const (
+	coreSystemContextCode          = "jobman.system.context"
+	coreSystemNotRequestedOmission = "system_context_not_requested"
+	coreSystemUnavailableOmission  = "system_context_unavailable"
+)
+
 func actionsFor(primary candidate, view evidenceView) []diagnosis.Action {
 	support := slices.Clone(primary.finding.SupportingEvidence)
 	action := func(id, code string, kind diagnosis.ActionKind, summary, description string, confirmation bool) diagnosis.Action {
@@ -377,6 +383,15 @@ func contextLimitations(view evidenceView) []diagnosis.MissingEvidence {
 			Code: "environment_names", Description: "Environment variable names and roles were not requested; values and secret references remain excluded.",
 		})
 	}
+	_, notRequested := view.omissions[coreSystemNotRequestedOmission]
+	_, unavailable := view.omissions[coreSystemUnavailableOmission]
+	if notRequested || unavailable {
+		description := "Point-in-time filesystem capacity and cgroup constraints were not requested."
+		if unavailable {
+			description = "Point-in-time filesystem capacity and cgroup constraints were unavailable on this platform or host."
+		}
+		missing = append(missing, diagnosis.MissingEvidence{Code: "system_context", Description: description})
+	}
 
 	return missing
 }
@@ -495,6 +510,7 @@ func itemSummary(code string) string {
 		diagnostic.CodeFailureFingerprint:     "The selected run's opaque, store-local factual fingerprint.",
 		diagnostic.CodeSimilarFailure:         "A safe summary of a matching store-local failure fingerprint.",
 		diagnostic.CodeResourceObservation:    "A typed, explicitly scoped process resource observation.",
+		coreSystemContextCode:                 "Point-in-time host filesystem and cgroup constraints; cgroup event counters are cumulative, not per-run attribution.",
 	}
 	if summary := summaries[code]; summary != "" {
 		return summary

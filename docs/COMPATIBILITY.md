@@ -27,6 +27,13 @@ envelope invariants, semantic identity, sizes, citations, and provenance.
 Within report schema 1, existing fields and controlled values do not change
 meaning or type. Breaking semantics require a new schema version.
 
+AI-mode live collection requests Jobman's additive `--system` context. When the
+minimum supported Jobman v1.4.0 reports that exact flag as unknown, the client
+performs one safe read-only retry without it. Other collection failures are not
+retried or hidden. Newer bundles may contain the additive
+`jobman.system.context` metadata item; v0.1.0-era decoders preserve and project
+unknown schema-1 items normally.
+
 Jobman store schema 8 is an implementation detail of core, not a companion
 compatibility surface. It adds resource observations and store-local failure
 fingerprints as additive evidence-schema-1 item codes. Bundles from schema-7

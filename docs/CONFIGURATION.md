@@ -10,7 +10,9 @@ Generated augmentation is activated by `--ai`, `-a`, `--ai-logs`, or
 bounded `metadata`, `command`, `path`, and `environment_name` classes for that
 invocation. Command evidence preserves executable and ordered argument
 boundaries; environment evidence contains names and roles but never values or
-secret-reference identifiers. AI never activates merely because a
+secret-reference identifiers. For live collection, AI also requests bounded
+point-in-time state-filesystem and Linux cgroup-v2 context in the `metadata`
+class. AI never activates merely because a
 configuration or credential exists.
 
 ## AI progress output
@@ -126,7 +128,7 @@ policy error. Reduce core collection (`--run`, `--log-bytes`, or omit
 
 The AI activation flag and profile are intersected. A profile allowance alone
 never sends a class. `--ai` and `--profile` approve metadata plus bounded
-command, path, and environment-name context; selecting a non-default profile is
+command, path, environment-name, and system context; selecting a non-default profile is
 therefore concise:
 
 ```console

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,7 +38,8 @@ func TestClientCollectPreservesArgumentsAndDisablesExtensions(t *testing.T) {
 	}
 	client, err := New(Options{
 		Executable: executable, StateDir: "/state with space", ConfigPath: "/config file",
-		Environment: []string{"EXAMPLE=value", "JOBMAN_NO_EXTENSIONS=0"},
+		IncludeSystem: true,
+		Environment:   []string{"EXAMPLE=value", "JOBMAN_NO_EXTENSIONS=0"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +64,7 @@ func TestClientCollectPreservesArgumentsAndDisablesExtensions(t *testing.T) {
 	}
 	wantArguments := []string{
 		"--state-dir", "/state with space", "--config", "/config file", "show", "evidence",
-		"--run=-1", "--command", "--paths", "--environment-names", "--logs", "tail",
+		"--run=-1", "--command", "--paths", "--environment-names", "--system", "--logs", "tail",
 		"--log-bytes", "8192B", "--similar", "2", "--json", "job name",
 	}
 	if !reflect.DeepEqual(gotArguments, wantArguments) {
@@ -70,6 +72,47 @@ func TestClientCollectPreservesArgumentsAndDisablesExtensions(t *testing.T) {
 	}
 	if environmentValue(gotEnvironment, "JOBMAN_NO_EXTENSIONS") != "1" {
 		t.Fatalf("environment = %#v", gotEnvironment)
+	}
+}
+
+func TestClientFallsBackWhenCoreDoesNotSupportSystemContext(t *testing.T) {
+	t.Parallel()
+
+	executable := testExecutable(t)
+	evidence, err := testevidence.Failed("nonzero_exit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope, err := json.Marshal(struct {
+		SchemaVersion int `json:"schema_version"`
+		Data          struct {
+			Evidence diagnostic.Evidence `json:"evidence"`
+		} `json:"data"`
+	}{SchemaVersion: 1, Data: struct {
+		Evidence diagnostic.Evidence `json:"evidence"`
+	}{Evidence: evidence}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := New(Options{Executable: executable, IncludeSystem: true, Environment: []string{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls [][]string
+	client.run = func(_ context.Context, _ string, arguments, _ []string) ([]byte, []byte, error) {
+		calls = append(calls, append([]string(nil), arguments...))
+		if len(calls) == 1 {
+			return nil, []byte("Error: unknown flag: --system\n"), errors.New("exit status 2")
+		}
+
+		return envelope, nil, nil
+	}
+	decoded, err := client.Collect(t.Context(), diagnostic.EvidenceRequest{Selector: "job"})
+	if err != nil || decoded.EvidenceID != evidence.EvidenceID {
+		t.Fatalf("Collect() = %q, %v", decoded.EvidenceID, err)
+	}
+	if len(calls) != 2 || !slices.Contains(calls[0], "--system") || slices.Contains(calls[1], "--system") {
+		t.Fatalf("calls = %#v", calls)
 	}
 }
 

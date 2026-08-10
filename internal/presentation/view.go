@@ -15,6 +15,8 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 )
 
+const coreSystemContextCode = "jobman.system.context"
+
 type reportView struct {
 	report           diagnosis.Report
 	evidence         diagnosis.FailureEvidence
@@ -210,6 +212,11 @@ func (view reportView) itemDetail(citation diagnosis.Citation, item diagnostic.I
 		var observation diagnostic.ResourceObservation
 		if decode(item.Value, &observation) == nil {
 			return subject + " resource — " + formatResource(observation)
+		}
+	case coreSystemContextCode:
+		var context systemContextView
+		if decode(item.Value, &context) == nil {
+			return formatSystemContext(context)
 		}
 	case diagnostic.CodeTargetCommand, diagnostic.CodeWaitCommand, diagnostic.CodeNotifierCommand:
 		var command diagnostic.Command

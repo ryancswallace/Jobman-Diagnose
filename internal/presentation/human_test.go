@@ -174,3 +174,29 @@ func fixtureItem(
 		Quality: diagnostic.QualityObserved, Disclosure: disclosure,
 	}
 }
+
+func TestFormatSystemContextDistinguishesCumulativeCgroupEvents(t *testing.T) {
+	t.Parallel()
+
+	memory := uint64(1024 * 1024 * 1024)
+	pids := uint64(12)
+	oom := uint64(3)
+	kills := uint64(1)
+	formatted := formatSystemContext(systemContextView{
+		Filesystem: &filesystemCapacityView{AvailableBytes: 20 * 1024 * 1024 * 1024, TotalBytes: 100 * 1024 * 1024 * 1024},
+		LinuxCgroup: &linuxCgroupView{
+			MemoryCurrentBytes: &memory, MemoryMaximum: &systemLimitView{Value: 4 * 1024 * 1024 * 1024},
+			PIDsCurrent: &pids, PIDsMaximum: &systemLimitView{Unlimited: true},
+			CumulativeOOM: &oom, CumulativeOOMKills: &kills,
+		},
+		ContainerHint: "docker",
+	})
+	for _, expected := range []string{
+		"20 GiB available of 100 GiB", "cgroup memory 1 GiB / 4 GiB", "cgroup PIDs 12 / unlimited",
+		"cumulative cgroup OOM events 3 (kills 1)", "container hint docker",
+	} {
+		if !strings.Contains(formatted, expected) {
+			t.Fatalf("formatSystemContext() = %q, want %q", formatted, expected)
+		}
+	}
+}

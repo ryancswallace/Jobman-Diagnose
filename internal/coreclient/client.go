@@ -28,19 +28,21 @@ const (
 
 // Options selects a core executable and nonsecret invocation context.
 type Options struct {
-	Executable  string
-	StateDir    string
-	ConfigPath  string
-	Environment []string
+	Executable    string
+	StateDir      string
+	ConfigPath    string
+	IncludeSystem bool
+	Environment   []string
 }
 
 // Client invokes a specific absolute Jobman executable without a shell.
 type Client struct {
-	executable  string
-	stateDir    string
-	configPath  string
-	environment []string
-	run         runCommand
+	executable    string
+	stateDir      string
+	configPath    string
+	includeSystem bool
+	environment   []string
+	run           runCommand
 }
 
 type runCommand func(context.Context, string, []string, []string) ([]byte, []byte, error)
@@ -57,7 +59,7 @@ func New(options Options) (*Client, error) {
 	}
 
 	return &Client{
-		executable: executable, stateDir: stateDir, configPath: configPath,
+		executable: executable, stateDir: stateDir, configPath: configPath, includeSystem: options.IncludeSystem,
 		environment: slices.Clone(environment), run: execute,
 	}, nil
 }
@@ -67,9 +69,15 @@ func (client *Client) Collect(ctx context.Context, request diagnostic.EvidenceRe
 	if ctx == nil {
 		return diagnostic.Evidence{}, errors.New("collect core evidence: nil context")
 	}
-	arguments := client.arguments(request)
+	arguments := client.arguments(request, client.includeSystem)
 	environment := replaceEnvironment(client.environment, "JOBMAN_NO_EXTENSIONS", "1")
 	stdout, stderr, err := client.run(ctx, client.executable, arguments, environment)
+	if err != nil && client.includeSystem && unsupportedSystemFlag(stderr) {
+		// Jobman v1.4 predates --system. Evidence collection is read-only, so a
+		// single compatibility retry without the additive context is safe.
+		arguments = client.arguments(request, false)
+		stdout, stderr, err = client.run(ctx, client.executable, arguments, environment)
+	}
 	if err != nil {
 		message := strings.TrimSpace(string(stderr))
 		if message == "" {
@@ -86,7 +94,7 @@ func (client *Client) Collect(ctx context.Context, request diagnostic.EvidenceRe
 	return evidence, nil
 }
 
-func (client *Client) arguments(request diagnostic.EvidenceRequest) []string {
+func (client *Client) arguments(request diagnostic.EvidenceRequest, includeSystem bool) []string {
 	arguments := make([]string, 0, 18)
 	if client.stateDir != "" {
 		arguments = append(arguments, "--state-dir", client.stateDir)
@@ -110,6 +118,9 @@ func (client *Client) arguments(request diagnostic.EvidenceRequest) []string {
 	if request.IncludeEnvironmentNames {
 		arguments = append(arguments, "--environment-names")
 	}
+	if includeSystem {
+		arguments = append(arguments, "--system")
+	}
 	if request.Logs != "" {
 		arguments = append(arguments, "--logs", string(request.Logs))
 	}
@@ -122,6 +133,12 @@ func (client *Client) arguments(request diagnostic.EvidenceRequest) []string {
 	arguments = append(arguments, "--json", request.Selector)
 
 	return arguments
+}
+
+func unsupportedSystemFlag(stderr []byte) bool {
+	message := strings.ToLower(string(stderr))
+
+	return strings.Contains(message, "unknown flag") && strings.Contains(message, "--system")
 }
 
 // DecodeEvidence accepts either a raw evidence value or Jobman's version-1

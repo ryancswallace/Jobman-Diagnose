@@ -30,7 +30,9 @@ and values, input, notification destinations, credentials, and raw Go errors.
 Plain deterministic collection omits commands, paths, and environment names.
 Explicit AI activation requests bounded, field-redacted direct command
 specifications (including ordered arguments), filesystem context, and
-environment variable names/roles. A profile must allow each class before
+environment variable names/roles, plus allowlisted point-in-time capacity and
+cgroup constraints from core. System context contains no hostname, mount or
+cgroup path, process list, or system log. A profile must allow each class before
 projection. Log content is separately opt-in and bounded.
 The companion does not echo artifact bytes in the human report. Human output
 may render allowlisted typed values from the already sealed evidence, including
@@ -55,7 +57,8 @@ requires all of the following:
   platform per-user Jobman configuration directory;
 - a strict profile allowance for each disclosure class; and
 - matching per-invocation approval, with metadata, command, path, and
-  environment-name context implied by explicit AI activation and log content requiring `--ai-logs` or
+  environment-name context implied by explicit AI activation, bounded system
+  context requested automatically for a live job, and log content requiring `--ai-logs` or
   `--share log_content`.
 
 For live evidence, log-content approval automatically requests a bounded tail;
@@ -64,6 +67,11 @@ requires the sealed core capability `configured_value_redaction_v1`.
 That capability proves a value-aware configured redaction rule was active; it
 does not prove that arbitrary output contains no secrets. Review evidence
 before authorizing disclosure.
+
+System context is collector-host, point-in-time metadata rather than a durable
+per-run measurement. Linux cgroup event counters may include other processes
+and prior events. They are advisory context for generated hypotheses and never
+independently establish an out-of-memory diagnosis.
 
 Projection uses exact item, artifact, and attributed-enrichment IDs and byte
 ceilings. Enrichment can be projected only alongside its explicitly approved

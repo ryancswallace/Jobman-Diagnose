@@ -286,6 +286,7 @@ type options struct {
 	bundleDryRun    bool
 	share           stringListValue
 	logsExplicit    bool
+	includeSystem   bool
 }
 
 func (parsed options) aiEnabled() bool { return parsed.ai || parsed.aiLogs || parsed.profile != "" }
@@ -361,6 +362,8 @@ func registerFlags(flags *flag.FlagSet, parsed *options) {
 	flags.BoolVar(&parsed.ai, "ai", false, "use the default AI profile and share bounded execution context")
 	flags.BoolVar(&parsed.ai, "a", false, "short form of --ai")
 	flags.BoolVar(&parsed.aiLogs, "ai-logs", false, "use AI and share a bounded redacted target-log tail")
+	flags.BoolVar(&parsed.includeSystem, "system", false,
+		"collect bounded point-in-time filesystem and cgroup constraints")
 	flags.StringVar(&parsed.diagnosisConfig, "diagnosis-config", "", "override the per-user diagnosis configuration path")
 	flags.StringVar(&parsed.profile, "profile", "", "use a named AI profile instead of the configured default")
 	flags.Var(&parsed.share, "share", "approve an additional disclosure class; log_content collects a live tail")
@@ -380,6 +383,7 @@ func normalizeAIOptions(parsed *options) error {
 		parsed.request.IncludeCommand = true
 		parsed.request.IncludePaths = true
 		parsed.request.IncludeEnvironmentNames = true
+		parsed.includeSystem = true
 	}
 	if parsed.aiLogs {
 		parsed.share = append(parsed.share, string(diagnostic.DisclosureLogContent))
@@ -435,6 +439,7 @@ func hasLiveCollectionOptions(parsed options) bool {
 	return parsed.jobman != "" || parsed.stateDir != "" || parsed.configPath != "" ||
 		parsed.request.Run != 0 || parsed.request.AllRuns || parsed.request.Similar != 0 ||
 		parsed.request.IncludeCommand || parsed.request.IncludePaths || parsed.request.IncludeEnvironmentNames ||
+		parsed.includeSystem ||
 		parsed.request.Logs != diagnostic.LogsMetadata || parsed.request.LogBytes != 0
 }
 
@@ -457,6 +462,7 @@ func obtainEvidence(ctx context.Context, options options, stdin io.Reader) (diag
 	}
 	client, err := coreclient.New(coreclient.Options{
 		Executable: options.jobman, StateDir: options.stateDir, ConfigPath: options.configPath,
+		IncludeSystem: options.includeSystem,
 	})
 	if err != nil {
 		return diagnostic.Evidence{}, err

@@ -25,7 +25,8 @@ augmentation is explicit opt-in through `--ai`, `-a`, `--ai-logs`, or
 `--profile`. AI mode reads a strict per-user `diagnosis.yml`, uses its default
 profile, and explicitly requests and approves bounded metadata plus a typed
 execution context: direct command argument vectors, paths, environment variable
-names (never values), and effective execution policy. Log content remains a
+names (never values), effective execution policy, and bounded point-in-time
+state-filesystem and cgroup constraints. Log content remains a
 separate opt-in. AI can append validated, uncalibrated hypotheses but cannot
 replace Jobman facts, choose retry policy, create an executable action, or
 mutate a job.
@@ -99,6 +100,7 @@ jobman diagnose JOB
 jobman diagnose --ai JOB
 jobman diagnose --ai-logs JOB
 jobman diagnose --logs tail --log-bytes 64KiB JOB
+jobman diagnose --system JOB
 jobman diagnose --json JOB
 ```
 
@@ -115,6 +117,10 @@ specific run with `--run N`, or compare bounded run history with `--all-runs`.
 Use `--similar N` to request up to N other failures with the same exact,
 store-local factual fingerprint. Current runs also include typed process CPU
 observations and, where the operating system supplies it, peak resident memory.
+`--system` additionally requests point-in-time state-filesystem capacity and
+allowlisted Linux cgroup-v2 limits and counters. AI mode requests that context
+automatically; Jobman v1.4.0 remains supported and is retried without the
+additive flag when necessary.
 Older runs created before Jobman store schema 8 are not backfilled, and the
 report calls out that partial history explicitly.
 
@@ -189,7 +195,10 @@ activation. The `command` class preserves direct executable and ordered
 argument boundaries for the target, wait probes, and command notifiers. The
 path class includes working directories, configured file paths, and per-run
 resolved executables. Environment evidence contains names and roles only—never
-literal values or secret-reference identifiers. Each selected profile must
+literal values or secret-reference identifiers. Metadata may also contain
+bounded collector-host filesystem capacity and cgroup limits/counters. Cgroup
+OOM counters are cumulative for a potentially shared group, not proof that the
+selected run caused an event. Each selected profile must
 allow a class before it is projected. Share log
 content with the single-purpose shortcut:
 

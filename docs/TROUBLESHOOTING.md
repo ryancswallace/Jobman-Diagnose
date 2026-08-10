@@ -54,8 +54,12 @@ a warning. This is the expected safe fallback, not a silent partial diagnosis.
 ## The model lacks useful context
 
 AI activation shares bounded metadata, direct command arguments, paths,
-environment variable names, and effective execution policy when the selected
-profile permits those classes. It does not share environment values.
+environment variable names, effective execution policy, and—when supported by
+core—point-in-time state-filesystem and cgroup constraints when the selected
+profile permits those classes. It does not share environment values, host
+paths, hostnames, process lists, or system logs. Jobman v1.4.0 is retried
+without the newer `--system` flag; upgrade core to collect that additional
+context.
 
 Log bytes require explicit intent because they can contain secrets that no
 automatic redactor recognizes:

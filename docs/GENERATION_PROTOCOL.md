@@ -20,7 +20,9 @@ API.
 
 Projected metadata and explicitly approved command, path, and environment-name
 context retain typed JSON values, quality, timestamps, disclosure classes, and
-stable evidence IDs. Direct command values preserve executable and ordered
+stable evidence IDs. Metadata may include bounded point-in-time filesystem and
+cgroup constraints; cumulative cgroup event counters do not claim per-run
+attribution. Direct command values preserve executable and ordered
 argument boundaries. Environment items contain names and roles only. A log
 artifact is bounded post-redaction UTF-8 data with its
 source digest, byte accounting, and truncation state. It is data, never part of

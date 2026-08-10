@@ -373,7 +373,7 @@ func TestParseProgressModes(t *testing.T) {
 
 func hasDefaultAIContext(parsed options) bool {
 	return parsed.aiEnabled() && parsed.request.IncludeCommand && parsed.request.IncludePaths &&
-		parsed.request.IncludeEnvironmentNames && slices.Contains(parsed.share, "metadata") &&
+		parsed.request.IncludeEnvironmentNames && parsed.includeSystem && slices.Contains(parsed.share, "metadata") &&
 		slices.Contains(parsed.share, "command") && slices.Contains(parsed.share, "path") &&
 		slices.Contains(parsed.share, "environment_name")
 }
