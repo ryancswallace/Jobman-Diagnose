@@ -1,11 +1,8 @@
 # Maintenance and support policy
 
-Jobman Diagnose is currently unreleased. Support for `main` is best effort and
-there is no compatibility or response-time guarantee until the first tagged
-release. The release gate is tracked in [RELEASE.md](RELEASE.md).
-
-After the first stable release, the newest stable minor line will be the normal
-maintenance target. Patch releases may contain compatible correctness,
+Jobman Diagnose v0.1.0 is the initial pre-v1 release. The newest published
+pre-v1 minor line is the normal maintenance target; support for unreleased
+`main` snapshots remains best effort. Patch releases may contain compatible correctness,
 security, documentation, and provider-conformance fixes. Breaking schema or CLI
 changes require a new major version and migration guidance.
 

@@ -37,14 +37,17 @@ jobs:
       - name: Check formatting and lint
         run: make format-check lint
 
-      - name: Validate workflows
-        run: make workflow-check
+      - name: Validate workflows and shell scripts
+        run: make workflow-check shellcheck
 
       - name: Check reachable vulnerabilities
         run: make vulncheck
 
       - name: Run race-enabled tests and enforce coverage
         run: make coverage-check
+
+      - name: Evaluate deterministic diagnosis quality
+        run: make evaluate
 
       - name: Upload coverage profile
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

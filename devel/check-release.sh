@@ -5,6 +5,11 @@
 set -eu
 
 dist=${1:-dist}
+mode=${2:-snapshot}
+if [ "${mode}" != snapshot ] && [ "${mode}" != signed ]; then
+  echo "usage: $0 [DIST] [snapshot|signed]" >&2
+  exit 2
+fi
 manifest=$(find "${dist}" -maxdepth 1 -type f \
   -name 'jobman-diagnose_*_checksums.txt' -print)
 if [ -z "${manifest}" ] || [ "$(printf '%s\n' "${manifest}" | wc -l | tr -d ' ')" -ne 1 ]; then
@@ -53,6 +58,19 @@ for filename in ${expected}; do
     exit 1
   fi
 done
+
+if [ "${mode}" = signed ]; then
+  bundle=${manifest}.sigstore.json
+  if [ ! -s "${bundle}" ]; then
+    echo "release is missing $(basename "${bundle}")" >&2
+    exit 1
+  fi
+  file_count=$(find "${dist}" -maxdepth 1 -type f | wc -l | tr -d ' ')
+  if [ "${file_count}" -ne 36 ]; then
+    echo "signed release contains ${file_count} files; expected exactly 36" >&2
+    exit 1
+  fi
+fi
 
 (
   cd "${dist}"

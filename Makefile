@@ -70,7 +70,8 @@ tools: tool-golangci-lint tool-actionlint tool-govulncheck tool-goreleaser tool-
 
 .PHONY: tool-golangci-lint
 tool-golangci-lint:
-	@if ! $(GOLANGCI_LINT) version 2>/dev/null \
+	@set -eu; \
+	if ! $(GOLANGCI_LINT) version 2>/dev/null \
 		| grep -Fq 'version $(patsubst v%,%,$(GOLANGCI_LINT_VERSION))'; then \
 		echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION) into $(BIN_DIR)/"; \
 		mkdir -p $(BIN_DIR); \
@@ -80,7 +81,8 @@ tool-golangci-lint:
 
 .PHONY: tool-actionlint
 tool-actionlint:
-	@if ! $(ACTIONLINT) -version 2>/dev/null \
+	@set -eu; \
+	if ! $(ACTIONLINT) -version 2>/dev/null \
 		| grep -Fq '$(patsubst v%,%,$(ACTIONLINT_VERSION))'; then \
 		echo "Installing actionlint $(ACTIONLINT_VERSION) into $(BIN_DIR)/"; \
 		mkdir -p $(BIN_DIR); \
@@ -90,7 +92,8 @@ tool-actionlint:
 
 .PHONY: tool-govulncheck
 tool-govulncheck:
-	@if ! $(GOVULNCHECK) -version 2>/dev/null \
+	@set -eu; \
+	if ! $(GOVULNCHECK) -version 2>/dev/null \
 		| grep -Fq '$(GOVULNCHECK_VERSION)'; then \
 		echo "Installing govulncheck $(GOVULNCHECK_VERSION) into $(BIN_DIR)/"; \
 		mkdir -p $(BIN_DIR); \
@@ -100,7 +103,8 @@ tool-govulncheck:
 
 .PHONY: tool-goreleaser
 tool-goreleaser:
-	@if ! $(GORELEASER) --version 2>/dev/null \
+	@set -eu; \
+	if ! $(GORELEASER) --version 2>/dev/null \
 		| grep -Fq '$(patsubst v%,%,$(GORELEASER_VERSION))'; then \
 		echo "Installing GoReleaser $(GORELEASER_VERSION) into $(BIN_DIR)/"; \
 		mkdir -p $(BIN_DIR); \
@@ -110,7 +114,8 @@ tool-goreleaser:
 
 .PHONY: tool-syft
 tool-syft:
-	@if ! test -x '$(SYFT)' || ! test -f '$(SYFT_VERSION_FILE)'; then \
+	@set -eu; \
+	if ! test -x '$(SYFT)' || ! test -f '$(SYFT_VERSION_FILE)'; then \
 		echo "Installing Syft $(SYFT_VERSION) into $(BIN_DIR)/"; \
 		mkdir -p $(BIN_DIR); \
 		GOBIN=$(abspath $(BIN_DIR)) $(GO) install \
@@ -144,6 +149,19 @@ lint: tool-golangci-lint ## Run static analysis against the Linux release target
 workflow-check: tool-actionlint ## Validate GitHub Actions workflows.
 	$(ACTIONLINT) .github/workflows/*.yml
 
+.PHONY: shellcheck
+shellcheck: ## Statically analyze repository shell scripts.
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		find devel -type f -name '*.sh' -print0 | xargs -0 shellcheck; \
+	elif $(DOCKER) info >/dev/null 2>&1; then \
+		$(DOCKER) run --rm -v '$(CURDIR):/mnt:ro' \
+			koalaman/shellcheck-alpine:v0.11.0 \
+			$$(find devel -type f -name '*.sh' -print); \
+	else \
+		echo 'shellcheck requires shellcheck or a running Docker daemon.' >&2; \
+		exit 2; \
+	fi
+
 .PHONY: vulncheck
 vulncheck: tool-govulncheck ## Check reachable Go code for known vulnerabilities.
 	$(GOVULNCHECK) ./...
@@ -151,6 +169,12 @@ vulncheck: tool-govulncheck ## Check reachable Go code for known vulnerabilities
 .PHONY: test
 test: ## Run race-enabled unit and compatibility tests.
 	$(GO) test -race -shuffle=on ./...
+
+.PHONY: e2etest
+e2etest: ## Test assembled binaries selected by JOBMAN_E2E_BINARY and JOBMAN_DIAGNOSE_E2E_BINARY.
+	@test -n "$$JOBMAN_E2E_BINARY" || { echo 'JOBMAN_E2E_BINARY is required.' >&2; exit 2; }
+	@test -n "$$JOBMAN_DIAGNOSE_E2E_BINARY" || { echo 'JOBMAN_DIAGNOSE_E2E_BINARY is required.' >&2; exit 2; }
+	$(GO) test -race -shuffle=on ./tests/e2e
 
 .PHONY: fuzz
 fuzz: ## Fuzz one decoder target for a bounded duration.
@@ -193,8 +217,20 @@ spellcheck: ## Spell-check the repository with a pinned cspell version.
 docs: docs-check spellcheck ## Validate authored documentation.
 
 .PHONY: evaluate
-evaluate: ## Run the checked-in deterministic diagnosis quality corpus.
+evaluate: evaluation-fixtures-check ## Run the checked-in deterministic diagnosis quality corpus.
 	$(GO) run ./devel/evaluate --corpus testdata/evaluation/manifest.json --summary
+
+.PHONY: gen-evaluation-fixtures
+gen-evaluation-fixtures: ## Regenerate synthetic nonsecret diagnostic evaluation evidence.
+	$(GO) run ./devel/evaluationfixtures -output testdata/evaluation/evidence
+
+.PHONY: evaluation-fixtures-check
+evaluation-fixtures-check: ## Verify checked-in synthetic evidence matches its generator.
+	@set -eu; \
+	temporary=$$(mktemp -d "$${TMPDIR:-/tmp}/jobman-diagnose-fixtures.XXXXXXXXXX"); \
+	trap 'rm -rf "$$temporary"' EXIT HUP INT TERM; \
+	$(GO) run ./devel/evaluationfixtures -output "$$temporary"; \
+	diff -ru testdata/evaluation/evidence "$$temporary"
 
 .PHONY: build
 build: ## Build the companion binary.
@@ -216,8 +252,12 @@ cross-build: ## Compile every supported release OS and architecture.
 	done
 
 .PHONY: release-check
-release-check: tool-goreleaser ## Validate the release configuration.
+release-check: tool-goreleaser release-metadata-check ## Validate the release configuration and metadata.
 	$(GORELEASER) check
+
+.PHONY: release-metadata-check
+release-metadata-check: ## Verify changelog and citation metadata against the latest stable tag.
+	./devel/check-release-metadata.sh
 
 .PHONY: release-build
 release-build: tool-goreleaser ## Compile every target declared to GoReleaser.
@@ -226,15 +266,19 @@ release-build: tool-goreleaser ## Compile every target declared to GoReleaser.
 .PHONY: snapshot
 snapshot: tool-goreleaser tool-syft ## Build a complete local release snapshot without publishing.
 	PATH='$(abspath $(BIN_DIR))':$$PATH \
-		$(GORELEASER) release --snapshot --clean --parallelism 2 --skip=sign
+		$(GORELEASER) release --snapshot --clean --parallelism 1 --skip=sign
 	./devel/check-release.sh dist
+
+.PHONY: package-smoke
+package-smoke: ## Install snapshot packages in pinned Debian, Fedora, and Alpine containers.
+	./devel/package-smoke.sh dist
 
 .PHONY: clean
 clean: ## Remove build, release, and test artifacts.
 	rm -rf $(BIN_DIR) dist coverage.txt
 
 .PHONY: quick-check
-quick-check: go-version-check mod-check format-check lint test docs build ## Run the fast local validation loop.
+quick-check: go-version-check mod-check format-check lint shellcheck test docs build ## Run the fast local validation loop.
 
 .PHONY: check
-check: go-version-check mod-check format-check lint workflow-check vulncheck coverage-check evaluate docs cross-build release-check release-build build ## Run the complete local validation gate.
+check: go-version-check mod-check format-check lint workflow-check shellcheck vulncheck coverage-check evaluate docs cross-build release-check release-build build ## Run the complete local validation gate.

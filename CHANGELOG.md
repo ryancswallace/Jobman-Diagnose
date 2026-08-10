@@ -15,6 +15,36 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 - Added separately repairable post-release workflows with protected
   credentials, checksum-signature and attestation verification, and
   source-digest tags that detect conflicting Cloudsmith packages.
+- Added assembled compatibility tests against Jobman v1.4.0 and current
+  Jobman `main`, including direct invocation, extension dispatch, evidence
+  export/import, private permissions, and semantic report parity.
+- Added ShellCheck, release-metadata consistency checks, scheduled invariant
+  validation, verified retained-draft publication, and DEB/RPM/APK install
+  smoke tests in pinned target-distribution containers.
+- Expanded the synthetic evaluation corpus with reproducible Python, Go, JVM,
+  compiler, launch, network, storage, and adversarial-log cases, plus generator
+  drift and ordinary CI quality gates.
+- Added optional system-context acquisition and automatic AI-mode collection
+  of bounded state-filesystem and Linux cgroup-v2 constraints, with readable
+  citations and compatibility fallback for Jobman v1.4.0.
+
+### Changed
+
+- Changed Homebrew publication to open an automatically merged, required-check
+  pull request in the protected shared tap instead of pushing directly to its
+  default branch.
+
+### Fixed
+
+- Made pinned tool bootstrap recipes fail immediately instead of risking a
+  success marker after a failed installation.
+- Accepted GitHub's normal `targetCommitish: main` metadata during retained
+  draft recovery while retaining immutable tag, signature, attestation, and
+  executable-version checks.
+- Serialized native-package generation so release validation cannot retain
+  incomplete output from concurrent nFPM packaging.
+- Distinguished cumulative shared-cgroup OOM counters from per-run facts so
+  generated analysis can use them as context without treating them as proof.
 
 ## [0.1.0] - 2026-08-09
 

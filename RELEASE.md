@@ -32,12 +32,14 @@ Before creating a companion tag:
 
 Create `HOMEBREW_TAP_TOKEN` as a fine-grained personal access token whose
 resource owner is `ryancswallace`. Grant it access only to
-`ryancswallace/homebrew-tap`, with **Contents: read and write** and no other
-repository permissions. Store it as an environment secret named
+`ryancswallace/homebrew-tap`, with **Contents: read and write** and **Pull
+requests: read and write**. Store it as an environment secret named
 `HOMEBREW_TAP_TOKEN` in this repository's protected `main` environment.
 
-The publishing workflow checks the token's push permission before cloning the
-tap. The tap's branch rules must allow the token owner to update `main`. Rotate
+The publishing workflow checks the token's repository access before cloning
+the tap, pushes an automation branch, opens a pull request, and requests
+auto-merge. Protected tap `main` requires strict online audits and installation
+tests for both formulas on Intel and Apple Silicon. Rotate
 the secret before the token expires and immediately after suspected exposure.
 Never put the token in repository, organization, or local configuration files.
 
@@ -73,8 +75,9 @@ vulnerabilities, race-enabled coverage, the deterministic evaluation corpus,
 documentation links, every supported architecture, GoReleaser configuration,
 and release builds.
 
-Also verify direct and `jobman diagnose` assembled invocation against the
-minimum and newest supported Jobman versions. Follow
+The `Jobman compatibility` workflow verifies direct and `jobman diagnose`
+assembled invocation against the minimum supported Jobman release and current
+Jobman `main`. Before a release, confirm both lanes pass, then follow
 [`docs/EVALUATION.md`](docs/EVALUATION.md) for recorded-response evaluation and
 opt-in live evaluation against at least one supported hosted strict-output
 service and one supported local runtime. Retain exact model/runtime identifiers,
@@ -87,8 +90,11 @@ Python, network, or provider runtime.
 
 ## Publish
 
-Create a signed `vX.Y.Z` tag only after the candidate gates pass and push it to
-GitHub. The protected Release workflow:
+Create an annotated `vX.Y.Z` tag only after the candidate gates pass, sign it
+when a configured signing identity is available, and push it to GitHub. GitHub
+rules prevent release-tag updates or deletion; artifact identity is established
+independently by keyless workflow signatures and attestations. The v0.1.0 tag
+predates this policy and is an unsigned annotated tag. The protected Release workflow:
 
 - rejects non-semantic tags, tags outside `main`, local Jobman replacements,
   and the unreleased `v0.0.0` placeholder;
@@ -108,7 +114,8 @@ Publish only after those artifacts agree with the tag and commit.
 
 Publishing a stable GitHub release triggers two independent distribution
 workflows. The Homebrew workflow regenerates `Formula/jobman-diagnose.rb` from
-the public checksum manifest and commits it to `ryancswallace/homebrew-tap`.
+the public checksum manifest and proposes it through a required-check pull
+request in `ryancswallace/homebrew-tap`.
 The Cloudsmith workflow downloads all nine native packages, verifies the
 release's keyless checksum signature, checks every package checksum and GitHub
 attestation, and uploads them to `jobman/stable`.

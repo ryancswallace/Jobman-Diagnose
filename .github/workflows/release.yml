@@ -62,7 +62,7 @@ jobs:
 
       - name: Revalidate release source
         run: >-
-          make mod-check format-check lint workflow-check vulncheck
+          make mod-check format-check lint workflow-check shellcheck vulncheck
           coverage-check evaluate docs release-check release-build build
 
       - name: Install Syft
@@ -78,12 +78,15 @@ jobs:
         with:
           distribution: goreleaser
           version: v2.17.0
-          args: release --clean
+          args: release --clean --parallelism 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify complete release artifact set
-        run: ./devel/check-release.sh dist
+        run: ./devel/check-release.sh dist signed
+
+      - name: Install native packages in target distributions
+        run: ./devel/package-smoke.sh dist
 
       - name: Prepare attestation input
         run: |

@@ -1,0 +1,67 @@
+---
+name: Jobman compatibility
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jobman-diagnose-compatibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assembled:
+    name: Assembled binaries (${{ matrix.jobman }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - jobman: minimum v1.4.0
+            jobman_ref: v1.4.0
+          - jobman: current main
+            jobman_ref: main
+
+    steps:
+      - name: Checkout Jobman Diagnose
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout Jobman
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ryancswallace/jobman
+          ref: ${{ matrix.jobman_ref }}
+          path: jobman-core
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.version
+          check-latest: true
+          cache-dependency-path: |
+            go.sum
+            jobman-core/go.sum
+
+      - name: Build assembled binaries
+        run: |
+          mkdir -p e2e-bin
+          go -C jobman-core build -trimpath -mod=readonly -o ../e2e-bin/jobman .
+          go build -trimpath -mod=readonly -o e2e-bin/jobman-diagnose ./cmd/jobman-diagnose
+
+      - name: Test direct and extension compatibility
+        env:
+          JOBMAN_DIAGNOSE_E2E_BINARY: ${{ github.workspace }}/e2e-bin/jobman-diagnose
+          JOBMAN_E2E_BINARY: ${{ github.workspace }}/e2e-bin/jobman
+        run: go test -race -shuffle=on ./tests/e2e

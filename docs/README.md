@@ -6,8 +6,8 @@ contracts behind the CLI.
 
 ## User guides
 
-- [Installation](INSTALLATION.md) explains source builds today and the planned
-  verified release-install flow.
+- [Installation](INSTALLATION.md) covers Homebrew, verified portable archives,
+  Linux packages, and source builds.
 - [Configuration](CONFIGURATION.md) documents profiles, disclosure policy,
   provider credentials, and precedence.
 - [Troubleshooting](TROUBLESHOOTING.md) covers provider failures, configuration

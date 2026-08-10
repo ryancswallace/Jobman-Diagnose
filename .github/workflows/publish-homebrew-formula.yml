@@ -114,10 +114,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          if [[ "$(gh api repos/ryancswallace/homebrew-tap \
-            --jq '.permissions.push')" != "true" ]]; then
-            echo "HOMEBREW_TAP_TOKEN cannot push to ryancswallace/homebrew-tap." >&2
-            echo "Grant the fine-grained token Contents: read and write for that repository." >&2
+          permissions=$(gh api repos/ryancswallace/homebrew-tap --jq \
+            '[.permissions.push, .permissions.maintain, .permissions.admin] | any')
+          if [[ "${permissions}" != "true" ]]; then
+            echo "HOMEBREW_TAP_TOKEN cannot update ryancswallace/homebrew-tap." >&2
+            echo "Grant the token Contents and Pull requests: read and write for that repository." >&2
             exit 1
           fi
 
@@ -129,8 +130,9 @@ jobs:
           persist-credentials: true
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
 
-      - name: Publish verified formula
+      - name: Propose verified formula
         env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
         run: |
           formula=generated-formula/jobman-diagnose.rb
@@ -138,12 +140,36 @@ jobs:
           grep -Fq "/releases/download/${RELEASE_TAG}/" "${formula}"
           install -m 0644 "${formula}" homebrew-tap/Formula/jobman-diagnose.rb
           cd homebrew-tap
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Formula/jobman-diagnose.rb
-          if git diff --cached --quiet; then
+          if git diff --quiet -- Formula/jobman-diagnose.rb; then
             echo "Homebrew formula already describes ${RELEASE_TAG}."
             exit 0
           fi
+          branch="automation/jobman-diagnose-${RELEASE_TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --create "${branch}"
+          git add Formula/jobman-diagnose.rb
           git commit -m "jobman-diagnose ${RELEASE_TAG#v}"
-          git push origin HEAD:main
+          remote_oid=$(git ls-remote --refs origin "refs/heads/${branch}" | awk '{print $1}')
+          if [[ -n "${remote_oid}" ]]; then
+            git push \
+              --force-with-lease="refs/heads/${branch}:${remote_oid}" \
+              origin "HEAD:refs/heads/${branch}"
+          else
+            git push origin "HEAD:refs/heads/${branch}"
+          fi
+          pr_url=$(gh pr list \
+            --repo ryancswallace/homebrew-tap \
+            --head "${branch}" \
+            --state open \
+            --json url \
+            --jq '.[0].url // empty')
+          if [[ -z "${pr_url}" ]]; then
+            pr_url=$(gh pr create \
+              --repo ryancswallace/homebrew-tap \
+              --base main \
+              --head "${branch}" \
+              --title "jobman-diagnose ${RELEASE_TAG#v}" \
+              --body "Automated verified formula update for Jobman Diagnose ${RELEASE_TAG}.")
+          fi
+          gh pr merge "${pr_url}" --auto --squash --delete-branch

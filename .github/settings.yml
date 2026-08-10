@@ -49,6 +49,8 @@ branches:
           - "Build (windows/arm64)"
           - "Build (windows/386)"
           - Release configuration
+          - "Assembled binaries (minimum v1.4.0)"
+          - "Assembled binaries (current main)"
           - Fuzz FuzzDecodeReport
           - Fuzz FuzzDecodeProposal
           - Fuzz FuzzDecodeEvidence

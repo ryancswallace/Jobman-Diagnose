@@ -136,12 +136,15 @@ func TestHomebrewWorkflowPublishesVerifiedFormula(t *testing.T) {
 		"gh attestation verify",
 		"go run ./devel/homebrewformula",
 		"Formula/jobman-diagnose.rb",
-		"git diff --cached --quiet",
-		"git push origin HEAD:main",
+		"gh pr create",
+		"gh pr merge \"${pr_url}\" --auto --squash --delete-branch",
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Errorf("Homebrew workflow is missing %q", required)
 		}
+	}
+	if strings.Contains(workflow, "git push origin HEAD:main") {
+		t.Error("Homebrew workflow bypasses tap pull-request validation")
 	}
 }
 
@@ -149,10 +152,34 @@ func TestReleaseWorkflowChecksCompleteArtifactSet(t *testing.T) {
 	t.Parallel()
 
 	workflow := readRepositoryFile(t, "../.github/workflows/release.yml")
-	if !strings.Contains(workflow, "run: ./devel/check-release.sh dist") {
+	if !strings.Contains(workflow, "run: ./devel/check-release.sh dist signed") {
 		t.Error("release workflow does not validate the complete artifact set")
 	}
+	if !strings.Contains(workflow, "run: ./devel/package-smoke.sh dist") {
+		t.Error("release workflow does not install native packages in target distributions")
+	}
 	assertExecutable(t, "check-release.sh")
+	assertExecutable(t, "package-smoke.sh")
+}
+
+func TestStagedReleaseWorkflowVerifiesBeforePublishingByID(t *testing.T) {
+	t.Parallel()
+
+	workflow := readRepositoryFile(t, "../.github/workflows/publish-staged-release.yml")
+	for _, required := range []string{
+		"./devel/check-release.sh dist signed",
+		"cosign verify-blob",
+		"gh attestation verify",
+		"source-ref \"refs/tags/${RELEASE_TAG}\"",
+		`"${target_commit}" != "main"`,
+		"verify-bin/jobman-diagnose --version",
+		`"repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}"`,
+		"-F draft=false",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Errorf("staged release workflow is missing %q", required)
+		}
+	}
 }
 
 func TestProtectedEnvironmentAllowsMainAndReleaseTags(t *testing.T) {
