@@ -14,4 +14,3 @@ raise SystemExit(17)
 
 print("checking database migration compatibility", file=sys.stderr)
 subprocess.run([sys.executable, "-c", child_program], check=True)
-

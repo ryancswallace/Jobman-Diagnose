@@ -15,4 +15,3 @@ document = """{
 print("loading deployment configuration from generated JSON", file=sys.stderr)
 configuration = json.loads(document)
 print(configuration)
-

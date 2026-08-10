@@ -12,4 +12,3 @@ raise PermissionError(
     "service identity cannot read the configured signing key",
     protected_path,
 )
-

@@ -29,4 +29,3 @@ print(
     file=sys.stderr,
 )
 parse_amount(incoming)
-

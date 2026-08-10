@@ -13,4 +13,3 @@ while time.monotonic() < deadline:
     time.sleep(0.5)
 
 raise TimeoutError("safety stop: partition assignment did not arrive within 10 seconds")
-

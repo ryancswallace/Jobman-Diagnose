@@ -16,4 +16,3 @@ def summarize_batch(batch: dict[str, object]) -> str:
 batch = {"id": "nightly-042", "total_cost": 125.50, "units": 0}
 print(f"processing batch {batch['id']} with {batch['units']} units", file=sys.stderr)
 print(summarize_batch(batch))
-

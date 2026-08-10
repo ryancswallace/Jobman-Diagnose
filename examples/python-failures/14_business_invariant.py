@@ -16,4 +16,3 @@ assert available >= order["quantity"], (
     f"inventory invariant violated for {order['id']}: requested "
     f"{order['quantity']} units but only {available} are available"
 )
-

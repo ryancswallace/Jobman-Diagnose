@@ -29,4 +29,3 @@ candidate = {
 }
 print("validating production deployment configuration", file=sys.stderr)
 validate(candidate)
-

@@ -7,4 +7,3 @@ def calculate_total(items)
 
 
 print(calculate_total([{"price": 10}]))
-

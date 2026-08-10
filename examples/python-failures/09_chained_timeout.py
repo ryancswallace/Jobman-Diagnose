@@ -23,4 +23,3 @@ def synchronize_inventory() -> None:
 
 print("inventory synchronization attempt 3 of 3", file=sys.stderr)
 synchronize_inventory()
-

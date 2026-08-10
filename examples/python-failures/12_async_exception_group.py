@@ -31,4 +31,3 @@ async def reconcile_accounts() -> None:
 
 print("reconciling customer and invoice records concurrently", file=sys.stderr)
 asyncio.run(reconcile_accounts())
-
