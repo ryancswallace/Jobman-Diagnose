@@ -1,6 +1,6 @@
 # Maintenance and support policy
 
-Jobman Diagnose v0.1.0 is the initial pre-v1 release. The newest published
+Jobman Diagnose v0.2.0 is the current pre-v1 release. The newest published
 pre-v1 minor line is the normal maintenance target; support for unreleased
 `main` snapshots remains best effort. Patch releases may contain compatible correctness,
 security, documentation, and provider-conformance fixes. Breaking schema or CLI

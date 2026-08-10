@@ -130,10 +130,9 @@ configuration and dispatch **Publish Homebrew formula** or **Publish Linux
 packages** from `main` with the existing stable tag. These workflows consume
 the already-public release and never rebuild or replace its artifacts.
 
-The v0.1.0 GitHub release predates native packages. After this distribution
-code reaches `main`, the Homebrew workflow may be dispatched for v0.1.0 because
-its signed macOS archives already exist. Do not dispatch the Cloudsmith workflow
-for v0.1.0; publish native packages with the next release instead.
+The v0.1.0 GitHub release predates native packages and remains archive-only.
+Version v0.2.0 is the first release with native packages and automated
+Cloudsmith publication. Never rebuild native packages under the v0.1.0 tag.
 
 Generated analysis remains explicit opt-in. Do not describe an adapter as
 release-supported until its structured-output behavior, locality boundary,
@@ -143,10 +142,10 @@ compatibility gate.
 ## Verify published artifacts
 
 Download the archive or native package, checksum manifest, and Sigstore bundle
-from the same release. For v0.1.0 on Apple silicon, for example:
+from the same release. For v0.2.0 on Apple silicon, for example:
 
 ```console
-gh release download v0.1.0 \
+gh release download v0.2.0 \
   --repo ryancswallace/Jobman-Diagnose \
   --pattern 'jobman-diagnose_0.1.0_darwin_arm64.tar.gz' \
   --pattern 'jobman-diagnose_0.1.0_checksums.txt' \
@@ -154,7 +153,7 @@ gh release download v0.1.0 \
 cosign verify-blob \
   --bundle jobman-diagnose_0.1.0_checksums.txt.sigstore.json \
   --certificate-identity \
-    'https://github.com/ryancswallace/Jobman-Diagnose/.github/workflows/release.yml@refs/tags/v0.1.0' \
+    'https://github.com/ryancswallace/Jobman-Diagnose/.github/workflows/release.yml@refs/tags/v0.2.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   jobman-diagnose_0.1.0_checksums.txt
 grep '  jobman-diagnose_0.1.0_darwin_arm64.tar.gz$' \
@@ -173,7 +172,7 @@ guide when testing a different platform.
 
 Install the published archive in a clean environment and repeat one
 deterministic and one configured provider smoke test. Confirm documentation
-links and badges. For releases after v0.1.0, also confirm the Homebrew formula
+links and badges. Beginning with v0.2.0, also confirm the Homebrew formula
 commit, install through Homebrew on macOS, install at least one Cloudsmith
 package through each relevant repository format, and verify that all nine
 Cloudsmith records carry their expected source-digest tag. Then record any

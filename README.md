@@ -11,7 +11,7 @@
 core evidence into a cited diagnosis report with confidence, limitations,
 recommended next actions, and explicit retry advice.
 
-Status: v0.1.0 is the initial pre-v1 release. It includes deterministic
+Status: v0.2.0 is the current pre-v1 release. It includes deterministic
 diagnosis, optional generated augmentation, and the command, strict
 OpenAI-compatible, and local Ollama provider adapters.
 
@@ -63,17 +63,14 @@ from the shared tap:
 brew install ryancswallace/tap/jobman-diagnose
 ```
 
-Stable releases after v0.1.0 include signed `.deb`, `.rpm`, and `.apk` packages
-for Linux 386, amd64, and arm64. They are available from the public
-[Cloudsmith repository] as well as the GitHub release. The v0.1.0 release
-remains archive-only on Linux and is also the source for the initial Homebrew
-formula.
+Stable releases beginning with v0.2.0 include signed `.deb`, `.rpm`, and `.apk`
+packages for Linux 386, amd64, and arm64. They are available from the public
+[Cloudsmith repository] as well as the GitHub release.
 
 Portable CGO-free archives remain available for Linux, macOS, and Windows.
 See the [installation guide](docs/INSTALLATION.md) for package-repository setup,
 exact asset names, and checksum, signature, and attestation verification.
 
-[v0.1.0 release]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0
 [Cloudsmith repository]: https://cloudsmith.io/~jobman/repos/stable/
 
 ## Build from source
@@ -85,7 +82,7 @@ normally, so the repositories do not need to be adjacent:
 ```console
 git clone https://github.com/ryancswallace/jobman-diagnose.git
 cd jobman-diagnose
-git checkout v0.1.0
+git checkout v0.2.0
 make setup
 make check
 ```

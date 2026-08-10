@@ -5,6 +5,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-09
+
 ### Added
 
 - Added Homebrew distribution through `ryancswallace/homebrew-tap`, generated
@@ -36,6 +38,9 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Explicitly dispatch post-release distribution workflows after a staged
+  release is published with `GITHUB_TOKEN`, whose ordinary release event does
+  not start additional workflows.
 - Made pinned tool bootstrap recipes fail immediately instead of risking a
   success marker after a failed installation.
 - Accepted GitHub's normal `targetCommitish: main` metadata during retained
@@ -143,5 +148,6 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0
