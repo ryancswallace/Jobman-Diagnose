@@ -17,9 +17,9 @@
           "category": {"type": "string", "minLength": 1, "maxLength": 160},
           "summary": {"type": "string", "minLength": 1, "maxLength": 4096},
           "explanation": {"type": "string", "minLength": 1, "maxLength": 8192},
-          "supporting_evidence": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
-          "contradicting_evidence": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
-          "contradicts_findings": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 256}}
+          "supporting_evidence": {"type": "array", "description": "Distinct supplied evidence IDs that directly support this hypothesis. Do not repeat an ID or also list it as contradicting evidence.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
+          "contradicting_evidence": {"type": "array", "description": "Distinct supplied evidence IDs that directly conflict with this hypothesis. Leave empty when none conflict, and never reuse a supporting evidence ID.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
+          "contradicts_findings": {"type": "array", "description": "Distinct supplied deterministic finding IDs that directly conflict with this hypothesis. Leave empty when none conflict.", "maxItems": 8, "items": {"type": "string", "maxLength": 256}}
         },
         "required": ["code", "category", "summary", "explanation", "supporting_evidence", "contradicting_evidence", "contradicts_findings"]
       }

@@ -199,6 +199,11 @@ func TestRequestNormalizationInitializesProtocolCollections(t *testing.T) {
 	}
 	request := validRequest(t)
 	request.RequestID = "sha256:" + strings.Repeat("b", 64)
+	responseSchema, err := proposalJSONSchemaForRequest(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.ResponseSchema = responseSchema
 	if err := VerifyRequest(request); err == nil || !strings.Contains(err.Error(), "semantic content") {
 		t.Fatalf("VerifyRequest(mismatched digest) error = %v", err)
 	}

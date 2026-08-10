@@ -179,7 +179,7 @@ func assertFailureCode(t *testing.T, err error, want provider.FailureCode) {
 }
 
 func TestCommandBridgeHelper(_ *testing.T) {
-	if os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL") != "1" {
+	if os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL") != "2" {
 		return
 	}
 	if os.Getenv("UNRELATED_PROVIDER_SECRET") != "" {
@@ -253,7 +253,6 @@ func bridgeRequest(t *testing.T) provider.Request {
 		AllowedCategories:      []string{"process"},
 		AllowedHypothesisCodes: []string{"generated.bridge_test"}, AllowedActions: []provider.AllowedAction{},
 		Instructions: provider.RequiredInstructions(), MaximumOutputBytes: 16 * 1024,
-		ResponseSchema: provider.ProposalJSONSchema(),
 	})
 	if err != nil {
 		t.Fatal(err)

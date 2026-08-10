@@ -82,7 +82,6 @@ func Prepare(
 		AllowedCategories:      slices.Clone(allowedCategories),
 		AllowedHypothesisCodes: slices.Clone(allowedHypothesisCodes), AllowedActions: actions,
 		Instructions: provider.RequiredInstructions(), MaximumOutputBytes: profile.MaximumOutputBytes,
-		ResponseSchema: provider.ProposalJSONSchema(),
 	})
 	if err != nil {
 		return Prepared{}, fmt.Errorf("prepare generated diagnosis: seal request: %w", err)

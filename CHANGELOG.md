@@ -5,6 +5,17 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Fixed
+
+- Specialized every AI response schema with the exact request identity and
+  request-specific code, category, evidence, finding, and action catalogs so
+  grammar-constrained local models cannot emit structurally valid but
+  unauthorized scalar values. Generation requests and command bridges now use
+  protocol 2, whose derived-schema verification avoids a request-hash cycle
+  without weakening host-side semantic validation. Fixed relational guidance
+  also prevents grammar-constrained local models from cross-listing the same
+  citation where portable JSON Schema cannot express that relationship.
+
 ### Changed
 
 - Documented installing Jobman and Jobman Diagnose together from Cloudsmith's

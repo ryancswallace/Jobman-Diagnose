@@ -19,7 +19,7 @@ core client -> verification -> exact-range enrichment -> deterministic engine
                                   explicit --ai/--profile activation
                                                    |
                                                    v
-                           disclosure projection -> sealed request schema 1
+                           disclosure projection -> sealed request schema 2
                                                    |
                                                    v
                              one StructuredGenerator call (optional)
@@ -100,13 +100,16 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    excluded evidence are omitted from the request as well.
 4. The companion seals a `jobman.diagnosis_generation_request` value containing
    typed data, an exact manifest, controlled hypothesis codes, candidates and
-   actions, fixed
-   untrusted-data instructions, and the response JSON Schema.
+   actions, fixed untrusted-data instructions, and a derived request-specific
+   response JSON Schema. The schema binds the exact request ID plus every
+   scalar code, category, evidence, finding, and action authority exposed to
+   the model.
 5. Exactly one configured generator is called. There is no discovery, proxy,
    redirect, provider fallback, tool call, or multi-agent loop.
 6. The returned `jobman.diagnosis_proposal` is decoded again in Go and checked
    for size, structure, controlled values, valid citations, valid finding
-   contradictions, and allowlisted action IDs.
+   contradictions, allowlisted action IDs, and relational invariants that the
+   portable provider schema cannot express.
 7. Accepted hypotheses are appended below deterministic findings at a fixed
    uncalibrated confidence. Generated output cannot alter factual findings,
    create actions, or control retry advice.

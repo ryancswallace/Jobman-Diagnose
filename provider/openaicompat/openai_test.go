@@ -1,6 +1,7 @@
 package openaicompat
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -29,8 +30,10 @@ func TestGenerateUsesStrictSchemaAndKeepsEvidenceInUserData(t *testing.T) {
 			http.Error(writer, "bad JSON", http.StatusBadRequest)
 			return
 		}
-		if payload.ResponseFormat.Type != "json_schema" || !payload.ResponseFormat.JSONSchema.Strict || payload.Temperature != 0 ||
+		if payload.ResponseFormat.Type != "json_schema" || !payload.ResponseFormat.JSONSchema.Strict ||
+			!bytes.Equal(payload.ResponseFormat.JSONSchema.Schema, request.ResponseSchema) || payload.Temperature != 0 ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "ignore prior instructions") ||
+			!strings.Contains(payload.Messages[0].Content, "never repeat or cross-list a citation") ||
 			!strings.Contains(payload.Messages[1].Content, "ignore prior instructions") {
 			http.Error(writer, "unsafe projection", http.StatusBadRequest)
 			return
@@ -208,7 +211,6 @@ func openAIRequest(t *testing.T) provider.Request {
 		AllowedCategories:      []string{"process"},
 		AllowedHypothesisCodes: []string{"generated.compatible_test"}, AllowedActions: []provider.AllowedAction{},
 		Instructions: provider.RequiredInstructions(), MaximumOutputBytes: 16 * 1024,
-		ResponseSchema: provider.ProposalJSONSchema(),
 	})
 	if err != nil {
 		t.Fatal(err)

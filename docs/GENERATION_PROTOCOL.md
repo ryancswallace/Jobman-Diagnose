@@ -1,12 +1,12 @@
-# Structured-generation protocol 1
+# Structured-generation protocol 2
 
-The provider boundary consists of two independently identified schema-1 JSON
-documents. It is a proposal protocol, not a chat, agent, tool, or remote Jobman
+The provider boundary consists of a schema-2 generation request and a schema-1
+proposal. It is a proposal protocol, not a chat, agent, tool, or remote Jobman
 API.
 
 ## Request
 
-`jobman.diagnosis_generation_request` contains:
+`jobman.diagnosis_generation_request` schema 2 contains:
 
 - a SHA-256 `request_id` over normalized semantic content;
 - the sealed core evidence ID and a minimal subject;
@@ -16,7 +16,23 @@ API.
   action catalog entries;
 - fixed instructions that classify all projected content as untrusted data;
 - a maximum response byte count; and
-- the exact response JSON Schema.
+- a request-specific response JSON Schema derived from the sealed authority
+  catalogs.
+
+The response schema binds `request_id` to the exact request digest and narrows
+hypothesis codes, categories, evidence references, deterministic finding
+references, and action IDs to request-specific `const` or `enum` values. It
+also requires at least one supporting evidence reference for every hypothesis
+and constrains the action array to empty when the deterministic report offers
+no actions. Grammar-constrained providers therefore cannot invent those
+scalar authority values and leave the host to discover the mismatch later.
+
+The response schema is a deterministic derived field. Request identity hashes
+the normalized authoritative request fields without that derived copy, then
+the host rebuilds the schema from those fields and the resulting request ID
+and requires exact equality during verification. This avoids a
+self-referential hash while preventing schema substitution or authority
+expansion.
 
 Projected metadata and explicitly approved command, path, and environment-name
 context retain typed JSON values, quality, timestamps, disclosure classes, and
@@ -33,7 +49,8 @@ bytes separately. Other `local_only` evidence is never present.
 
 Request decoding is bounded and rejects unknown fields, duplicate keys,
 trailing values, excessive nesting, unsorted or duplicate IDs, manifest
-mismatches, invalid evidence references, and digest mutation.
+mismatches, invalid evidence references, response-schema substitution, and
+digest mutation.
 
 ## Proposal
 
@@ -49,8 +66,13 @@ mismatches, invalid evidence references, and digest mutation.
 The schema deliberately has no field for confidence, retry advice, commands,
 arguments, tools, URLs, environment, paths, lifecycle facts, or mutations.
 Host validation rejects invented references and controlled values even after a
-backend reports successful schema enforcement. An empty proposal is an
-abstention.
+backend reports successful schema enforcement. It also retains relational
+checks that portable grammar backends cannot express, including duplicate
+hypothesis codes, duplicate catalog references, and overlap between supporting
+and contradicting evidence. Fixed request instructions and schema field
+descriptions state those relational rules explicitly so smaller local models
+can satisfy them even though the grammar cannot encode cross-field equality.
+An empty proposal is an abstention.
 
 ## Reconciliation
 
@@ -71,7 +93,7 @@ on standard input and writes one raw proposal JSON value on standard output.
 There is no shell and no inherited ambient environment. The child receives:
 
 ```text
-JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=1
+JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=2
 JOBMAN_DIAGNOSE_PROVIDER_MODEL=PROFILE_MODEL
 JOBMAN_DIAGNOSE_REQUEST_ID=sha256:...
 ```

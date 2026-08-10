@@ -15,11 +15,11 @@ semantic versions.
 | Diagnosis report | Schema 1 |
 | Deterministic engine | Version 1.2.0 |
 | Diagnosis configuration | YAML schema 2 |
-| Generation request | `jobman.diagnosis_generation_request` schema 1 |
+| Generation request | `jobman.diagnosis_generation_request` schema 2 |
 | Generated proposal | `jobman.diagnosis_proposal` schema 1 |
 | Support bundle | `jobman.diagnosis_support_bundle` schema 1 |
 | Evaluation corpus/result | Schema 1 |
-| Provider adapters | Command protocol 1, strict OpenAI-compatible Chat Completions, local Ollama `/api/chat` |
+| Provider adapters | Command protocol 2, strict OpenAI-compatible Chat Completions, local Ollama `/api/chat` |
 
 The companion rejects a newer required evidence schema with an actionable
 error. It ignores unknown additive evidence item codes, but validates all known
@@ -44,12 +44,15 @@ never assumed complete when core reports that older failures were not indexed.
 Provider compatibility is narrower than accepting arbitrary JSON. Every
 selected generator must claim native JSON Schema enforcement and satisfy the
 profile's byte limits and locality before invocation. The host then validates
-the response again against the exact schema-1 request. There is no fallback to
-JSON mode, a different endpoint, a different provider, or a remote service.
+the response again against the exact schema-2 request. The response schema
+binds the exact request ID and request-specific code, category, citation,
+finding, and action catalogs before generation; relational validation remains
+authoritative after decoding. There is no fallback to JSON mode, a different
+endpoint, a different provider, or a remote service.
 OpenAI-compatible servers must implement the configured Chat Completions
 strict `json_schema` request and response shape. Ollama profiles must implement
 local `/api/chat` structured output. Command bridges must implement the raw
-schema-1 stdin/stdout protocol documented in
+generation-request-schema-2/proposal-schema-1 stdin/stdout protocol documented in
 [`GENERATION_PROTOCOL.md`](GENERATION_PROTOCOL.md).
 
 Copied core fixtures under `testdata/jobman-v1/` record their Jobman v1.4.0

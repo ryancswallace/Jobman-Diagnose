@@ -9,7 +9,7 @@ const (
 	// RequestKind identifies the structured-generation request protocol.
 	RequestKind = "jobman.diagnosis_generation_request"
 	// RequestSchemaVersion is the newest request schema understood here.
-	RequestSchemaVersion = 1
+	RequestSchemaVersion = 2
 	// ProposalKind identifies generated proposal documents.
 	ProposalKind = "jobman.diagnosis_proposal"
 	// ProposalSchemaVersion is the newest proposal schema understood here.

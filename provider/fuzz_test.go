@@ -26,7 +26,7 @@ func FuzzDecodeProposal(f *testing.F) {
 		AllowedCategories:      []string{"process"},
 		AllowedHypothesisCodes: []string{"generated.unknown_target_error"},
 		AllowedActions:         []AllowedAction{}, Instructions: RequiredInstructions(),
-		MaximumOutputBytes: 16 * 1024, ResponseSchema: ProposalJSONSchema(),
+		MaximumOutputBytes: 16 * 1024,
 	})
 	if err != nil {
 		f.Fatal(err)

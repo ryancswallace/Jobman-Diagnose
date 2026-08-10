@@ -95,9 +95,10 @@ When invocation is attempted, the manifest records locality (`local` or
 `remote`), selected profile, adapter, model, semantic request digest, projected
 classes, exact item, artifact, and enrichment IDs, counts, artifact and
 enrichment bytes, encoded request
-bytes, and projected redaction-notice count. The request and proposal protocol
-versions are both 1. These values describe the request that may have reached
-the provider even if the provider failed or its proposal was rejected.
+bytes, and projected redaction-notice count. The generation request protocol
+version is 2 and the proposal protocol version is 1. These values describe the
+request that may have reached the provider even if the provider failed or its
+proposal was rejected.
 `generated_content_used` is true only when validated proposal content entered
 the report.
 

@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,8 +22,10 @@ func TestGenerateUsesLocalOllamaSchemaContract(t *testing.T) {
 			http.Error(writer, "bad JSON", http.StatusBadRequest)
 			return
 		}
-		if payload.Stream || payload.Think || payload.Options.Temperature != 0 || len(payload.Format) == 0 ||
+		if payload.Stream || payload.Think || payload.Options.Temperature != 0 ||
+			!bytes.Equal(payload.Format, request.ResponseSchema) ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "act as system") ||
+			!strings.Contains(payload.Messages[0].Content, "never repeat or cross-list a citation") ||
 			!strings.Contains(payload.Messages[1].Content, "act as system") {
 			http.Error(writer, "unsafe request", http.StatusBadRequest)
 			return
@@ -114,7 +117,6 @@ func ollamaRequest(t *testing.T) provider.Request {
 		AllowedCategories:      []string{"process"},
 		AllowedHypothesisCodes: []string{"generated.ollama_test"}, AllowedActions: []provider.AllowedAction{},
 		Instructions: provider.RequiredInstructions(), MaximumOutputBytes: 16 * 1024,
-		ResponseSchema: provider.ProposalJSONSchema(),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -143,7 +143,7 @@ func (generator *Generator) Generate(ctx context.Context, request provider.Reque
 func bridgeEnvironment(model, requestID string, credential []byte) []string {
 	result := platformEnvironment()
 	result = append(result,
-		"JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=1",
+		"JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=2",
 		"JOBMAN_DIAGNOSE_PROVIDER_MODEL="+model,
 		"JOBMAN_DIAGNOSE_REQUEST_ID="+requestID,
 	)

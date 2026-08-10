@@ -98,6 +98,15 @@ It cannot create a fact, action, command, URL, retry decision, or lifecycle
 operation. Deterministic findings remain primary and deterministic retry advice
 is never replaced.
 
+Generation-request schema 2 derives a response schema from the sealed request.
+It constrains the model to the exact request ID and request-specific hypothesis,
+category, evidence, finding, and action catalogs before decoding. The host
+reconstructs that derived schema during request verification and rejects any
+substitution. Relational rules that grammar backends cannot portably enforce,
+such as disjoint supporting and contradicting evidence or duplicate hypothesis
+codes, are stated in fixed instructions and schema annotations, then still
+checked after decoding.
+
 ## Configuration, credentials, and transports
 
 Configuration is bounded and versioned. The YAML decoder rejects unknown or

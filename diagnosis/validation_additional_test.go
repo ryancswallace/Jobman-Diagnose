@@ -128,6 +128,28 @@ func TestDisclosureAndGeneratorValidation(t *testing.T) {
 	}
 }
 
+func TestReportAcceptsSupportedGenerationRequestVersions(t *testing.T) {
+	t.Parallel()
+
+	for _, requestVersion := range []int{1, 2} {
+		report, _ := validReportAndEvidence(t)
+		report.Versions.GenerationRequestSchemaVersion = requestVersion
+		report.Versions.ProposalSchemaVersion = 1
+		report.Disclosure = DisclosureManifest{
+			ProviderInvoked: true, Locality: ProviderLocal,
+			Profile: "profile", Provider: "provider", Model: "model",
+			RequestID: "sha256:" + strings.Repeat("a", 64), Classes: []string{"metadata"},
+			ItemIDs: []string{"ev:item"}, ItemCount: 1, RequestBytes: 100,
+		}
+		report.Generators = []GeneratorDescriptor{{
+			Provider: "provider", Model: "model", Profile: "profile", Locality: ProviderLocal,
+		}}
+		if _, err := Seal(report); err != nil {
+			t.Fatalf("Seal(generation request schema %d): %v", requestVersion, err)
+		}
+	}
+}
+
 func TestReportCodecAndJSONBoundaries(t *testing.T) {
 	t.Parallel()
 

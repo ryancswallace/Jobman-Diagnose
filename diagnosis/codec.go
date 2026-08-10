@@ -290,8 +290,9 @@ func validate(report Report, placeholder bool) error {
 	if err := validateGenerators(report.Generators, report.Disclosure); err != nil {
 		return err
 	}
-	if report.Disclosure.ProviderInvoked != (report.Versions.GenerationRequestSchemaVersion == 1 &&
-		report.Versions.ProposalSchemaVersion == 1) ||
+	generatedProtocol := report.Versions.GenerationRequestSchemaVersion >= 1 &&
+		report.Versions.GenerationRequestSchemaVersion <= 2 && report.Versions.ProposalSchemaVersion == 1
+	if report.Disclosure.ProviderInvoked != generatedProtocol ||
 		(report.Mode == ModeMixed || report.Mode == ModeGenerated) != report.Disclosure.GeneratedContentUsed ||
 		report.Mode == ModeDeterministic && report.Disclosure.GeneratedContentUsed {
 		return errors.New("validate diagnosis: analysis mode, protocol versions, and disclosure are inconsistent")
@@ -342,7 +343,7 @@ func validateVersions(versions Versions) error {
 	if versions.CompanionVersion == "" || versions.EngineVersion == "" ||
 		versions.JobmanVersion == "" || versions.EvidenceSchemaVersion < 1 ||
 		versions.ReportSchemaVersion != SchemaVersion || versions.GenerationRequestSchemaVersion < 0 ||
-		versions.GenerationRequestSchemaVersion > 1 || versions.ProposalSchemaVersion < 0 ||
+		versions.GenerationRequestSchemaVersion > 2 || versions.ProposalSchemaVersion < 0 ||
 		versions.ProposalSchemaVersion > 1 ||
 		(versions.GenerationRequestSchemaVersion == 0) != (versions.ProposalSchemaVersion == 0) {
 		return errors.New("validate diagnosis: incomplete versions")
