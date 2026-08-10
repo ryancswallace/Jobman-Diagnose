@@ -2,6 +2,7 @@ package openaicompat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -63,6 +64,7 @@ func TestGenerateClassifiesCompatibleFailures(t *testing.T) {
 		{name: "invalid envelope", body: `{`, code: provider.FailureResponseInvalid},
 		{name: "no choices", body: `{"choices":[]}`, code: provider.FailureResponseIncomplete},
 		{name: "ambiguous choices", body: `{"choices":[{},{}]}`, code: provider.FailureResponseIncomplete},
+		{name: "truncated", body: `{"choices":[{"finish_reason":"length","message":{"content":"{}"}}]}`, code: provider.FailureResponseTruncated},
 		{name: "unfinished", body: `{"choices":[{"finish_reason":"tool_calls","message":{"content":"{}"}}]}`, code: provider.FailureResponseIncomplete},
 		{name: "refusal", body: `{"choices":[{"finish_reason":"stop","message":{"refusal":"no","content":"{}"}}]}`, code: provider.FailureModelRefused},
 		{name: "empty", body: `{"choices":[{"finish_reason":"stop","message":{"content":""}}]}`, code: provider.FailureContentEmpty},
@@ -93,23 +95,50 @@ func TestGenerateClassifiesCompatibleFailures(t *testing.T) {
 	if _, err := generator.Generate(canceled, request); compatibleFailureCode(err) != provider.FailureRequestCanceled {
 		t.Fatalf("canceled error = %v", err)
 	}
+	deadline, cancelDeadline := context.WithTimeout(t.Context(), -1)
+	defer cancelDeadline()
+	if _, err := generator.Generate(deadline, request); compatibleFailureCode(err) != provider.FailureRequestTimeout {
+		t.Fatalf("deadline error = %v", err)
+	}
+
+	generator = newTestCompatible(t)
+	generator.client = &http.Client{Transport: compatibleRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError, Header: http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{"error":"unavailable"}`)),
+		}, nil
+	})}
+	if _, err := generator.Generate(t.Context(), request); err == nil || !strings.Contains(err.Error(), "non-success") {
+		t.Fatalf("HTTP status error = %v", err)
+	}
 }
 
 func TestGenerateDropsUnsafeProviderRequestID(t *testing.T) {
 	t.Parallel()
 
-	generator := newTestCompatible(t)
-	generator.client = compatibleResponseClient(`{
-		"id":"unsafe\nidentifier",
-		"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]
-	}`)
-	response, err := generator.Generate(t.Context(), openAIRequest(t))
+	for _, providerRequestID := range []string{"unsafe\nidentifier", strings.Repeat("x", 257)} {
+		generator := newTestCompatible(t)
+		generator.client = compatibleResponseClient(`{
+			"id":` + string(mustJSON(t, providerRequestID)) + `,
+			"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]
+		}`)
+		response, err := generator.Generate(t.Context(), openAIRequest(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.ProviderRequestID != "" {
+			t.Fatalf("unsafe provider request ID retained: %q", response.ProviderRequestID)
+		}
+	}
+}
+
+func mustJSON(t *testing.T, value string) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(value)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.ProviderRequestID != "" {
-		t.Fatalf("unsafe provider request ID retained: %q", response.ProviderRequestID)
-	}
+	return encoded
 }
 
 func newTestCompatible(t *testing.T) *Generator {

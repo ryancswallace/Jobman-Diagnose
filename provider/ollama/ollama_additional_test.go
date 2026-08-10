@@ -96,6 +96,41 @@ func TestGenerateClassifiesOllamaFailures(t *testing.T) {
 	if _, err := generator.Generate(canceled, request); failureCode(err) != provider.FailureRequestCanceled {
 		t.Fatalf("canceled error = %v", err)
 	}
+	deadline, cancelDeadline := context.WithTimeout(t.Context(), -1)
+	defer cancelDeadline()
+	if _, err := generator.Generate(deadline, request); failureCode(err) != provider.FailureRequestTimeout {
+		t.Fatalf("deadline error = %v", err)
+	}
+
+	generator = newTestOllama(t)
+	generator.client = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError, Header: http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{"error":"unavailable"}`)),
+		}, nil
+	})}
+	if _, err := generator.Generate(t.Context(), request); err == nil || !strings.Contains(err.Error(), "non-success") {
+		t.Fatalf("HTTP status error = %v", err)
+	}
+}
+
+func TestGenerateSendsOllamaCredential(t *testing.T) {
+	t.Parallel()
+
+	generator := newTestOllama(t)
+	generator.config.Credential = []byte("test-token")
+	generator.client = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if got := request.Header.Get("Authorization"); got != "Bearer test-token" {
+			t.Errorf("Authorization = %q", got)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}},
+			Body: io.NopCloser(strings.NewReader(`{"done":true,"message":{"content":"{}"}}`)),
+		}, nil
+	})}
+	if _, err := generator.Generate(t.Context(), ollamaRequest(t)); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func newTestOllama(t *testing.T) *Generator {
