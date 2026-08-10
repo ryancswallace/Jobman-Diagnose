@@ -73,7 +73,10 @@ func TestValidateCorpusRejectsInvalidExpectationContracts(t *testing.T) {
 			corpus.Cases = make([]Case, maximumCases+1)
 		}},
 		{name: "name", mutate: func(corpus *Corpus) { corpus.Cases[0].Name = "Invalid Name" }},
-		{name: "absolute evidence", mutate: func(corpus *Corpus) { corpus.Cases[0].Evidence = "/outside.json" }},
+		{name: "absolute evidence", mutate: func(corpus *Corpus) {
+			root := filepath.VolumeName(corpus.root) + string(os.PathSeparator)
+			corpus.Cases[0].Evidence = filepath.Join(root, "outside.json")
+		}},
 		{name: "escaping evidence", mutate: func(corpus *Corpus) { corpus.Cases[0].Evidence = "../outside.json" }},
 		{name: "no primary codes", mutate: func(corpus *Corpus) { corpus.Cases[0].AcceptedPrimaryCodes = nil }},
 		{name: "negative confidence", mutate: func(corpus *Corpus) { corpus.Cases[0].MinimumConfidence = -1 }},

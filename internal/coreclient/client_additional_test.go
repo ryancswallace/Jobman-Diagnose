@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -71,8 +72,10 @@ func TestResolveOptionsRejectsUnsafeExecutables(t *testing.T) {
 	if err := os.WriteFile(path, []byte("data"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := resolveOptions(Options{Executable: path}, nil); err == nil {
-		t.Fatal("resolveOptions(non-executable) error = nil")
+	if runtime.GOOS != "windows" {
+		if _, _, _, err := resolveOptions(Options{Executable: path}, nil); err == nil {
+			t.Fatal("resolveOptions(non-executable) error = nil")
+		}
 	}
 }
 

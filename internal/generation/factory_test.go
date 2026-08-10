@@ -10,6 +10,10 @@ import (
 func TestNewGeneratorConstructsConfiguredAdapters(t *testing.T) {
 	t.Parallel()
 
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	base := testProfile(t, false)
 	tests := []struct {
 		name    string
@@ -28,7 +32,7 @@ func TestNewGeneratorConstructsConfiguredAdapters(t *testing.T) {
 			profile.Provider = "command"
 			profile.Locality = "local"
 			profile.Endpoint = ""
-			profile.Command = &config.Command{Executable: "/usr/bin/true", Arguments: []string{"--structured"}}
+			profile.Command = &config.Command{Executable: executable, Arguments: []string{"--structured"}}
 			return profile
 		}()},
 	}

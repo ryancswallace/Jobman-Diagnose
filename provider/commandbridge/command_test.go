@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -78,11 +79,7 @@ func TestCommandBridgeValidatesConfigurationAndClonesSecrets(t *testing.T) {
 	if err := os.WriteFile(nonExecutable, []byte("provider"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, newErr := New(Config{
-		Executable: nonExecutable, Model: "test", MaximumInputBytes: 1, MaximumOutputBytes: 1,
-	}); newErr == nil {
-		t.Fatal("New(non-executable file) error = nil")
-	}
+	assertNonExecutableRejected(t, nonExecutable)
 
 	executable, err := os.Executable()
 	if err != nil {
@@ -113,6 +110,18 @@ func TestCommandBridgeValidatesConfigurationAndClonesSecrets(t *testing.T) {
 		capabilities.Locality != provider.LocalityLocal || capabilities.MaximumInputBytes != 4096 ||
 		capabilities.MaximumOutputBytes != 2048 {
 		t.Fatalf("generator description = %q / %#v", generator.Name(), capabilities)
+	}
+}
+
+func assertNonExecutableRejected(t *testing.T, executable string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if _, err := New(Config{
+		Executable: executable, Model: "test", MaximumInputBytes: 1, MaximumOutputBytes: 1,
+	}); err == nil {
+		t.Fatal("New(non-executable file) error = nil")
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -28,7 +29,7 @@ func TestWriteAtomicCreatesPrivateFileWithoutOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(contents) != "first" || info.Mode().Perm() != 0o600 {
+	if string(contents) != "first" || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("contents/mode = %q / %o", contents, info.Mode().Perm())
 	}
 	if writeErr := WriteAtomic(destination, func(writer io.Writer) error {

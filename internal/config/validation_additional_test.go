@@ -76,11 +76,15 @@ func TestProfileValidationRejectsUnsafeVariants(t *testing.T) {
 func TestCommandTransportValidation(t *testing.T) {
 	t.Parallel()
 
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	valid := validValidationProfile()
 	valid.Provider = "command"
 	valid.Locality = provider.LocalityLocal
 	valid.Endpoint = ""
-	valid.Command = &Command{Executable: "/bin/true", Arguments: []string{"--structured"}}
+	valid.Command = &Command{Executable: executable, Arguments: []string{"--structured"}}
 	if err := valid.validate(); err != nil {
 		t.Fatal(err)
 	}
