@@ -2,10 +2,15 @@ package commandbridge
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
@@ -58,6 +63,121 @@ func TestCommandBridgeBoundsOutputAndHidesStderr(t *testing.T) {
 	}
 }
 
+func TestCommandBridgeValidatesConfigurationAndClonesSecrets(t *testing.T) {
+	t.Parallel()
+
+	if _, err := New(Config{}); err == nil {
+		t.Fatal("New(empty configuration) error = nil")
+	}
+	missing := filepath.Join(t.TempDir(), "missing-provider")
+	if _, err := New(Config{
+		Executable: missing, Model: "test", MaximumInputBytes: 1, MaximumOutputBytes: 1,
+	}); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("New(missing executable) error = %v", err)
+	}
+	nonExecutable := filepath.Join(t.TempDir(), "provider")
+	if err := os.WriteFile(nonExecutable, []byte("provider"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	assertNonExecutableRejected(t, nonExecutable)
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, newErr := New(Config{
+		Executable: executable, Arguments: []string{strings.Repeat("x", 4097)}, Model: "test",
+		MaximumInputBytes: 1, MaximumOutputBytes: 1,
+	}); newErr == nil {
+		t.Fatal("New(oversized argument) error = nil")
+	}
+	arguments := []string{"-test.run=^TestCommandBridgeHelper$"}
+	credential := []byte("credential")
+	generator, err := New(Config{
+		Executable: executable, Arguments: arguments, Model: "model", Credential: credential,
+		MaximumInputBytes: 4096, MaximumOutputBytes: 2048,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments[0] = "changed"
+	credential[0] = 'X'
+	if generator.config.Arguments[0] == "changed" || string(generator.config.Credential) != "credential" {
+		t.Fatal("generator retained caller-owned configuration slices")
+	}
+	capabilities := generator.Capabilities()
+	if generator.Name() != "command" || !capabilities.NativeJSONSchema ||
+		capabilities.Locality != provider.LocalityLocal || capabilities.MaximumInputBytes != 4096 ||
+		capabilities.MaximumOutputBytes != 2048 {
+		t.Fatalf("generator description = %q / %#v", generator.Name(), capabilities)
+	}
+}
+
+func assertNonExecutableRejected(t *testing.T, executable string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		return
+	}
+	if _, err := New(Config{
+		Executable: executable, Model: "test", MaximumInputBytes: 1, MaximumOutputBytes: 1,
+	}); err == nil {
+		t.Fatal("New(non-executable file) error = nil")
+	}
+}
+
+func TestCommandBridgeClassifiesRequestBoundaryFailures(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := New(Config{
+		Executable: executable, Arguments: []string{"-test.run=^TestCommandBridgeHelper$"},
+		Model: "test", MaximumInputBytes: 64 * 1024, MaximumOutputBytes: 16 * 1024,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, generateErr := base.Generate(nil, bridgeRequest(t)) //nolint:staticcheck // Explicit nil-context contract.
+	assertFailureCode(t, generateErr, provider.FailureInvalidRequest)
+	_, generateErr = base.Generate(t.Context(), provider.Request{})
+	assertFailureCode(t, generateErr, provider.FailureInvalidRequest)
+
+	inputLimited := *base
+	inputLimited.config.MaximumInputBytes = 1
+	_, generateErr = inputLimited.Generate(t.Context(), bridgeRequest(t))
+	assertFailureCode(t, generateErr, provider.FailureInputOversized)
+
+	missing := *base
+	missing.config.Executable = filepath.Join(t.TempDir(), "removed-provider")
+	_, generateErr = missing.Generate(t.Context(), bridgeRequest(t))
+	assertFailureCode(t, generateErr, provider.FailureRequestFailed)
+
+	empty := *base
+	empty.config.Model = "empty"
+	_, generateErr = empty.Generate(t.Context(), bridgeRequest(t))
+	assertFailureCode(t, generateErr, provider.FailureOutputEmpty)
+
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, generateErr = base.Generate(canceled, bridgeRequest(t))
+	assertFailureCode(t, generateErr, provider.FailureRequestCanceled)
+
+	blocking := *base
+	blocking.config.Model = "block"
+	deadline, cancelDeadline := context.WithTimeout(t.Context(), 20*time.Millisecond)
+	defer cancelDeadline()
+	_, generateErr = blocking.Generate(deadline, bridgeRequest(t))
+	assertFailureCode(t, generateErr, provider.FailureRequestTimeout)
+}
+
+func assertFailureCode(t *testing.T, err error, want provider.FailureCode) {
+	t.Helper()
+	code, _, ok := provider.Diagnostic(err)
+	if !ok || code != want {
+		t.Fatalf("failure = %q/%t (%v), want %q", code, ok, err, want)
+	}
+}
+
 func TestCommandBridgeHelper(_ *testing.T) {
 	if os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL") != "1" {
 		return
@@ -70,6 +190,14 @@ func TestCommandBridgeHelper(_ *testing.T) {
 	}
 	model := os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_MODEL")
 	switch model {
+	case "empty":
+		if err := os.Stdout.Close(); err != nil {
+			os.Exit(15)
+		}
+		os.Exit(0)
+	case "block":
+		time.Sleep(time.Minute)
+		return
 	case "oversize":
 		if _, err := os.Stdout.WriteString(strings.Repeat("x", 4096)); err != nil {
 			os.Exit(13)
