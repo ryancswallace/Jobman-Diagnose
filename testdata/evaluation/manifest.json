@@ -5,11 +5,17 @@
     {
       "name": "active_run",
       "evidence": "jobman-v1/active-run-v1.json",
-      "accepted_primary_codes": ["core.insufficient_structured_evidence"],
+      "accepted_primary_codes": [
+        "core.insufficient_structured_evidence"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.insufficient_structured_evidence"],
+      "required_finding_codes": [
+        "core.insufficient_structured_evidence"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "unknown",
       "expected_existing_policy": "scheduled",
@@ -19,11 +25,59 @@
     {
       "name": "additive_unknown_fact",
       "evidence": "jobman-v1/additive-fact-v1.json",
-      "accepted_primary_codes": ["core.nonzero_exit"],
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.nonzero_exit"],
+      "required_finding_codes": [
+        "core.nonzero_exit"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
+      "name": "compiler_error",
+      "evidence": "evaluation/evidence/compiler-error-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.compiler_error"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
+      "name": "connection_refused_message",
+      "evidence": "evaluation/evidence/connection-refused-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.connection_refused_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
@@ -33,11 +87,59 @@
     {
       "name": "failed_exit",
       "evidence": "jobman-v1/failed-exit-v1.json",
-      "accepted_primary_codes": ["core.nonzero_exit"],
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.nonzero_exit"],
+      "required_finding_codes": [
+        "core.nonzero_exit"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
+      "name": "go_panic",
+      "evidence": "evaluation/evidence/go-panic-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.go_panic"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
+      "name": "jvm_exception",
+      "evidence": "evaluation/evidence/jvm-exception-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.jvm_exception"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
@@ -47,11 +149,17 @@
     {
       "name": "log_budget_boundary",
       "evidence": "jobman-v1/log-budget-boundary-v1.json",
-      "accepted_primary_codes": ["core.insufficient_structured_evidence"],
+      "accepted_primary_codes": [
+        "core.insufficient_structured_evidence"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.insufficient_structured_evidence"],
+      "required_finding_codes": [
+        "core.insufficient_structured_evidence"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "unknown",
       "expected_existing_policy": "unknown",
@@ -59,13 +167,44 @@
       "maximum_confidence": 35
     },
     {
+      "name": "nested_command_not_found",
+      "evidence": "evaluation/evidence/nested-command-not-found-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.shell_command_not_found"
+      ],
+      "forbidden_finding_codes": [
+        "core.executable_not_found"
+      ],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [
+        "correct_executable"
+      ],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
       "name": "notification_failure",
       "evidence": "jobman-v1/notification-failure-v1.json",
-      "accepted_primary_codes": ["secondary.notification_failed"],
+      "accepted_primary_codes": [
+        "secondary.notification_failed"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["secondary.notification_failed"],
+      "required_finding_codes": [
+        "secondary.notification_failed"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_notification_configuration"],
+      "required_action_codes": [
+        "inspect_notification_configuration"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "no",
       "expected_existing_policy": "unknown",
@@ -73,13 +212,88 @@
       "maximum_confidence": 50
     },
     {
+      "name": "permission_message",
+      "evidence": "evaluation/evidence/permission-message-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.permission_message"
+      ],
+      "forbidden_finding_codes": [
+        "core.permission_denied"
+      ],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
+      "name": "prompt_injection_noise",
+      "evidence": "evaluation/evidence/prompt-injection-noise-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit"
+      ],
+      "forbidden_finding_codes": [
+        "target.compiler_error",
+        "target.go_panic",
+        "target.jvm_exception",
+        "target.python_exception"
+      ],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
       "name": "pruned_logs",
       "evidence": "jobman-v1/pruned-logs-v1.json",
-      "accepted_primary_codes": ["core.nonzero_exit"],
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.nonzero_exit"],
+      "required_finding_codes": [
+        "core.nonzero_exit"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
+      "name": "python_traceback",
+      "evidence": "evaluation/evidence/python-traceback-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.python_exception"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
@@ -89,11 +303,17 @@
     {
       "name": "secret_canary",
       "evidence": "jobman-v1/secret-canary-v1.json",
-      "accepted_primary_codes": ["core.nonzero_exit"],
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.nonzero_exit"],
+      "required_finding_codes": [
+        "core.nonzero_exit"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
@@ -103,11 +323,18 @@
     {
       "name": "similar_history",
       "evidence": "jobman-v1/similar-history-v1.json",
-      "accepted_primary_codes": ["core.nonzero_exit"],
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.nonzero_exit", "secondary.same_fingerprint_history"],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "secondary.same_fingerprint_history"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["inspect_target_evidence"],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
@@ -117,11 +344,18 @@
     {
       "name": "start_failure",
       "evidence": "jobman-v1/start-failure-v1.json",
-      "accepted_primary_codes": ["core.executable_not_found"],
+      "accepted_primary_codes": [
+        "core.executable_not_found"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.executable_not_found"],
+      "required_finding_codes": [
+        "core.executable_not_found"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["correct_executable", "verify_executable"],
+      "required_action_codes": [
+        "correct_executable",
+        "verify_executable"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
@@ -129,13 +363,41 @@
       "maximum_confidence": 100
     },
     {
+      "name": "storage_exhausted_message",
+      "evidence": "evaluation/evidence/storage-exhausted-v1.json",
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.storage_exhausted_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82
+    },
+    {
       "name": "timeout",
       "evidence": "jobman-v1/timeout-v1.json",
-      "accepted_primary_codes": ["core.timeout"],
+      "accepted_primary_codes": [
+        "core.timeout"
+      ],
       "allowed_generated_codes": [],
-      "required_finding_codes": ["core.timeout"],
+      "required_finding_codes": [
+        "core.timeout"
+      ],
       "forbidden_finding_codes": [],
-      "required_action_codes": ["change_timeout_or_workload", "inspect_timeout_boundary"],
+      "required_action_codes": [
+        "change_timeout_or_workload",
+        "inspect_timeout_boundary"
+      ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",

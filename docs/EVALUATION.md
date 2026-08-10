@@ -3,7 +3,9 @@
 The checked-in schema-1 corpus under `testdata/evaluation/` measures diagnosis
 quality independently from wording. Every case names accepted and forbidden
 findings/actions, retry state, confidence bounds, and allowed generated codes.
-Inputs are synthetic, nonsecret, checksummed Jobman compatibility fixtures.
+Inputs are synthetic and nonsecret. They combine immutable checksummed Jobman
+compatibility fixtures with reproducibly generated multi-ecosystem target-log
+cases and adversarial noise.
 
 Run deterministic evaluation with no network or configuration:
 
