@@ -5,6 +5,15 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-10
+
+### Added
+
+- Added a standard-library Python failure lab with simple, layered, timeout,
+  signal, and concurrent failures plus a runner that submits each fixture and
+  displays its AI-assisted diagnosis.
+- Added reproducible terminal-demo sources and GIF, MP4, and WebM outputs.
+
 ### Fixed
 
 - Specialized every AI response schema with the exact request identity and
@@ -175,6 +184,7 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0
