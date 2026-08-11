@@ -51,6 +51,26 @@ untrusted or sensitive content.
 Without `--require-model`, the complete deterministic report is returned with
 a warning. This is the expected safe fallback, not a silent partial diagnosis.
 
+## The AI cause is generic or rejected as not specific
+
+Use `--ai-logs` when the target-specific exception or error appears only in
+stdout or stderr. Metadata-only AI mode cannot infer details that were not
+collected, and the model should abstain rather than guess.
+
+Proposal schema 2 requires separate issue summary, root cause, and failure
+path text. Jobman Diagnose rejects repeated text, generic nonzero-exit or
+invalid-input restatements, and explanations that mistake traceback structure,
+enrichment, or byte ranges for the cause. `--require-model` reports this safe
+classification as `proposal_not_specific`; optional mode returns the complete
+deterministic fallback instead.
+
+If the bounded log is present in the disclosure and proposals still fail this
+gate, compare the exact model and quantized variant with the checked-in live
+evaluation corpus. JSON Schema enforcement controls response shape and
+authority, not reasoning quality. A larger or less aggressively quantized
+instruction model may be necessary for nested exception chains or multiple
+simultaneous validation failures.
+
 ## The model lacks useful context
 
 AI activation shares bounded metadata, direct command arguments, paths,

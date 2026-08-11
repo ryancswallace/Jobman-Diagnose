@@ -13,6 +13,7 @@ import (
 
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 	"github.com/ryancswallace/jobman-diagnose/internal/engine"
+	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
 type diagnosticianFunc func(context.Context, diagnosis.FailureEvidence) (diagnosis.Report, error)
@@ -35,9 +36,9 @@ func TestLoadRejectsUnreadableOrMalformedCorpus(t *testing.T) {
 		encoded []byte
 	}{
 		{name: "malformed", encoded: []byte(`{"kind":`)},
-		{name: "unknown field", encoded: []byte(`{"kind":"` + Kind + `","schema_version":1,"cases":[],"extra":true}`)},
-		{name: "trailing value", encoded: []byte(`{"kind":"` + Kind + `","schema_version":1,"cases":[]} {}`)},
-		{name: "invalid header", encoded: []byte(`{"kind":"wrong","schema_version":1,"cases":[]}`)},
+		{name: "unknown field", encoded: []byte(`{"kind":"` + Kind + `","schema_version":2,"cases":[],"extra":true}`)},
+		{name: "trailing value", encoded: []byte(`{"kind":"` + Kind + `","schema_version":2,"cases":[]} {}`)},
+		{name: "invalid header", encoded: []byte(`{"kind":"wrong","schema_version":2,"cases":[]}`)},
 		{name: "oversized", encoded: bytes.Repeat([]byte(" "), maximumCorpusBytes+1)},
 	}
 	for _, test := range tests {
@@ -95,6 +96,48 @@ func TestValidateCorpusRejectsInvalidExpectationContracts(t *testing.T) {
 		}},
 		{name: "missing retry", mutate: func(corpus *Corpus) { corpus.Cases[0].ExpectedRetry = "" }},
 		{name: "missing policy", mutate: func(corpus *Corpus) { corpus.Cases[0].ExpectedExistingPolicy = "" }},
+		{name: "concepts without generated cause", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].GeneratedConcepts = [][]string{{"specific cause"}}
+		}},
+		{name: "generated cause without allowed code", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].GeneratedConcepts = [][]string{{"specific cause"}}
+		}},
+		{name: "generated cause without concepts", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+		}},
+		{name: "empty generated concept", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedConcepts = [][]string{{" "}}
+		}},
+		{name: "multiline generated concept", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedConcepts = [][]string{{"cause\nother"}}
+		}},
+		{name: "too many generated concept groups", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedConcepts = make([][]string, 17)
+			for index := range corpus.Cases[0].GeneratedConcepts {
+				corpus.Cases[0].GeneratedConcepts[index] = []string{"cause"}
+			}
+		}},
+		{name: "too many generated concept alternatives", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedConcepts = [][]string{make([]string, 17)}
+			for index := range corpus.Cases[0].GeneratedConcepts[0] {
+				corpus.Cases[0].GeneratedConcepts[0][index] = "cause"
+			}
+		}},
+		{name: "oversized generated concept", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].RequireGeneratedCause = true
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedConcepts = [][]string{{strings.Repeat("c", 257)}}
+		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -221,6 +264,13 @@ func TestEvaluationHelpersPreserveMetricSemantics(t *testing.T) {
 	if primaryCode(report) != "selected" || findPrimary(diagnosis.Report{}).Code != "" {
 		t.Fatal("primary finding lookup changed")
 	}
+	concepts := [][]string{{"ValueError"}, {"missing field", "required key"}}
+	if missing := missingGeneratedConcept("ValueError: required key region is absent", concepts); missing != "" {
+		t.Fatalf("missingGeneratedConcept(specific) = %q", missing)
+	}
+	if missing := missingGeneratedConcept("ValueError: input failed", concepts); missing != "missing field | required key" {
+		t.Fatalf("missingGeneratedConcept(generic) = %q", missing)
+	}
 }
 
 func TestRunReportsIndependentExpectationRegressions(t *testing.T) {
@@ -258,6 +308,107 @@ func TestRunReportsIndependentExpectationRegressions(t *testing.T) {
 	}
 }
 
+func TestRunMeasuresGeneratedCauseSpecificity(t *testing.T) {
+	t.Parallel()
+
+	corpus := cloneCorpus(loadCorpus(t))
+	index := slices.IndexFunc(corpus.Cases, func(test Case) bool { return test.Name == "python_traceback" })
+	if index < 0 {
+		t.Fatal("python_traceback evaluation case is missing")
+	}
+	corpus.Cases = []Case{corpus.Cases[index]}
+	base, err := engine.New("specificity-test", func() time.Time {
+		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name        string
+		summary     string
+		explanation string
+		wantPassed  bool
+	}{
+		{
+			name:    "specific",
+			summary: "ValueError identifies invalid input in the target request",
+			explanation: "Root cause: the supplied input violates the application's value constraint. " +
+				"Failure path: validation raises ValueError before processing begins.",
+			wantPassed: true,
+		},
+		{
+			name:        "generic",
+			summary:     "The target encountered an application error",
+			explanation: "Root cause: target data was rejected. Failure path: processing stopped.",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			target := generatedEvaluationTarget(t, base, test.summary, test.explanation)
+			summary, runErr := Run(t.Context(), corpus, target, "specificity-test")
+			if runErr != nil {
+				t.Fatal(runErr)
+			}
+			passed := summary.Passed == 1 && summary.Metrics.GeneratedSpecificity == 1 &&
+				summary.Metrics.GeneratedSpecificityCases == 1
+			if passed != test.wantPassed {
+				t.Fatalf("specificity summary = %#v, want passed %t", summary, test.wantPassed)
+			}
+			if !test.wantPassed && (len(summary.Results[0].Violations) == 0 ||
+				!strings.Contains(strings.Join(summary.Results[0].Violations, " "), "omitted required issue concept")) {
+				t.Fatalf("generic violations = %#v", summary.Results[0].Violations)
+			}
+		})
+	}
+}
+
+func generatedEvaluationTarget(
+	t *testing.T,
+	base diagnosis.Diagnostician,
+	summary string,
+	explanation string,
+) diagnosis.Diagnostician {
+	t.Helper()
+	confidence, err := diagnosis.NewConfidence(40, "Uncalibrated generated evaluation hypothesis.")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return diagnosticianFunc(func(ctx context.Context, evidence diagnosis.FailureEvidence) (diagnosis.Report, error) {
+		report, diagnoseErr := base.Diagnose(ctx, evidence)
+		if diagnoseErr != nil {
+			return diagnosis.Report{}, diagnoseErr
+		}
+		if len(report.Findings) == 0 || len(report.Findings[0].SupportingEvidence) == 0 ||
+			len(evidence.Core.Items) == 0 {
+			return diagnosis.Report{}, errors.New("specificity fixture lacks required evidence")
+		}
+		report.Findings = append(report.Findings, diagnosis.Finding{
+			ID: "finding:999:generated-data-validation", Code: "generated.data_validation",
+			Category: "application", Severity: diagnosis.SeverityWarning,
+			Summary: summary, Explanation: explanation, Confidence: confidence,
+			SupportingEvidence:    slices.Clone(report.Findings[0].SupportingEvidence),
+			ContradictingEvidence: []string{}, ContradictingFindings: []string{},
+			Analyzer: "generator.proposal/1",
+		})
+		report.Mode = diagnosis.ModeMixed
+		report.Versions.GenerationRequestSchemaVersion = provider.RequestSchemaVersion
+		report.Versions.ProposalSchemaVersion = provider.ProposalSchemaVersion
+		report.Disclosure = diagnosis.DisclosureManifest{
+			ProviderInvoked: true, GeneratedContentUsed: true, Locality: diagnosis.ProviderLocal,
+			Profile: "evaluation", Provider: "evaluation", Model: "fixture",
+			RequestID: "sha256:" + strings.Repeat("a", 64), Classes: []string{"metadata"},
+			ItemIDs: []string{evidence.Core.Items[0].ID}, ArtifactIDs: []string{}, EnrichmentIDs: []string{},
+			ItemCount: 1, RequestBytes: 1,
+		}
+		report.Generators = []diagnosis.GeneratorDescriptor{{
+			Provider: "evaluation", Model: "fixture", Profile: "evaluation", Locality: diagnosis.ProviderLocal,
+		}}
+
+		return diagnosis.Seal(report)
+	})
+}
+
 func loadCorpus(t *testing.T) Corpus {
 	t.Helper()
 	corpus, err := Load(filepath.Join("..", "..", "testdata", "evaluation", "manifest.json"))
@@ -278,6 +429,10 @@ func cloneCorpus(source Corpus) Corpus {
 		cloned.Cases[index].ForbiddenFindingCodes = slices.Clone(source.Cases[index].ForbiddenFindingCodes)
 		cloned.Cases[index].RequiredActionCodes = slices.Clone(source.Cases[index].RequiredActionCodes)
 		cloned.Cases[index].ForbiddenActionCodes = slices.Clone(source.Cases[index].ForbiddenActionCodes)
+		cloned.Cases[index].GeneratedConcepts = make([][]string, len(source.Cases[index].GeneratedConcepts))
+		for conceptIndex := range source.Cases[index].GeneratedConcepts {
+			cloned.Cases[index].GeneratedConcepts[conceptIndex] = slices.Clone(source.Cases[index].GeneratedConcepts[conceptIndex])
+		}
 	}
 
 	return cloned

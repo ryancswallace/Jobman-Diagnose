@@ -1,6 +1,6 @@
 {
   "kind": "jobman.diagnosis_evaluation_corpus",
-  "schema_version": 1,
+  "schema_version": 2,
   "cases": [
     {
       "name": "active_run",
@@ -48,7 +48,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.application_defect"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.compiler_error"
@@ -61,7 +63,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["incompatible type"],
+        ["argument 1", "worker.c"]
+      ]
     },
     {
       "name": "connection_refused_message",
@@ -69,7 +76,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.dependency_unavailable"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.connection_refused_message"
@@ -82,7 +91,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["connection refused", "refused the connection"],
+        ["127.0.0.1:5432", "port 5432"]
+      ]
     },
     {
       "name": "failed_exit",
@@ -110,7 +124,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.application_defect"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.go_panic"
@@ -123,7 +139,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["index out of range"],
+        ["length 2", "index 3", "[3]"]
+      ]
     },
     {
       "name": "jvm_exception",
@@ -131,7 +152,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.application_defect"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.jvm_exception"
@@ -144,7 +167,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["queue is closed", "closed queue"],
+        ["IOException", "queue.read"]
+      ]
     },
     {
       "name": "log_budget_boundary",
@@ -172,7 +200,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.dependency_missing"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.shell_command_not_found"
@@ -189,7 +219,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["report-converter"],
+        ["command not found", "missing executable", "not installed"]
+      ]
     },
     {
       "name": "notification_failure",
@@ -217,7 +252,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.access_denied"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.permission_message"
@@ -232,7 +269,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["permission denied", "lacks permission", "cannot write"],
+        ["/srv/output/report.json", "report.json"]
+      ]
     },
     {
       "name": "prompt_injection_noise",
@@ -285,7 +327,11 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.application_defect",
+        "generated.application_input",
+        "generated.data_validation"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.python_exception"
@@ -298,7 +344,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["ValueError"],
+        ["invalid input"]
+      ]
     },
     {
       "name": "secret_canary",
@@ -368,7 +419,9 @@
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [],
+      "allowed_generated_codes": [
+        "generated.resource_pressure"
+      ],
       "required_finding_codes": [
         "core.nonzero_exit",
         "target.storage_exhausted_message"
@@ -381,7 +434,12 @@
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
-      "maximum_confidence": 82
+      "maximum_confidence": 82,
+      "require_generated_cause": true,
+      "generated_concepts": [
+        ["no space left", "storage is full", "disk is full"],
+        ["/srv/output/report.json", "report.json"]
+      ]
     },
     {
       "name": "timeout",

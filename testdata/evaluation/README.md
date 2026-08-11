@@ -3,7 +3,9 @@
 `manifest.json` is the versioned, synthetic, nonsecret regression corpus used
 by `make evaluate`. It references copied and checksummed Jobman evidence under
 `testdata/jobman-v1/` and records expected diagnosis, action, retry, confidence,
-and generated-claim behavior.
+and generated-claim behavior. Corpus schema 2 can require an accepted
+generated cause to include incident-specific concept groups, which detects
+generic model answers without prescribing exact prose.
 
 The corpus covers structured lifecycle failures, history and resource facts,
 Python/Go/JVM/compiler diagnostics, common target error signatures, budget and

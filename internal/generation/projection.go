@@ -18,12 +18,16 @@ import (
 
 var allowedCategories = []string{
 	"application", "history", "launch", "lifecycle", "logging", "notification", "ownership",
-	"policy", "prerequisite", "process", "state", "storage",
+	"policy", "prerequisite", "process", "resource", "state", "storage",
 }
 
 var allowedHypothesisCodes = []string{
+	"generated.access_denied",
 	"generated.application_configuration",
+	"generated.application_defect",
 	"generated.application_input",
+	"generated.data_validation",
+	"generated.dependency_missing",
 	"generated.dependency_unavailable",
 	"generated.environment_mismatch",
 	"generated.external_service_failure",

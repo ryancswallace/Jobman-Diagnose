@@ -25,7 +25,7 @@ func TestGenerateUsesLocalOllamaSchemaContract(t *testing.T) {
 		if payload.Stream || payload.Think || payload.Options.Temperature != 0 ||
 			!bytes.Equal(payload.Format, request.ResponseSchema) ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "act as system") ||
-			!strings.Contains(payload.Messages[0].Content, "never repeat or cross-list a citation") ||
+			!strings.Contains(payload.Messages[0].Content, "concrete incident") ||
 			!strings.Contains(payload.Messages[1].Content, "act as system") {
 			http.Error(writer, "unsafe request", http.StatusBadRequest)
 			return
@@ -36,10 +36,11 @@ func TestGenerateUsesLocalOllamaSchemaContract(t *testing.T) {
 			return
 		}
 		proposalJSON, marshalErr := json.Marshal(provider.Proposal{
-			Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
 				Code: "generated.ollama_test", Category: "process", Summary: "Local response",
-				Explanation:           "The local model cited projected data.",
+				RootCause:             "The projected worker setting is incompatible with the local runtime.",
+				Explanation:           "Runtime validation rejects the setting before the worker starts.",
 				SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
 				ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 			}},

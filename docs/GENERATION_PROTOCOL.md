@@ -1,6 +1,6 @@
 # Structured-generation protocol 2
 
-The provider boundary consists of a schema-2 generation request and a schema-1
+The provider boundary consists of a schema-2 generation request and a schema-2
 proposal. It is a proposal protocol, not a chat, agent, tool, or remote Jobman
 API.
 
@@ -57,40 +57,52 @@ digest mutation.
 `jobman.diagnosis_proposal` contains the matching `request_id` and only:
 
 - up to eight hypotheses selected from the request's controlled code taxonomy,
-  with controlled categories, concise summary and explanation, projected
+  with controlled categories, an issue-specific summary, a concrete
+  `root_cause`, a distinct causal-path explanation, projected
   supporting/contradicting evidence IDs, and optional
   deterministic finding IDs they contradict;
 - up to eight action IDs selected from the supplied catalog; and
 - up to eight descriptions of missing evidence.
 
-The schema deliberately has no field for confidence, retry advice, commands,
-arguments, tools, URLs, environment, paths, lifecycle facts, or mutations.
-Host validation rejects invented references and controlled values even after a
-backend reports successful schema enforcement. It also retains relational
-checks that portable grammar backends cannot express, including duplicate
-hypothesis codes, duplicate catalog references, and overlap between supporting
-and contradicting evidence. Fixed request instructions and schema field
-descriptions state those relational rules explicitly so smaller local models
-can satisfy them even though the grammar cannot encode cross-field equality.
-An empty proposal is an abstention.
+The schema deliberately has no authority-bearing field for confidence, retry
+advice, commands, arguments, tools, URLs, environment, paths, lifecycle facts,
+or mutations. Diagnostic prose may identify a short path or endpoint from the
+approved evidence, but cannot turn it into an operation. Host validation
+rejects invented references and controlled values even after a backend reports
+successful schema enforcement. It also retains relational checks that portable
+grammar backends cannot express, including duplicate hypothesis codes,
+duplicate catalog references, and overlap between supporting and contradicting
+evidence. Fixed request instructions and schema field descriptions state those
+relational rules explicitly so smaller local models can satisfy them even
+though the grammar cannot encode cross-field equality. An empty proposal is an
+abstention.
 
 The fixed instructions define the intended meaning of each generated code,
 reserve `generated.unknown_target_error` for cases where no specific supplied
-code is supported, ask for distinct cause and reasoning text, prohibit
-verbatim artifact quotation, and request the smallest directly relevant
-evidence set. These are content-quality constraints in addition to the
-request-specific structural authority enforced by JSON Schema and the host.
+code is supported, and require the model to distinguish the concrete incident
+from its generic exit mechanism. Short exception names, setting names, paths,
+endpoints, and diagnostic values from an approved projection may be reproduced
+when necessary for specificity; complete artifacts, secrets, and
+instruction-like target text remain prohibited. The host rejects repeated
+summary/cause/reasoning text, known generic failure restatements, and proposals
+that mistake tracebacks, enrichment metadata, or byte ranges for a root cause.
+When the evidence cannot support a specific cause, the model must abstain and
+name the missing evidence instead. These are content-quality constraints in
+addition to the request-specific structural authority enforced by JSON Schema
+and the host.
 
 ## Reconciliation
 
 The deterministic report exists before the provider call. Valid hypotheses are
 appended at fixed uncalibrated confidence 40 and can explicitly contradict,
-but cannot replace, deterministic findings. Action IDs may reorder only the
-existing deterministic action list. For the first recognized generated cause
-code, reconciliation may prepend fixed, non-executing guidance written by
-Jobman; the model supplies neither its prose nor an execution vector. Unknown
-target errors receive no specific guidance. Missing-evidence descriptions are
-advisory. Retry advice and the primary finding remain deterministic.
+but cannot replace, deterministic findings. The report preserves the generated
+summary and renders the other proposal fields as explicit `Root cause` and
+`Failure path` clauses. Action IDs may reorder only the existing deterministic
+action list. For the first recognized generated cause code, reconciliation may
+prepend fixed, non-executing guidance written by Jobman; the model supplies
+neither its prose nor an execution vector. Unknown target errors receive no
+specific guidance. Missing-evidence descriptions are advisory. Retry advice
+and the primary finding remain deterministic.
 
 Provider or proposal failure produces a sealed deterministic fallback with an
 exact attempted-disclosure manifest unless the user selected

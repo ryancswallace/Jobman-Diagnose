@@ -30,7 +30,8 @@ func TestDeterministicCorpus(t *testing.T) {
 		summary.Metrics.PrimaryCodePrecision != 1 || summary.Metrics.UnsupportedClaimRate != 0 ||
 		summary.Metrics.CitationValidity != 1 || summary.Metrics.SafeActionRate != 1 ||
 		summary.Metrics.RetryAdviceAccuracy != 1 || summary.Metrics.DeterministicStability != 1 ||
-		summary.Metrics.ProviderFallbackRate != 0 {
+		summary.Metrics.ProviderFallbackRate != 0 || summary.Metrics.GeneratedSpecificity != 1 ||
+		summary.Metrics.GeneratedSpecificityCases != 0 {
 		t.Fatalf("evaluation summary = %#v", summary)
 	}
 }
@@ -44,7 +45,7 @@ func TestLoadRejectsUnknownAndEscapingInput(t *testing.T) {
 	}
 	encoded := []byte(`{
   "kind":"jobman.diagnosis_evaluation_corpus",
-  "schema_version":1,
+  "schema_version":2,
   "cases":[{
     "name":"escape",
     "evidence":"../../outside.json",

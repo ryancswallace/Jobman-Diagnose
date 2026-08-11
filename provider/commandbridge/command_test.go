@@ -218,10 +218,11 @@ func TestCommandBridgeHelper(_ *testing.T) {
 		os.Exit(10)
 	}
 	proposal := provider.Proposal{
-		Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+		Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []provider.Hypothesis{{
 			Code: "generated.bridge_test", Category: "process", Summary: "Bridge hypothesis",
-			Explanation:           "The bridge returned a cited test proposal.",
+			RootCause:             "The projected worker setting is incompatible with the bridge runtime.",
+			Explanation:           "Runtime validation rejects the setting before the worker starts.",
 			SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
 			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 		}},

@@ -290,8 +290,10 @@ func validate(report Report, placeholder bool) error {
 	if err := validateGenerators(report.Generators, report.Disclosure); err != nil {
 		return err
 	}
-	generatedProtocol := report.Versions.GenerationRequestSchemaVersion >= 1 &&
-		report.Versions.GenerationRequestSchemaVersion <= 2 && report.Versions.ProposalSchemaVersion == 1
+	generatedProtocol := report.Versions.GenerationRequestSchemaVersion != 0 && validGenerationProtocolVersions(
+		report.Versions.GenerationRequestSchemaVersion,
+		report.Versions.ProposalSchemaVersion,
+	)
 	if report.Disclosure.ProviderInvoked != generatedProtocol ||
 		(report.Mode == ModeMixed || report.Mode == ModeGenerated) != report.Disclosure.GeneratedContentUsed ||
 		report.Mode == ModeDeterministic && report.Disclosure.GeneratedContentUsed {
@@ -344,12 +346,20 @@ func validateVersions(versions Versions) error {
 		versions.JobmanVersion == "" || versions.EvidenceSchemaVersion < 1 ||
 		versions.ReportSchemaVersion != SchemaVersion || versions.GenerationRequestSchemaVersion < 0 ||
 		versions.GenerationRequestSchemaVersion > 2 || versions.ProposalSchemaVersion < 0 ||
-		versions.ProposalSchemaVersion > 1 ||
-		(versions.GenerationRequestSchemaVersion == 0) != (versions.ProposalSchemaVersion == 0) {
+		versions.ProposalSchemaVersion > 2 || !validGenerationProtocolVersions(
+		versions.GenerationRequestSchemaVersion,
+		versions.ProposalSchemaVersion,
+	) {
 		return errors.New("validate diagnosis: incomplete versions")
 	}
 
 	return nil
+}
+
+func validGenerationProtocolVersions(requestVersion, proposalVersion int) bool {
+	return requestVersion == 0 && proposalVersion == 0 ||
+		requestVersion == 1 && proposalVersion == 1 ||
+		requestVersion == 2 && (proposalVersion == 1 || proposalVersion == 2)
 }
 
 func validateReportContents(report Report) error {

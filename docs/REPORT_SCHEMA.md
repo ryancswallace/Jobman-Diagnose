@@ -50,6 +50,9 @@ they are not part of schema 1 and must not be persisted as evidence identity.
 The default renderer is an answer-first summary. Validated generated findings
 are labeled as AI-assisted, advisory likely causes and appear beside the
 deterministic primary finding without replacing its canonical authority.
+Each accepted generated finding has an issue-specific headline followed by
+explicit `Root cause` and `Failure path` clauses, making the model's actual
+diagnosis distinguishable from Jobman's confirmed exit mechanism.
 Recommendations and retry advice precede job context and a source-aware set of
 up to four evidence highlights. Repeated generated summary/explanation text is
 shown once, and the internal fixed generated ranking score is not presented as
@@ -116,9 +119,10 @@ When invocation is attempted, the manifest records locality (`local` or
 classes, exact item, artifact, and enrichment IDs, counts, artifact and
 enrichment bytes, encoded request
 bytes, and projected redaction-notice count. The generation request protocol
-version is 2 and the proposal protocol version is 1. These values describe the
-request that may have reached the provider even if the provider failed or its
-proposal was rejected.
+version is 2 and the current proposal protocol version is 2. The decoder
+retains schema-1 proposal provenance in historical reports. These values
+describe the request that may have reached the provider even if the provider
+failed or its proposal was rejected.
 `generated_content_used` is true only when validated proposal content entered
 the report.
 

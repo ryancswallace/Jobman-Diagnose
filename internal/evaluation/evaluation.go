@@ -27,7 +27,7 @@ const (
 	// Kind identifies an evaluation corpus manifest.
 	Kind = "jobman.diagnosis_evaluation_corpus"
 	// SchemaVersion is the newest corpus schema supported by this package.
-	SchemaVersion = 1
+	SchemaVersion = 2
 
 	maximumCorpusBytes = 1024 * 1024
 	maximumCases       = 512
@@ -55,6 +55,8 @@ type Case struct {
 	ExpectedExistingPolicy diagnosis.ExistingPolicy `json:"expected_existing_policy"`
 	MinimumConfidence      int                      `json:"minimum_confidence"`
 	MaximumConfidence      int                      `json:"maximum_confidence"`
+	RequireGeneratedCause  bool                     `json:"require_generated_cause"`
+	GeneratedConcepts      [][]string               `json:"generated_concepts"`
 }
 
 // Result records one case without copying evidence or generated prose.
@@ -72,13 +74,15 @@ type Result struct {
 // Metrics are intentionally separated so fluent model output cannot hide a
 // citation, action, or retry-policy regression.
 type Metrics struct {
-	PrimaryCodePrecision   float64 `json:"primary_code_precision"`
-	UnsupportedClaimRate   float64 `json:"unsupported_claim_rate"`
-	CitationValidity       float64 `json:"citation_validity"`
-	SafeActionRate         float64 `json:"safe_action_rate"`
-	RetryAdviceAccuracy    float64 `json:"retry_advice_accuracy"`
-	DeterministicStability float64 `json:"deterministic_stability"`
-	ProviderFallbackRate   float64 `json:"provider_fallback_rate"`
+	PrimaryCodePrecision      float64 `json:"primary_code_precision"`
+	UnsupportedClaimRate      float64 `json:"unsupported_claim_rate"`
+	CitationValidity          float64 `json:"citation_validity"`
+	SafeActionRate            float64 `json:"safe_action_rate"`
+	RetryAdviceAccuracy       float64 `json:"retry_advice_accuracy"`
+	DeterministicStability    float64 `json:"deterministic_stability"`
+	ProviderFallbackRate      float64 `json:"provider_fallback_rate"`
+	GeneratedSpecificity      float64 `json:"generated_specificity"`
+	GeneratedSpecificityCases int     `json:"generated_specificity_cases"`
 }
 
 // Summary is the versioned machine-readable evaluation result.
@@ -144,6 +148,7 @@ func Run(ctx context.Context, corpus Corpus, target diagnosis.Diagnostician, mod
 		Cases: len(corpus.Cases), Results: make([]Result, 0, len(corpus.Cases)),
 	}
 	var primaryOK, citationsOK, retryOK, stable, fallback, generatedClaims, unsupportedClaims int
+	var specificityCases, specificGenerated int
 	var safeActions, actions int
 	for _, test := range corpus.Cases {
 		if err := ctx.Err(); err != nil {
@@ -165,16 +170,20 @@ func Run(ctx context.Context, corpus Corpus, target diagnosis.Diagnostician, mod
 		safeActions += counters.safeActions
 		generatedClaims += counters.generatedClaims
 		unsupportedClaims += counters.unsupportedClaims
+		specificityCases += counters.specificityCases
+		specificGenerated += counters.specificGenerated
 		summary.Results = append(summary.Results, result)
 	}
 	summary.Metrics = Metrics{
-		PrimaryCodePrecision:   ratio(primaryOK, summary.Cases),
-		UnsupportedClaimRate:   zeroRatio(unsupportedClaims, generatedClaims),
-		CitationValidity:       ratio(citationsOK, summary.Cases),
-		SafeActionRate:         ratio(safeActions, actions),
-		RetryAdviceAccuracy:    ratio(retryOK, summary.Cases),
-		DeterministicStability: ratio(stable, summary.Cases),
-		ProviderFallbackRate:   ratio(fallback, summary.Cases),
+		PrimaryCodePrecision:      ratio(primaryOK, summary.Cases),
+		UnsupportedClaimRate:      zeroRatio(unsupportedClaims, generatedClaims),
+		CitationValidity:          ratio(citationsOK, summary.Cases),
+		SafeActionRate:            ratio(safeActions, actions),
+		RetryAdviceAccuracy:       ratio(retryOK, summary.Cases),
+		DeterministicStability:    ratio(stable, summary.Cases),
+		ProviderFallbackRate:      ratio(fallback, summary.Cases),
+		GeneratedSpecificity:      ratio(specificGenerated, specificityCases),
+		GeneratedSpecificityCases: specificityCases,
 	}
 
 	return summary, nil
@@ -183,6 +192,7 @@ func Run(ctx context.Context, corpus Corpus, target diagnosis.Diagnostician, mod
 type caseCounters struct {
 	primaryOK, citationsOK, retryOK, stable, fallback        int
 	actions, safeActions, generatedClaims, unsupportedClaims int
+	specificityCases, specificGenerated                      int
 }
 
 //nolint:cyclop,gocognit // A corpus case intentionally evaluates all independent quality and safety metrics together.
@@ -237,16 +247,31 @@ func runCase(
 		result.Violations = append(result.Violations, "primary confidence is outside the accepted bound")
 	}
 	findingCodes := make([]string, 0, len(report.Findings))
+	generatedText := strings.Builder{}
 	for _, finding := range report.Findings {
 		findingCodes = append(findingCodes, finding.Code)
 		if finding.Analyzer != "generator.proposal/1" {
 			continue
 		}
 		counters.generatedClaims++
+		generatedText.WriteString(finding.Summary)
+		generatedText.WriteByte(' ')
+		generatedText.WriteString(finding.Explanation)
+		generatedText.WriteByte(' ')
 		result.GeneratedCodes = append(result.GeneratedCodes, finding.Code)
 		if !slices.Contains(test.AllowedGeneratedCodes, finding.Code) {
 			counters.unsupportedClaims++
 			result.Violations = append(result.Violations, "generated diagnosis code is not labeled as supported for this case")
+		}
+	}
+	if report.Disclosure.ProviderInvoked && test.RequireGeneratedCause {
+		counters.specificityCases = 1
+		if counters.generatedClaims == 0 {
+			result.Violations = append(result.Violations, "a specific generated cause is required for this case")
+		} else if missing := missingGeneratedConcept(generatedText.String(), test.GeneratedConcepts); missing != "" {
+			result.Violations = append(result.Violations, "generated diagnosis omitted required issue concept: "+missing)
+		} else {
+			counters.specificGenerated = 1
 		}
 	}
 	checkCodes(&result, findingCodes, test.RequiredFindingCodes, test.ForbiddenFindingCodes, "finding")
@@ -297,13 +322,53 @@ func validateCorpus(corpus Corpus, manifestDirectory string) error {
 		if test.Name <= prior || !validCode(test.Name) || filepath.IsAbs(test.Evidence) ||
 			!strings.HasPrefix(path, rootWithSeparator) || len(test.AcceptedPrimaryCodes) == 0 ||
 			test.MinimumConfidence < 0 || test.MaximumConfidence > 100 ||
-			test.MinimumConfidence > test.MaximumConfidence || !validExpectedCodes(test) {
+			test.MinimumConfidence > test.MaximumConfidence || !validExpectedCodes(test) ||
+			!validGeneratedExpectations(test) {
 			return fmt.Errorf("validate evaluation corpus: invalid case %q", test.Name)
 		}
 		prior = test.Name
 	}
 
 	return nil
+}
+
+func validGeneratedExpectations(test Case) bool {
+	if !test.RequireGeneratedCause {
+		return len(test.GeneratedConcepts) == 0
+	}
+	if len(test.AllowedGeneratedCodes) == 0 || len(test.GeneratedConcepts) == 0 || len(test.GeneratedConcepts) > 16 {
+		return false
+	}
+	for _, alternatives := range test.GeneratedConcepts {
+		if len(alternatives) == 0 || len(alternatives) > 16 {
+			return false
+		}
+		for _, value := range alternatives {
+			if strings.TrimSpace(value) == "" || len(value) > 256 || strings.ContainsAny(value, "\r\n\x00") {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func missingGeneratedConcept(text string, groups [][]string) string {
+	text = strings.ToLower(text)
+	for _, alternatives := range groups {
+		matched := false
+		for _, value := range alternatives {
+			if strings.Contains(text, strings.ToLower(value)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return strings.Join(alternatives, " | ")
+		}
+	}
+
+	return ""
 }
 
 func validExpectedCodes(test Case) bool {

@@ -128,13 +128,13 @@ func TestDisclosureAndGeneratorValidation(t *testing.T) {
 	}
 }
 
-func TestReportAcceptsSupportedGenerationRequestVersions(t *testing.T) {
+func TestReportAcceptsSupportedGenerationProtocolVersions(t *testing.T) {
 	t.Parallel()
 
-	for _, requestVersion := range []int{1, 2} {
+	for _, versions := range []struct{ request, proposal int }{{1, 1}, {2, 1}, {2, 2}} {
 		report, _ := validReportAndEvidence(t)
-		report.Versions.GenerationRequestSchemaVersion = requestVersion
-		report.Versions.ProposalSchemaVersion = 1
+		report.Versions.GenerationRequestSchemaVersion = versions.request
+		report.Versions.ProposalSchemaVersion = versions.proposal
 		report.Disclosure = DisclosureManifest{
 			ProviderInvoked: true, Locality: ProviderLocal,
 			Profile: "profile", Provider: "provider", Model: "model",
@@ -145,8 +145,14 @@ func TestReportAcceptsSupportedGenerationRequestVersions(t *testing.T) {
 			Provider: "provider", Model: "model", Profile: "profile", Locality: ProviderLocal,
 		}}
 		if _, err := Seal(report); err != nil {
-			t.Fatalf("Seal(generation request schema %d): %v", requestVersion, err)
+			t.Fatalf("Seal(generation/proposal schema %d/%d): %v", versions.request, versions.proposal, err)
 		}
+	}
+	report, _ := validReportAndEvidence(t)
+	report.Versions.GenerationRequestSchemaVersion = 1
+	report.Versions.ProposalSchemaVersion = 2
+	if _, err := Seal(report); err == nil {
+		t.Fatal("Seal(generation/proposal schema 1/2) error = nil")
 	}
 }
 

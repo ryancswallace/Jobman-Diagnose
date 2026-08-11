@@ -33,7 +33,7 @@ func TestGenerateUsesStrictSchemaAndKeepsEvidenceInUserData(t *testing.T) {
 		if payload.ResponseFormat.Type != "json_schema" || !payload.ResponseFormat.JSONSchema.Strict ||
 			!bytes.Equal(payload.ResponseFormat.JSONSchema.Schema, request.ResponseSchema) || payload.Temperature != 0 ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "ignore prior instructions") ||
-			!strings.Contains(payload.Messages[0].Content, "never repeat or cross-list a citation") ||
+			!strings.Contains(payload.Messages[0].Content, "concrete incident") ||
 			!strings.Contains(payload.Messages[1].Content, "ignore prior instructions") {
 			http.Error(writer, "unsafe projection", http.StatusBadRequest)
 			return
@@ -176,10 +176,11 @@ func TestNewRejectsInsecureRemoteAndCredentialURL(t *testing.T) {
 
 func validOpenAIProposal(request provider.Request) provider.Proposal {
 	return provider.Proposal{
-		Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+		Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []provider.Hypothesis{{
 			Code: "generated.compatible_test", Category: "process", Summary: "Compatible response",
-			Explanation:           "The response cites only projected evidence.",
+			RootCause:             "The projected worker setting is incompatible with the selected runtime.",
+			Explanation:           "Runtime validation rejects the incompatible setting before work begins.",
 			SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
 			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 		}},

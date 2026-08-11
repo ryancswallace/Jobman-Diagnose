@@ -176,6 +176,23 @@ func TestHumanFormattingUtilities(t *testing.T) {
 	if got := formatConfidence(diagnosis.Confidence{Score: 40, Band: "medium"}, "generator.proposal/1"); !strings.Contains(got, "not calibrated") {
 		t.Fatalf("formatConfidence(generated) = %q", got)
 	}
+	generated := diagnosis.Finding{
+		Analyzer:    "generator.proposal/1",
+		Explanation: "Root cause: region moon-1 is disabled. Failure path: startup validation rejects it.",
+	}
+	rootCause, failurePath, ok := generatedCauseDetails(generated)
+	if !ok || rootCause != "region moon-1 is disabled." || failurePath != "startup validation rejects it." {
+		t.Fatalf("generatedCauseDetails() = %q, %q, %t", rootCause, failurePath, ok)
+	}
+	for _, malformed := range []diagnosis.Finding{
+		{Analyzer: "builtin.rules/1", Explanation: generated.Explanation},
+		{Analyzer: "generator.proposal/1", Explanation: "ordinary explanation"},
+		{Analyzer: "generator.proposal/1", Explanation: "Root cause:  Failure path: stopped"},
+	} {
+		if _, _, parsed := generatedCauseDetails(malformed); parsed {
+			t.Fatalf("generatedCauseDetails() parsed %#v", malformed)
+		}
+	}
 }
 
 func mustJSON(t *testing.T, value any) json.RawMessage {

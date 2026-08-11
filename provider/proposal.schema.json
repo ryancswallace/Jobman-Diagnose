@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "properties": {
     "kind": {"type": "string", "const": "jobman.diagnosis_proposal"},
-    "schema_version": {"type": "integer", "const": 1},
+    "schema_version": {"type": "integer", "const": 2},
     "request_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "hypotheses": {
       "type": "array",
@@ -13,15 +13,16 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "code": {"type": "string", "description": "Select the most specific authorized code. generated.application_configuration covers rejected or unsupported settings; generated.application_input covers invalid target input; generated.dependency_unavailable covers unusable dependencies; generated.environment_mismatch covers incompatible runtime context; generated.external_service_failure covers remote-service failures; generated.resource_pressure covers constrained resources; generated.transient_infrastructure covers temporary infrastructure conditions; generated.unknown_target_error is only for evidence that supports no more specific code.", "pattern": "^generated[.][a-z0-9_.-]{1,150}$"},
+          "code": {"type": "string", "description": "Classify the root cause only after analyzing it. Select the narrowest authorized code; generated.unknown_target_error is a last resort.", "pattern": "^generated[.][a-z0-9_.-]{1,150}$"},
           "category": {"type": "string", "minLength": 1, "maxLength": 160},
-          "summary": {"type": "string", "description": "One concise statement of the likely target-specific cause; do not merely restate the exit mechanism.", "minLength": 1, "maxLength": 4096},
-          "explanation": {"type": "string", "description": "Distinct causal reasoning that explains how the smallest directly relevant evidence set supports the summary. Do not repeat the summary or quote artifact content verbatim.", "minLength": 1, "maxLength": 8192},
-          "supporting_evidence": {"type": "array", "description": "The smallest set of distinct supplied evidence IDs that directly supports this hypothesis, normally two to five. Do not repeat an ID, also list it as contradicting evidence, or cite unrelated timestamps, counters, or resources.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
-          "contradicting_evidence": {"type": "array", "description": "Distinct supplied evidence IDs that directly conflict with this hypothesis. Leave empty when none conflict, and never reuse a supporting evidence ID.", "maxItems": 16, "items": {"type": "string", "maxLength": 256}},
+          "summary": {"type": "string", "description": "A concise, issue-specific headline. Name the actual exception, rejected setting, missing dependency, inaccessible resource, invalid value, or failing component and the distinguishing detail. Never merely say that input was invalid, an exception exists, the target failed, or the exit status was nonzero.", "minLength": 1, "maxLength": 512},
+          "root_cause": {"type": "string", "description": "The concrete underlying condition or defect. Include short diagnostic identifiers and values needed to distinguish this failure from other failures. Do not describe logs, tracebacks, evidence IDs, byte ranges, enrichment, or Jobman's collection process as the cause.", "minLength": 1, "maxLength": 2048},
+          "explanation": {"type": "string", "description": "The causal failure path from root cause to observed outcome. Name the affected operation or component and relevant exception or error. This must add information beyond both summary and root_cause and must not discuss evidence plumbing.", "minLength": 1, "maxLength": 2048},
+          "supporting_evidence": {"type": "array", "description": "The smallest set of distinct supplied evidence IDs that directly supports this hypothesis, normally two to five. Do not repeat an ID, also list it as contradicting evidence, or cite unrelated timestamps, counters, or resources.", "maxItems": 8, "items": {"type": "string", "maxLength": 256}},
+          "contradicting_evidence": {"type": "array", "description": "Distinct supplied evidence IDs that directly conflict with this hypothesis. Leave empty when none conflict, and never reuse a supporting evidence ID.", "maxItems": 8, "items": {"type": "string", "maxLength": 256}},
           "contradicts_findings": {"type": "array", "description": "Distinct supplied deterministic finding IDs that directly conflict with this hypothesis. Leave empty when none conflict.", "maxItems": 8, "items": {"type": "string", "maxLength": 256}}
         },
-        "required": ["code", "category", "summary", "explanation", "supporting_evidence", "contradicting_evidence", "contradicts_findings"]
+        "required": ["code", "category", "summary", "root_cause", "explanation", "supporting_evidence", "contradicting_evidence", "contradicts_findings"]
       }
     },
     "recommended_action_ids": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 256}},

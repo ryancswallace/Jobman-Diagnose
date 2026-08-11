@@ -103,6 +103,11 @@ func specializeHypotheses(
 	if enumErr := setSchemaEnum(hypotheses, "category", request.AllowedCategories); enumErr != nil {
 		return enumErr
 	}
+	for _, name := range []string{"summary", "root_cause", "explanation"} {
+		if _, fieldErr := schemaObject(hypotheses, name); fieldErr != nil {
+			return fieldErr
+		}
+	}
 	for _, name := range []string{"supporting_evidence", "contradicting_evidence"} {
 		field, fieldErr := schemaObject(hypotheses, name)
 		if fieldErr != nil {

@@ -31,7 +31,7 @@ func FuzzDecodeProposal(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	f.Add([]byte(`{"kind":"jobman.diagnosis_proposal","schema_version":1}`))
+	f.Add([]byte(`{"kind":"jobman.diagnosis_proposal","schema_version":2}`))
 	f.Add([]byte(`{"kind":"jobman.diagnosis_proposal","kind":"duplicate"}`))
 	f.Fuzz(func(_ *testing.T, encoded []byte) {
 		if _, err := DecodeProposal(bytes.NewReader(encoded), request); err != nil {

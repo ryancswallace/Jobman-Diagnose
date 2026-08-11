@@ -166,8 +166,12 @@ func TestGeneratedGuidanceCatalogIsHostAuthoredAndNonExecuting(t *testing.T) {
 		wantKind     diagnosis.ActionKind
 		confirmation bool
 	}{
+		{"generated.access_denied", "review_target_access", diagnosis.ActionChange, true},
 		{"generated.application_configuration", "review_application_configuration", diagnosis.ActionChange, true},
+		{"generated.application_defect", "review_application_defect", diagnosis.ActionChange, true},
 		{"generated.application_input", "review_application_input", diagnosis.ActionChange, true},
+		{"generated.data_validation", "review_invalid_data", diagnosis.ActionChange, true},
+		{"generated.dependency_missing", "restore_missing_dependency", diagnosis.ActionChange, true},
 		{"generated.dependency_unavailable", "restore_required_dependency", diagnosis.ActionChange, true},
 		{"generated.environment_mismatch", "review_target_environment", diagnosis.ActionChange, true},
 		{"generated.external_service_failure", "inspect_external_service", diagnosis.ActionInspect, false},
@@ -194,6 +198,32 @@ func TestGeneratedGuidanceCatalogIsHostAuthoredAndNonExecuting(t *testing.T) {
 		Code: "generated.application_configuration",
 	}}); len(got) != 1 || got[0].Code != existing[0].Code {
 		t.Fatalf("duplicate host guidance = %#v", got)
+	}
+}
+
+func TestGeneratedCauseTaxonomyCoversSpecificFailureClasses(t *testing.T) {
+	t.Parallel()
+
+	for _, code := range []string{
+		"generated.access_denied",
+		"generated.application_configuration",
+		"generated.application_defect",
+		"generated.application_input",
+		"generated.data_validation",
+		"generated.dependency_missing",
+		"generated.dependency_unavailable",
+		"generated.environment_mismatch",
+		"generated.external_service_failure",
+		"generated.resource_pressure",
+		"generated.transient_infrastructure",
+		"generated.unknown_target_error",
+	} {
+		if !slices.Contains(allowedHypothesisCodes, code) {
+			t.Fatalf("generated taxonomy omits %q", code)
+		}
+	}
+	if !slices.Contains(allowedCategories, "resource") {
+		t.Fatal("generated category taxonomy omits resource")
 	}
 }
 

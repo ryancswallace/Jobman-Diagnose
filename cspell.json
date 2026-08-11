@@ -62,6 +62,7 @@
     "evaluationfixtures",
     "fieldalignment",
     "fuzztime",
+    "generationprompt",
     "GOARCH",
     "GOBIN",
     "gocognit",

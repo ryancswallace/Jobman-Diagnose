@@ -74,7 +74,9 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 			Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []Hypothesis{{
 				Code: "generated.configuration_mismatch", Category: "process",
-				Summary: "Configuration mismatch", Explanation: "The observed exit could have this cause.",
+				Summary:            "The worker configuration selects an unsupported region",
+				RootCause:          "The configured region is not enabled for this deployment.",
+				Explanation:        "Startup validation rejects the region before the worker can process records.",
 				SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
 				ContradictsFindings: []string{"finding:001"},
 			}},
@@ -96,7 +98,26 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 		{name: "hypothesis code", mutate: func(value *Proposal) { value.Hypotheses[0].Code = "generated.unknown" }},
 		{name: "hypothesis category", mutate: func(value *Proposal) { value.Hypotheses[0].Category = "network" }},
 		{name: "hypothesis summary", mutate: func(value *Proposal) { value.Hypotheses[0].Summary = "" }},
+		{name: "hypothesis summary limit", mutate: func(value *Proposal) {
+			value.Hypotheses[0].Summary = strings.Repeat("s", maximumSummaryText+1)
+		}},
+		{name: "hypothesis root cause", mutate: func(value *Proposal) { value.Hypotheses[0].RootCause = "" }},
+		{name: "hypothesis root cause limit", mutate: func(value *Proposal) {
+			value.Hypotheses[0].RootCause = strings.Repeat("r", maximumCauseText+1)
+		}},
 		{name: "hypothesis explanation", mutate: func(value *Proposal) { value.Hypotheses[0].Explanation = "\n" }},
+		{name: "hypothesis explanation limit", mutate: func(value *Proposal) {
+			value.Hypotheses[0].Explanation = strings.Repeat("e", maximumCauseText+1)
+		}},
+		{name: "repeated diagnosis text", mutate: func(value *Proposal) {
+			value.Hypotheses[0].RootCause = value.Hypotheses[0].Summary
+		}},
+		{name: "generic summary", mutate: func(value *Proposal) {
+			value.Hypotheses[0].Summary = "Invalid target input caused the target to exit with a nonzero status."
+		}},
+		{name: "evidence plumbing as cause", mutate: func(value *Proposal) {
+			value.Hypotheses[0].RootCause = "The companion enrichment identifies a sanitized byte range."
+		}},
 		{name: "support required", mutate: func(value *Proposal) { value.Hypotheses[0].SupportingEvidence = nil }},
 		{name: "support limit", mutate: func(value *Proposal) { value.Hypotheses[0].SupportingEvidence = make([]string, maximumReferences+1) }},
 		{name: "support duplicate", mutate: func(value *Proposal) {
@@ -123,6 +144,27 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 				t.Fatal("validateProposal() error = nil")
 			}
 		})
+	}
+}
+
+func TestValidateProposalClassifiesNonspecificDiagnosisWithoutEchoingIt(t *testing.T) {
+	t.Parallel()
+
+	request := validRequest(t)
+	proposal := Proposal{
+		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
+		Hypotheses: []Hypothesis{{
+			Code: "generated.configuration_mismatch", Category: "process",
+			Summary:   "Invalid target input caused the target to exit with a nonzero status.",
+			RootCause: "Invalid target input", Explanation: "The application stopped after validation.",
+			SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
+			ContradictsFindings: []string{},
+		}},
+		RecommendedActions: []string{}, MissingEvidence: []MissingEvidence{},
+	}
+	err := validateProposal(proposal, request)
+	if !errors.Is(err, ErrProposalNotSpecific) || strings.Contains(err.Error(), proposal.Hypotheses[0].Summary) {
+		t.Fatalf("validateProposal() error = %v", err)
 	}
 }
 

@@ -110,11 +110,16 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 			return fmt.Errorf("write evaluation report: %w", err)
 		}
 	} else if parsed.summary {
+		specificity := "n/a"
+		if summary.Metrics.GeneratedSpecificityCases != 0 {
+			specificity = fmt.Sprintf("%.3f", summary.Metrics.GeneratedSpecificity)
+		}
 		if _, err := fmt.Fprintf(
-			stdout, "evaluation: %d/%d cases passed; primary %.3f, citations %.3f, actions %.3f, retry %.3f, unsupported %.3f\n",
+			stdout, "evaluation: %d/%d cases passed; primary %.3f, citations %.3f, actions %.3f, retry %.3f, unsupported %.3f, specificity %s\n",
 			summary.Passed, summary.Cases, summary.Metrics.PrimaryCodePrecision,
 			summary.Metrics.CitationValidity, summary.Metrics.SafeActionRate,
 			summary.Metrics.RetryAdviceAccuracy, summary.Metrics.UnsupportedClaimRate,
+			specificity,
 		); err != nil {
 			return fmt.Errorf("write evaluation summary: %w", err)
 		}

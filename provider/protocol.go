@@ -13,7 +13,7 @@ const (
 	// ProposalKind identifies generated proposal documents.
 	ProposalKind = "jobman.diagnosis_proposal"
 	// ProposalSchemaVersion is the newest proposal schema understood here.
-	ProposalSchemaVersion = 1
+	ProposalSchemaVersion = 2
 )
 
 // Subject is the minimum operational context disclosed to a generator.
@@ -26,9 +26,12 @@ type Subject struct {
 // Projection contains only evidence classes approved by both profile and CLI.
 type Projection struct {
 	Items            []ProjectedItem       `json:"items"`
-	Artifacts        []ProjectedArtifact   `json:"artifacts"`
 	Enrichment       []ProjectedEnrichment `json:"enrichment"`
 	RedactionNotices []ProjectedRedaction  `json:"redaction_notices"`
+	// Artifacts intentionally encode last. The trusted instructions follow the
+	// projection in Request, keeping bounded target output close to the task
+	// while still ending the user message with host-authored guidance.
+	Artifacts []ProjectedArtifact `json:"artifacts"`
 }
 
 // ProjectedItem is one typed core value with transport-irrelevant source data removed.
@@ -132,6 +135,7 @@ type Hypothesis struct {
 	Code                  string   `json:"code"`
 	Category              string   `json:"category"`
 	Summary               string   `json:"summary"`
+	RootCause             string   `json:"root_cause"`
 	Explanation           string   `json:"explanation"`
 	SupportingEvidence    []string `json:"supporting_evidence"`
 	ContradictingEvidence []string `json:"contradicting_evidence"`

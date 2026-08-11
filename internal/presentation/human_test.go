@@ -110,9 +110,10 @@ func TestHumanMakesGeneratedDiagnosisProminent(t *testing.T) {
 	}
 	rendered := output.String()
 	for _, wanted := range []string{
-		"  • AI-assisted likely cause [F3]\n    The application rejected a deployment configuration value",
+		"  • AI-assisted likely cause [F3]\n    Deployment region moon-1 is not enabled for the target application",
 		"      - Status: Advisory; confidence not calibrated",
-		"      - Why: The bounded stderr evidence identifies a configuration rejection",
+		"      - Root cause: region moon-1 is not enabled for this deployment",
+		"      - Failure path: startup validation rejects the region before work begins",
 		"  • Confirmed by Jobman [F1]",
 		"Correct the rejected application configuration",
 		"AI disclosure\n", "Validated generated hypotheses from jobman-llama contributed",
@@ -274,9 +275,10 @@ func mixedPresentationFixture(t *testing.T) (diagnosis.Report, diagnosis.Failure
 	report.Findings = append(report.Findings, diagnosis.Finding{
 		ID: "finding:999:generated-application-configuration", Code: "generated.application_configuration",
 		Category: "application", Severity: diagnosis.SeverityWarning,
-		Summary:     "The application rejected a deployment configuration value",
-		Explanation: "The bounded stderr evidence identifies a configuration rejection that explains the nonzero exit.",
-		Confidence:  confidence, SupportingEvidence: support,
+		Summary: "Deployment region moon-1 is not enabled for the target application",
+		Explanation: "Root cause: region moon-1 is not enabled for this deployment. " +
+			"Failure path: startup validation rejects the region before work begins.",
+		Confidence: confidence, SupportingEvidence: support,
 		ContradictingEvidence: []string{}, ContradictingFindings: []string{}, Analyzer: "generator.proposal/1",
 	})
 	report.Actions = append([]diagnosis.Action{{

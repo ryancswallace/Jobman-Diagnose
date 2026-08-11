@@ -100,9 +100,13 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 	}
 	proposal, err := provider.DecodeProposal(bytes.NewReader(response.JSON), prepared.Request)
 	if err != nil {
+		detail := "proposal_validation_failed: model output did not satisfy Jobman's bounded proposal rules"
+		if errors.Is(err, provider.ErrProposalNotSpecific) {
+			detail = "proposal_not_specific: model output did not provide a distinct, incident-specific root cause"
+		}
 		return augmenter.handleFailure(
 			report, evidence, prepared, "generator_proposal_invalid",
-			"proposal_validation_failed: model output did not satisfy Jobman's bounded proposal rules",
+			detail,
 		)
 	}
 	if len(proposal.Hypotheses) == 0 && len(proposal.RecommendedActions) == 0 && len(proposal.MissingEvidence) == 0 {
@@ -209,7 +213,7 @@ func reconcile(
 		)
 		report.Findings = append(report.Findings, diagnosis.Finding{
 			ID: identifier, Code: hypothesis.Code, Category: hypothesis.Category, Severity: diagnosis.SeverityWarning,
-			Summary: hypothesis.Summary, Explanation: hypothesis.Explanation, Confidence: confidence,
+			Summary: hypothesis.Summary, Explanation: generatedExplanation(hypothesis), Confidence: confidence,
 			SupportingEvidence:    slices.Clone(hypothesis.SupportingEvidence),
 			ContradictingEvidence: slices.Clone(hypothesis.ContradictingEvidence),
 			ContradictingFindings: slices.Clone(hypothesis.ContradictsFindings), Analyzer: generatedAnalyzer,
@@ -241,6 +245,19 @@ func reconcile(
 	return sealed, nil
 }
 
+func generatedExplanation(hypothesis provider.Hypothesis) string {
+	return "Root cause: " + sentence(hypothesis.RootCause) + " Failure path: " + sentence(hypothesis.Explanation)
+}
+
+func sentence(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasSuffix(value, ".") || strings.HasSuffix(value, "!") || strings.HasSuffix(value, "?") {
+		return value
+	}
+
+	return value + "."
+}
+
 func augmenterDescriptor(prepared Prepared) diagnosis.GeneratorDescriptor {
 	return diagnosis.GeneratorDescriptor{
 		Provider: prepared.Provider, Model: prepared.Model,
@@ -261,7 +278,8 @@ func duplicatesDeterministicFinding(hypothesis provider.Hypothesis, findings []d
 		}
 		findingSupport := slices.Clone(finding.SupportingEvidence)
 		slices.Sort(findingSupport)
-		sameText := hypothesis.Summary == finding.Summary && hypothesis.Explanation == finding.Explanation
+		sameText := hypothesis.Summary == finding.Summary &&
+			(hypothesis.RootCause == finding.Explanation || generatedExplanation(hypothesis) == finding.Explanation)
 		if (hypothesisCode == finding.Code || sameText) && slices.Equal(support, findingSupport) {
 			return true
 		}
@@ -323,6 +341,12 @@ func generatedGuidanceAction(hypothesis provider.Hypothesis) (diagnosis.Action, 
 		Execution:          diagnosis.ActionExecutionNone, Arguments: []string{}, SafeToAutomate: false,
 	}
 	switch hypothesis.Code {
+	case "generated.access_denied":
+		action.Code = "review_target_access"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Correct the target's access to the required resource"
+		action.Description = "Review the target identity, resource ownership, and applicable permission or authorization policy before creating another run."
+		action.RequiresConfirmation = true
 	case "generated.application_configuration":
 		action.Code = "review_application_configuration"
 		action.Kind = diagnosis.ActionChange
@@ -334,6 +358,24 @@ func generatedGuidanceAction(hypothesis provider.Hypothesis) (diagnosis.Action, 
 		action.Kind = diagnosis.ActionChange
 		action.Summary = "Correct or validate the target input"
 		action.Description = "Compare the supplied input with the target application's accepted format and constraints before creating another run."
+		action.RequiresConfirmation = true
+	case "generated.application_defect":
+		action.Code = "review_application_defect"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Correct the application defect before retrying"
+		action.Description = "Inspect the cited failure path in the application source or deployed artifact, correct it through the normal development and deployment process, and then create a new run."
+		action.RequiresConfirmation = true
+	case "generated.data_validation":
+		action.Code = "review_invalid_data"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Correct or quarantine the invalid data"
+		action.Description = "Compare the rejected record or document with the application's accepted schema and business constraints before creating another run."
+		action.RequiresConfirmation = true
+	case "generated.dependency_missing":
+		action.Code = "restore_missing_dependency"
+		action.Kind = diagnosis.ActionChange
+		action.Summary = "Install or deploy the missing dependency"
+		action.Description = "Restore the required module, executable, file, or deployed component through the target's normal build or deployment process before retrying."
 		action.RequiresConfirmation = true
 	case "generated.dependency_unavailable":
 		action.Code = "restore_required_dependency"

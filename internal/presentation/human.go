@@ -140,7 +140,11 @@ func (renderer *humanRenderer) renderFinding(finding diagnosis.Finding, label st
 		confidenceValue = renderer.style.warning(confidenceValue)
 	}
 	renderer.findingDetail(confidenceLabel, confidenceValue)
-	if !equivalentText(finding.Explanation, finding.Summary) {
+	rootCause, failurePath, structuredCause := generatedCauseDetails(finding)
+	if structuredCause {
+		renderer.findingDetail("Root cause", rootCause)
+		renderer.findingDetail("Failure path", failurePath)
+	} else if !equivalentText(finding.Explanation, finding.Summary) {
 		renderer.findingDetail("Why", finding.Explanation)
 	}
 	if renderer.details && finding.Confidence.Basis != "" &&
@@ -379,6 +383,28 @@ func (renderer *humanRenderer) referenceList(ids []string) string {
 
 func isGeneratedFinding(finding diagnosis.Finding) bool {
 	return strings.HasPrefix(finding.Analyzer, "generator.")
+}
+
+func generatedCauseDetails(finding diagnosis.Finding) (string, string, bool) {
+	const (
+		rootPrefix = "Root cause: "
+		pathMarker = " Failure path: "
+	)
+	if !isGeneratedFinding(finding) || !strings.HasPrefix(finding.Explanation, rootPrefix) {
+		return "", "", false
+	}
+	remaining := strings.TrimPrefix(finding.Explanation, rootPrefix)
+	marker := strings.Index(remaining, pathMarker)
+	if marker < 1 {
+		return "", "", false
+	}
+	rootCause := strings.TrimSpace(remaining[:marker])
+	failurePath := strings.TrimSpace(remaining[marker+len(pathMarker):])
+	if rootCause == "" || failurePath == "" {
+		return "", "", false
+	}
+
+	return rootCause, failurePath, true
 }
 
 func equivalentText(left, right string) bool {

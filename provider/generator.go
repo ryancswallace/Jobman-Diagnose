@@ -21,15 +21,17 @@ type Request struct {
 	RequestID              string                   `json:"request_id"`
 	EvidenceID             string                   `json:"evidence_id"`
 	Subject                Subject                  `json:"subject"`
-	Projection             Projection               `json:"projection"`
-	Manifest               ProjectionManifest       `json:"manifest"`
 	Deterministic          []DeterministicCandidate `json:"deterministic_candidates"`
 	AllowedCategories      []string                 `json:"allowed_categories"`
 	AllowedHypothesisCodes []string                 `json:"allowed_hypothesis_codes"`
 	AllowedActions         []AllowedAction          `json:"allowed_actions"`
-	Instructions           []string                 `json:"instructions"`
 	MaximumOutputBytes     int                      `json:"maximum_output_bytes"`
 	ResponseSchema         json.RawMessage          `json:"response_schema"`
+	Manifest               ProjectionManifest       `json:"manifest"`
+	Projection             Projection               `json:"projection"`
+	// Instructions intentionally encode last so the final content in a model's
+	// user message is trusted host guidance rather than untrusted target output.
+	Instructions []string `json:"instructions"`
 }
 
 // Response is raw structured output plus nonsecret transport provenance.

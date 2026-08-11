@@ -39,10 +39,16 @@ may render allowlisted typed values from the already sealed evidence, including
 sanitized command arguments, outcomes, exit details, resource observations,
 and exact enrichment ranges. It uses report-local citation aliases; canonical
 evidence IDs and controlled citation summaries remain unchanged in JSON.
-Generated summaries are labeled advisory and are instructed not to quote
-artifact content verbatim. Contextual recommendations are selected from fixed
-host-authored text by a validated controlled hypothesis code; model output
-still cannot introduce commands, URLs, tools, or execution vectors.
+Generated summaries are labeled advisory. To avoid useless generic diagnoses,
+proposal schema 2 bounds diagnostic text, and fixed instructions permit short
+fragments from an explicitly approved projection, such as an exception name,
+setting, path, endpoint, or rejected value. Those instructions forbid complete
+artifact reproduction, secrets, and instruction-like target text. Generated
+prose is still untrusted and can repeat sensitive text that escaped core
+redaction, so users must review both logs and reports before sharing them.
+Contextual recommendations are selected from fixed host-authored text by a
+validated controlled hypothesis code; model output still cannot introduce
+commands, URLs, tools, or execution vectors.
 
 Core failure fingerprints are HMAC values created with a private key held in
 the Jobman state store. The key never enters evidence or this process. Command
@@ -96,7 +102,9 @@ and supplies a strict response schema.
 Host validation remains authoritative after backend schema enforcement. It
 rejects duplicate keys, trailing data, excessive nesting or size, unknown
 fields, unsupported hypothesis codes or categories, invented citations, invalid contradictions,
-and action IDs outside the deterministic catalog. A proposal can append an
+action IDs outside the deterministic catalog, repeated diagnosis fields,
+known generic exit restatements, and evidence-collection metadata presented as
+a root cause. A proposal can append an
 uncalibrated hypothesis, reorder existing action IDs, or name missing evidence.
 It cannot create a fact, action, command, URL, retry decision, or lifecycle
 operation. Deterministic findings remain primary and deterministic retry advice

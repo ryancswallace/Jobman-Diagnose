@@ -25,7 +25,7 @@ core client -> verification -> exact-range enrichment -> deterministic engine
                              one StructuredGenerator call (optional)
                                                    |
                                                    v
-                        strict proposal schema 1 -> deterministic reconciliation
+                        strict proposal schema 2 -> deterministic reconciliation
                                                    |
                                                    v
                                       diagnosis report schema 1
@@ -106,12 +106,16 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    the model.
 5. Exactly one configured generator is called. There is no discovery, proxy,
    redirect, provider fallback, tool call, or multi-agent loop.
-6. The returned `jobman.diagnosis_proposal` is decoded again in Go and checked
-   for size, structure, controlled values, valid citations, valid finding
-   contradictions, allowlisted action IDs, and relational invariants that the
-   portable provider schema cannot express.
+6. The returned `jobman.diagnosis_proposal` separates its issue-specific
+   headline, concrete root cause, and causal failure path. It is decoded again
+   in Go and checked for size, structure, controlled values, valid citations,
+   valid finding contradictions, allowlisted action IDs, relational
+   invariants that the portable provider schema cannot express, repeated text,
+   generic failure restatements, and evidence-plumbing language presented as a
+   cause.
 7. Accepted hypotheses are appended below deterministic findings at a fixed
-   uncalibrated confidence. Generated output cannot alter factual findings,
+   uncalibrated confidence. The root cause and failure path remain visibly
+   distinct in the report. Generated output cannot alter factual findings,
    create actions, or control retry advice.
 
 Once a request is attempted, the final disclosure manifest conservatively

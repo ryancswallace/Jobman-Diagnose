@@ -27,7 +27,9 @@ func TestRequestAndProposalProtocolRoundTrip(t *testing.T) {
 		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []Hypothesis{{
 			Code: "generated.configuration_mismatch", Category: "process",
-			Summary: "Configuration may differ", Explanation: "The cited exit fact is consistent with this alternative.",
+			Summary:            "The worker configuration uses an unsupported deployment region",
+			RootCause:          "The selected region is not enabled for the worker deployment.",
+			Explanation:        "Worker initialization rejects the unsupported region before processing begins.",
 			SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
 			ContradictsFindings: []string{"finding:001"},
 		}},
@@ -52,9 +54,9 @@ func TestProposalRejectsUnknownAuthorityAndInventedEvidence(t *testing.T) {
 
 	request := validRequest(t)
 	tests := map[string]string{
-		"unknown retry field": `{"kind":"jobman.diagnosis_proposal","schema_version":1,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[],"retry":"now"}`,
-		"invented citation":   `{"kind":"jobman.diagnosis_proposal","schema_version":1,"request_id":"` + request.RequestID + `","hypotheses":[{"code":"generated.guess","category":"process","summary":"Guess","explanation":"Guess","supporting_evidence":["invented"],"contradicting_evidence":[],"contradicts_findings":[]}],"recommended_action_ids":[],"missing_evidence":[]}`,
-		"duplicate key":       `{"kind":"jobman.diagnosis_proposal","kind":"jobman.diagnosis_proposal","schema_version":1,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[]}`,
+		"unknown retry field": `{"kind":"jobman.diagnosis_proposal","schema_version":2,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[],"retry":"now"}`,
+		"invented citation":   `{"kind":"jobman.diagnosis_proposal","schema_version":2,"request_id":"` + request.RequestID + `","hypotheses":[{"code":"generated.guess","category":"process","summary":"Specific guess","root_cause":"A guessed condition exists.","explanation":"That condition prevents startup.","supporting_evidence":["invented"],"contradicting_evidence":[],"contradicts_findings":[]}],"recommended_action_ids":[],"missing_evidence":[]}`,
+		"duplicate key":       `{"kind":"jobman.diagnosis_proposal","kind":"jobman.diagnosis_proposal","schema_version":2,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[]}`,
 	}
 	for name, encoded := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -84,6 +86,7 @@ func TestProposalSchemaIsReviewedStrictObject(t *testing.T) {
 	}
 }
 
+//nolint:cyclop,gocognit // One protocol test intentionally checks every specialized schema authority and bound.
 func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	t.Parallel()
 
@@ -104,6 +107,9 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 		t.Fatalf("request ID schema = %#v", requestID)
 	}
 	hypothesis := mustSchemaObject(t, properties, "hypotheses", "items", "properties")
+	if ProposalSchemaVersion != 2 || mustSchemaObject(t, properties, "schema_version")["const"] != float64(2) {
+		t.Fatalf("proposal schema version = %d / %#v", ProposalSchemaVersion, properties["schema_version"])
+	}
 	if got := schemaEnum(t, mustSchemaObject(t, hypothesis, "code")); !slices.Equal(got, request.AllowedHypothesisCodes) {
 		t.Fatalf("hypothesis code enum = %v", got)
 	}
@@ -131,6 +137,50 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	if strings.Contains(string(request.ResponseSchema), `"uniqueItems"`) {
 		t.Fatal("request schema uses uniqueItems, which is unsupported by the required xgrammar backend")
 	}
+	for _, name := range []string{"summary", "root_cause", "explanation"} {
+		if mustSchemaObject(t, hypothesis, name)["description"] == "" {
+			t.Fatalf("%s specificity guidance is empty", name)
+		}
+	}
+	if mustSchemaObject(t, hypothesis, "summary")["maxLength"] != float64(maximumSummaryText) ||
+		mustSchemaObject(t, hypothesis, "root_cause")["maxLength"] != float64(maximumCauseText) ||
+		mustSchemaObject(t, hypothesis, "explanation")["maxLength"] != float64(maximumCauseText) ||
+		mustSchemaObject(t, hypothesis, "supporting_evidence")["maxItems"] != float64(maximumReferences) {
+		t.Fatal("proposal schema text or citation limits diverged from host validation")
+	}
+}
+
+func TestEncodedRequestKeepsTrustedInstructionsAfterUntrustedArtifacts(t *testing.T) {
+	t.Parallel()
+
+	base := validRequest(t)
+	base.RequestID = ""
+	base.ResponseSchema = nil
+	base.Projection.Artifacts = []ProjectedArtifact{{
+		ID: "artifact:stderr", Role: "target_stderr", Run: 1, Stream: "stderr",
+		Content: "untrusted-artifact-marker", Encoding: "utf-8-lossy",
+		Digest: "sha256:" + strings.Repeat("c", 64), SelectedBytes: 25, ContentBytes: 25,
+		Disclosure: "log_content",
+	}}
+	base.Manifest.Classes = []string{"log_content", "metadata"}
+	base.Manifest.ArtifactIDs = []string{"artifact:stderr"}
+	base.Manifest.ArtifactCount = 1
+	base.Manifest.ArtifactBytes = 25
+	request, err := SealRequest(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := string(encoded)
+	schemaIndex := strings.Index(value, `"response_schema"`)
+	artifactIndex := strings.Index(value, "untrusted-artifact-marker")
+	instructionIndex := strings.LastIndex(value, "Do not propose commands")
+	if schemaIndex < 0 || artifactIndex <= schemaIndex || instructionIndex <= artifactIndex {
+		t.Fatalf("request attention order is schema=%d artifact=%d instructions=%d", schemaIndex, artifactIndex, instructionIndex)
+	}
 }
 
 func TestRequiredInstructionsDescribeRelationalRules(t *testing.T) {
@@ -142,7 +192,9 @@ func TestRequiredInstructionsDescribeRelationalRules(t *testing.T) {
 		"application_configuration means a rejected",
 		"unknown_target_error is a last resort",
 		"smallest directly relevant evidence set",
-		"do not repeat the summary",
+		"All three text fields must add distinct information",
+		"Never describe a traceback, sanitized byte range",
+		"deterministic candidates as confirmed framing",
 	} {
 		if !strings.Contains(instructions, expected) {
 			t.Fatalf("request instructions omit %q", expected)

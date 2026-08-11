@@ -77,6 +77,9 @@ func TestProposalSchemaRejectsCorruptReviewedTemplate(t *testing.T) {
 		{name: "hypothesis category", mutate: func(t *testing.T, document map[string]any) {
 			delete(hypothesisSchemaProperties(t, document), "category")
 		}},
+		{name: "hypothesis root cause", mutate: func(t *testing.T, document map[string]any) {
+			delete(hypothesisSchemaProperties(t, document), "root_cause")
+		}},
 		{name: "supporting evidence", mutate: func(t *testing.T, document map[string]any) {
 			delete(hypothesisSchemaProperties(t, document), "supporting_evidence")
 		}},

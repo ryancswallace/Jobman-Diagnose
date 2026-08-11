@@ -194,11 +194,12 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 	fake := &fakeGenerator{profile: profile}
 	fake.generate = func(request provider.Request) (provider.Response, error) {
 		proposal := provider.Proposal{
-			Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
 				Code: "generated.application_configuration", Category: "process",
-				Summary:            "The target configuration may be inconsistent",
-				Explanation:        "This remains an uncalibrated alternative to the observed nonzero exit.",
+				Summary:            "The worker configuration selects an unsupported deployment region",
+				RootCause:          "The selected region is not enabled for this worker deployment.",
+				Explanation:        "Startup validation rejects the unsupported region before processing begins.",
 				SupportingEvidence: []string{request.Manifest.ItemIDs[0]}, ContradictingEvidence: []string{},
 				ContradictsFindings: []string{request.Deterministic[0].ID},
 			}},
@@ -232,6 +233,8 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 	}
 	generated := report.Findings[len(report.Findings)-1]
 	if generated.Confidence.Score != 40 || len(generated.ContradictingFindings) != 1 ||
+		!strings.Contains(generated.Explanation, "Root cause: The selected region is not enabled") ||
+		!strings.Contains(generated.Explanation, "Failure path: Startup validation rejects") ||
 		!report.Disclosure.ProviderInvoked || !report.Disclosure.GeneratedContentUsed {
 		t.Fatalf("generated finding/disclosure = %#v / %#v", generated, report.Disclosure)
 	}
@@ -247,7 +250,7 @@ func assertGeneratedGuidance(t *testing.T, actions []diagnosis.Action, wantCount
 	}
 }
 
-func TestReconcileSuppressesGeneratedDuplicateOfDeterministicFinding(t *testing.T) {
+func TestAugmenterRejectsGenericDuplicateOfDeterministicFinding(t *testing.T) {
 	t.Parallel()
 
 	evidence, err := testevidence.Failed("nonzero_exit", nil)
@@ -264,10 +267,11 @@ func TestReconcileSuppressesGeneratedDuplicateOfDeterministicFinding(t *testing.
 	profile := testProfile(t, false)
 	fake := &fakeGenerator{profile: profile, generate: func(request provider.Request) (provider.Response, error) {
 		proposal := provider.Proposal{
-			Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
 				Code: "generated.unknown_target_error", Category: primary.Category,
-				Summary: primary.Summary, Explanation: primary.Explanation,
+				Summary: primary.Summary, RootCause: primary.Explanation,
+				Explanation:           "The same cited observations lead to the already reported deterministic finding.",
 				SupportingEvidence:    slices.Clone(primary.SupportingEvidence),
 				ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 			}},
@@ -290,8 +294,35 @@ func TestReconcileSuppressesGeneratedDuplicateOfDeterministicFinding(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Findings) != len(deterministicReport.Findings) || report.Mode != diagnosis.ModeMixed {
-		t.Fatalf("duplicate generated finding was retained: %#v", report.Findings)
+	if len(report.Findings) != len(deterministicReport.Findings) || report.Mode != diagnosis.ModeDeterministic ||
+		report.Disclosure.GeneratedContentUsed || !hasWarning(report, "generator_proposal_invalid") ||
+		!strings.Contains(warningMessage(report, "generator_proposal_invalid"), "proposal_not_specific") {
+		t.Fatalf("generic duplicate did not fall back safely: %#v", report)
+	}
+	required, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = required.Diagnose(t.Context(), failureEvidence); err == nil ||
+		!strings.Contains(err.Error(), "proposal_not_specific") || strings.Contains(err.Error(), primary.Summary) {
+		t.Fatalf("required generic diagnosis error = %v", err)
+	}
+}
+
+func TestDuplicateComparisonRecognizesRootCauseRestatement(t *testing.T) {
+	t.Parallel()
+
+	finding := diagnosis.Finding{
+		Code: "core.nonzero_exit", Summary: "A specific deterministic finding",
+		Explanation: "The exact deterministic cause.", SupportingEvidence: []string{"evidence"},
+	}
+	hypothesis := provider.Hypothesis{
+		Code: "generated.unknown_target_error", Summary: finding.Summary,
+		RootCause: finding.Explanation, Explanation: "The generated causal path adds no new finding.",
+		SupportingEvidence: []string{"evidence"},
+	}
+	if !duplicatesDeterministicFinding(hypothesis, []diagnosis.Finding{finding}) {
+		t.Fatal("root-cause restatement was not recognized as a deterministic duplicate")
 	}
 }
 
@@ -348,7 +379,7 @@ func TestAugmenterEmitsProgressEvents(t *testing.T) {
 			name: "validated response",
 			generate: func(request provider.Request) (provider.Response, error) {
 				proposal, marshalErr := json.Marshal(provider.Proposal{
-					Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+					Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 					Hypotheses: []provider.Hypothesis{}, RecommendedActions: []string{},
 					MissingEvidence: []provider.MissingEvidence{{
 						Code: "generated.more_context", Description: "More context may distinguish alternatives.",

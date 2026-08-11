@@ -268,10 +268,11 @@ func TestRunUsesDefaultGeneratedProfileWithImpliedMetadata(t *testing.T) {
 			return
 		}
 		proposalJSON, marshalErr := json.Marshal(provider.Proposal{
-			Kind: provider.ProposalKind, SchemaVersion: 1, RequestID: request.RequestID,
+			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
 				Code: "generated.application_configuration", Category: "process", Summary: "Generated CLI alternative",
-				Explanation:           "This uncalibrated alternative cites a projected fact.",
+				RootCause:             "The projected deployment setting is incompatible with this worker.",
+				Explanation:           "Worker initialization rejects the setting before processing begins.",
 				SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
 				ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 			}},

@@ -5,6 +5,25 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Changed
+
+- Upgraded generated proposals to schema 2 with distinct issue summary, root
+  cause, and failure-path fields; expanded the cause taxonomy and prompts so
+  AI-assisted diagnoses identify the specific exception, setting, dependency,
+  resource, operation, path, endpoint, or rejected value instead of restating
+  the nonzero exit mechanism.
+- Added host-side rejection of repeated, generic, and evidence-plumbing
+  diagnoses plus generated-specificity evaluation expectations for log-backed
+  compiler, Go, JVM, Python, permission, dependency, network, and storage
+  failures.
+
+### Security
+
+- Allowed short diagnostic fragments from explicitly approved, bounded log
+  projections to enter advisory generated prose when needed for specificity;
+  complete artifacts, commands, URLs, tools, retry authority, and mutations
+  remain prohibited, and generated text remains untrusted.
+
 ## [0.3.0] - 2026-08-10
 
 ### Added

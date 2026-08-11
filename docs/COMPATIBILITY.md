@@ -16,9 +16,9 @@ semantic versions.
 | Deterministic engine | Version 1.2.0 |
 | Diagnosis configuration | YAML schema 2 |
 | Generation request | `jobman.diagnosis_generation_request` schema 2 |
-| Generated proposal | `jobman.diagnosis_proposal` schema 1 |
+| Generated proposal | `jobman.diagnosis_proposal` schema 2; report decoding retains recorded schema 1 provenance |
 | Support bundle | `jobman.diagnosis_support_bundle` schema 1 |
-| Evaluation corpus/result | Schema 1 |
+| Evaluation corpus/result | Corpus schema 2; result schema 1 |
 | Provider adapters | Command protocol 2, strict OpenAI-compatible Chat Completions, local Ollama `/api/chat` |
 
 The companion rejects a newer required evidence schema with an actionable
@@ -52,8 +52,8 @@ endpoint, a different provider, or a remote service.
 OpenAI-compatible servers must implement the configured Chat Completions
 strict `json_schema` request and response shape. Ollama profiles must implement
 local `/api/chat` structured output. Command bridges must implement the raw
-generation-request-schema-2/proposal-schema-1 stdin/stdout protocol documented in
-[`GENERATION_PROTOCOL.md`](GENERATION_PROTOCOL.md).
+generation-request-schema-2/proposal-schema-2 stdin/stdout protocol documented
+in [`GENERATION_PROTOCOL.md`](GENERATION_PROTOCOL.md).
 
 Copied core fixtures under `testdata/jobman-v1/` record their Jobman v1.4.0
 origin, evidence IDs, and exact SHA-256 values. Compatibility tests never

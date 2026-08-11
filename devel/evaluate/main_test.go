@@ -68,6 +68,7 @@ func TestParseShare(t *testing.T) {
 	}
 }
 
+//nolint:gocognit // The cases exercise every output and filesystem boundary of one CLI operation.
 func TestRunDeterministicEvaluationOutputs(t *testing.T) {
 	t.Parallel()
 
@@ -78,7 +79,8 @@ func TestRunDeterministicEvaluationOutputs(t *testing.T) {
 		if err := run([]string{"--corpus", corpus, "--summary"}, &stdout, &bytes.Buffer{}); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(stdout.String(), "evaluation: 19/19 cases passed") {
+		if !strings.Contains(stdout.String(), "evaluation: 19/19 cases passed") ||
+			!strings.Contains(stdout.String(), "specificity n/a") {
 			t.Fatalf("summary = %q", stdout.String())
 		}
 	})

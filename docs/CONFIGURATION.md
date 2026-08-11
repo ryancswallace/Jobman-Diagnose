@@ -173,7 +173,9 @@ When an approved log contains a recognized traceback, panic stack, JVM chain,
 or compiler diagnostic, the request also includes the companion collector's
 code and exact source byte range. This attributed enrichment adds no bytes from
 outside the already approved artifact and is accounted separately in the
-disclosure manifest.
+disclosure manifest. It is a navigation hint, not a diagnosis: the model is
+explicitly required to analyze the attributed artifact content and may not use
+the collector, traceback structure, or byte range as the root cause.
 
 Use `--log-bytes` to reduce or enlarge the bounded tail. Log content is never a
 persistent configuration default; each invocation must use `--ai-logs` or
@@ -257,7 +259,10 @@ profiles:
 
 The adapter follows the current [OpenAI Structured Outputs contract]. A model
 selected for this generic endpoint must actually support strict structured
-output; there is no fallback to JSON mode.
+output; there is no fallback to JSON mode. Schema enforcement constrains the
+proposal shape and authority, but it does not make a model diagnostically
+capable. Use the checked-in live evaluation and its generated-specificity
+metric when choosing a model or quantization for log analysis.
 
 ### Ollama
 
@@ -330,7 +335,7 @@ profiles:
 
 The child receives one `jobman.diagnosis_generation_request` schema-2 JSON
 value on standard input and must write one raw
-`jobman.diagnosis_proposal` schema-1 JSON value to standard output. Its
+`jobman.diagnosis_proposal` schema-2 JSON value to standard output. Its
 environment is minimal and does not inherit ambient variables. The bridge sets
 `JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=2`, `JOBMAN_DIAGNOSE_PROVIDER_MODEL`, and
 `JOBMAN_DIAGNOSE_REQUEST_ID`; an explicitly referenced credential is available
@@ -349,7 +354,9 @@ stable, nonsecret reason such as `request_timeout`, `http_status`,
 `response_truncated`, `incomplete_response`, `invalid_response`, or
 `structured_content_oversized`. The diagnostic never includes provider error
 bodies, model output, evidence values, credentials, or an untrusted low-level
-error string.
+error string. A proposal that is structurally valid but merely repeats the
+failure mechanism or evidence plumbing reports the controlled
+`proposal_not_specific` reason without echoing the rejected model text.
 
 The profile `timeout` bounds the complete provider operation, including the
 wait for a non-streaming HTTP provider to finish inference and return response
