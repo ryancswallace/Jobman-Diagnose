@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: If you use Jobman Diagnose, please cite this software.
 type: software
 title: Jobman Diagnose
-version: 0.3.0
-date-released: 2026-08-10
+version: 0.4.0
+date-released: 2026-08-11
 authors:
   - family-names: Wallace
     given-names: Ryan

@@ -5,6 +5,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-11
+
 ### Changed
 
 - Upgraded generated proposals to schema 2 with distinct issue summary, root
@@ -203,7 +205,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.4.0
 [0.3.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.1.0
