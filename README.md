@@ -1,4 +1,9 @@
-# Jobman-Diagnose
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-diagnose.svg">
+  <img alt="Jobman" src="assets/logo-dark-diagnose.svg" width="420">
+</picture>
+<!-- markdownlint-enable MD033 -->
 
 [![Test](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/test.yml/badge.svg)](https://github.com/ryancswallace/jobman-diagnose/actions/workflows/test.yml)
 [![Codecov](https://codecov.io/gh/ryancswallace/Jobman-Diagnose/branch/main/graph/badge.svg)](https://codecov.io/gh/ryancswallace/Jobman-Diagnose)
