@@ -8,6 +8,7 @@
     ".devcontainer/.env.local",
     ".devcontainer/devcontainer-lock.json",
     ".git/**",
+    "assets/*.svg",
     "bin/**",
     "coverage.txt",
     "cspell.json",
