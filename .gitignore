@@ -19,6 +19,7 @@ coverage.*
 /evaluation*.json
 /proposals*.json
 /diagnosis-support*.tar.gz
+config/
 
 # Workspace and editor files
 go.work
