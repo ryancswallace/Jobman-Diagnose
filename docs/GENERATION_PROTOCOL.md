@@ -52,11 +52,21 @@ traceback, panic, JVM, compiler, and causal-message enrichment may accompany it
 with collector provenance, exact source byte ranges, and bounded diagnostic
 lines deterministically selected from those already disclosed ranges.
 Traceback selection retains the terminal line of every visible exception-group
-branch and cause-chain member; causal-message selection exposes short exact
-lines such as a DNS name, TLS verification error, endpoint, rejected value, or
-database constraint. These lines remain untrusted data and do not expand
-artifact disclosure. The manifest accounts for their IDs and encoded bytes
-separately. Other `local_only` evidence is never present.
+branch and every visible traceback in a cause chain. Diagnostic-line selection
+also retains outer exceptions and operations, multi-field validation details,
+Python syntax locations, and bounded pre-traceback remediation messages.
+Causal-message selection exposes short exact lines such as a DNS name, TLS
+verification error, endpoint, rejected value, or database constraint. These
+lines remain untrusted data and do not expand artifact disclosure. The manifest
+accounts for their IDs and encoded bytes separately. Other `local_only`
+evidence is never present.
+
+The trusted prompt and fixed request instructions use one evidence-first
+sequence: inspect the bounded diagnostic lines, verify them against their
+runtime artifact, preserve every material fact and cause/effect pair, then
+classify the result. This keeps the attention contract compact while retaining
+the same untrusted-data, authority, citation, abstention, and no-mutation
+boundaries.
 
 An explicitly approved `source_content` artifact contains either one exact
 continuous line window or one exact complete UTF-8 source file. Its projection
@@ -116,6 +126,11 @@ merely because it was observed. When cited content exposes a concrete endpoint,
 causal path, or deepest exception chain, the proposal must retain the
 corresponding distinguishing operand or causal identifier; prompts still ask
 for both the deepest exception and operation when both are available.
+An explicit remote HTTP 5xx response authorizes
+`generated.external_service_failure`, while connection refusal, DNS, TLS,
+reset, and deadline signals authorize `generated.dependency_unavailable`.
+Receiving a 5xx response does not by itself prove a separately transient
+infrastructure condition.
 Before reconciliation, the host collapses an optional generated explanation to
 the supported root cause when it merely copies schema guidance, narrates Jobman
 lifecycle bookkeeping, or introduces a high-salience causal condition absent

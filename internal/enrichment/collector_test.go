@@ -3,6 +3,7 @@ package enrichment
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
@@ -89,5 +90,40 @@ func TestCollectAttributesBoundedCausalMessageLines(t *testing.T) {
 	item := evidence.Enrichment[index]
 	if got := string(log[item.ByteStart:item.ByteEnd]); got != "synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded\n" {
 		t.Fatalf("causal-message range = %q", got)
+	}
+}
+
+func TestCollectExtractsEveryPythonCauseChainMember(t *testing.T) {
+	t.Parallel()
+
+	log := []byte("Traceback (most recent call last):\n" +
+		"  File \"pipeline.py\", line 8, in parse\n" +
+		"decimal.InvalidOperation: ConversionSyntax\n\n" +
+		"The above exception was the direct cause of the following exception:\n\n" +
+		"Traceback (most recent call last):\n" +
+		"  File \"pipeline.py\", line 20, in run\n" +
+		"RecordTransformError: record 42 has invalid decimal amount '1,2O'\n")
+	core, err := testevidence.Failed("nonzero_exit", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := Collect(t.Context(), core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tracebacks []diagnosis.EnrichmentItem
+	for _, item := range evidence.Enrichment {
+		if item.Code == CodePythonTraceback {
+			tracebacks = append(tracebacks, item)
+		}
+	}
+	if len(tracebacks) != 2 {
+		t.Fatalf("python traceback enrichments = %#v", tracebacks)
+	}
+	if first := string(log[tracebacks[0].ByteStart:tracebacks[0].ByteEnd]); !strings.Contains(first, "InvalidOperation") {
+		t.Fatalf("first traceback = %q", first)
+	}
+	if second := string(log[tracebacks[1].ByteStart:tracebacks[1].ByteEnd]); !strings.Contains(second, "RecordTransformError") {
+		t.Fatalf("second traceback = %q", second)
 	}
 }

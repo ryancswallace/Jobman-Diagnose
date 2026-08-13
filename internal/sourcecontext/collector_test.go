@@ -301,6 +301,24 @@ func TestSourcePathAndStableOpenHelpers(t *testing.T) {
 	}
 }
 
+func TestInferSourceLineUsesOutermostMatchingPythonFrame(t *testing.T) {
+	t.Parallel()
+
+	sourcePath := "/workspace/pipeline.py"
+	log := []byte("Traceback (most recent call last):\n" +
+		"  File \"pipeline.py\", line 14, in parse_amount\n" +
+		"decimal.InvalidOperation: ConversionSyntax\n\n" +
+		"Traceback (most recent call last):\n" +
+		"  File \"pipeline.py\", line 31, in <module>\n" +
+		"RecordTransformError: invalid decimal amount\n")
+	line, found := inferSourceLine(sourcePath, []diagnostic.Artifact{{
+		Disclosure: diagnostic.DisclosureLogContent, Data: log,
+	}})
+	if !found || line != 31 {
+		t.Fatalf("inferSourceLine() = %d, %t", line, found)
+	}
+}
+
 func sourceEvidence(
 	t *testing.T,
 	workingDirectory string,

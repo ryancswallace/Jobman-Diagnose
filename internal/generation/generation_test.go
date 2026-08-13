@@ -254,6 +254,8 @@ func TestProjectedDiagnosticLinesExposeBoundedCauseFocus(t *testing.T) {
 		SourceArtifactID: artifact.ID, ByteStart: 0, ByteEnd: uint64(len(data)), Format: "jvm_exception",
 	}
 	want := []string{
+		"java.lang.IllegalStateException: queue is closed",
+		"at example.Worker.run(Worker.java:42)",
 		"Caused by: java.io.IOException: closed",
 		"at example.Queue.read(Queue.java:17)",
 	}
@@ -282,6 +284,63 @@ func TestPythonDiagnosticLinesPreserveExceptionGroupsAndCauseChains(t *testing.T
 	}
 	if got := selectDiagnosticLines("python_traceback", lines); !slices.Equal(got, want) {
 		t.Fatalf("python diagnostic lines = %#v, want %#v", got, want)
+	}
+}
+
+func TestPythonDiagnosticLinesPreserveValidationDetails(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"ValueError: deployment configuration is invalid:",
+		"  - region must be one of us-east-1 or us-west-2",
+		"  - retries must be an integer, not a string",
+		"  - request_timeout_seconds must be greater than zero",
+		"  - database.dsn is required",
+	}
+	want := []string{
+		"ValueError: deployment configuration is invalid:",
+		"region must be one of us-east-1 or us-west-2",
+		"retries must be an integer, not a string",
+		"request_timeout_seconds must be greater than zero",
+		"database.dsn is required",
+	}
+	if got := selectDiagnosticLines("python_traceback", lines); !slices.Equal(got, want) {
+		t.Fatalf("python diagnostic lines = %#v, want %#v", got, want)
+	}
+}
+
+func TestJVMDiagnosticLinesPreserveOuterNodeOperation(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"TypeError: Cannot read properties of undefined (reading 'currency')",
+		"    at priceInvoice (/srv/billing.js:42:17)",
+	}
+	want := []string{
+		"TypeError: Cannot read properties of undefined (reading 'currency')",
+		"at priceInvoice (/srv/billing.js:42:17)",
+	}
+	if got := selectDiagnosticLines("jvm_exception", lines); !slices.Equal(got, want) {
+		t.Fatalf("node diagnostic lines = %#v, want %#v", got, want)
+	}
+}
+
+func TestPythonSyntaxDiagnosticLinesPreserveLocationAndOperation(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"  File \"17_syntax_error.py\", line 5",
+		"    def calculate_total(items)",
+		"                              ^",
+		"SyntaxError: expected ':'",
+	}
+	want := []string{
+		"File \"17_syntax_error.py\", line 5",
+		"def calculate_total(items)",
+		"SyntaxError: expected ':'",
+	}
+	if got := selectDiagnosticLines("python_syntax", lines); !slices.Equal(got, want) {
+		t.Fatalf("python syntax diagnostic lines = %#v, want %#v", got, want)
 	}
 }
 

@@ -3,6 +3,8 @@
 // command.
 package enrichment
 
+// cspell:ignore parseint
+
 import (
 	"bytes"
 	"context"
@@ -85,15 +87,14 @@ func Collect(ctx context.Context, core diagnostic.Evidence) (diagnosis.FailureEv
 func structuredRanges(data []byte) []byteRange {
 	lines := splitLines(data)
 	result := make([]byteRange, 0, 4)
-	if selected, ok := pythonTraceback(data, lines); ok {
-		result = append(result, selected)
-	}
+	result = append(result, pythonTracebacks(data, lines)...)
 	if selected, ok := goPanic(data, lines); ok {
 		result = append(result, selected)
 	}
 	if selected, ok := jvmException(data, lines); ok {
 		result = append(result, selected)
 	}
+	result = append(result, pythonSyntaxDiagnostics(data, lines)...)
 	for _, selected := range compilerDiagnostics(data, lines) {
 		result = append(result, selected)
 		if len(result) == 8 {
@@ -122,10 +123,11 @@ func causalMessages(data []byte, lines []lineRange) []byteRange {
 		[]byte("address already in use"), []byte("cannot find module"), []byte("certificate signed by unknown authority"),
 		[]byte("certificate verify failed"), []byte("command not found"), []byte("connection refused"),
 		[]byte("context deadline exceeded"), []byte("deadlock detected"), []byte("duplicate key"),
-		[]byte("missing setting"), []byte("no space left on device"), []byte("no such host"),
+		[]byte("invalid decimal"), []byte("migration rejected"), []byte("missing setting"),
+		[]byte("no space left on device"), []byte("no such host"), []byte("parseint"),
 		[]byte("parameter not set"), []byte("permission denied"), []byte("read-only file system"),
 		[]byte("service unavailable"), []byte("too many open files"), []byte("too many requests"),
-		[]byte("undefined reference"),
+		[]byte("undefined reference"), []byte("apply migrations"),
 	}
 	result := make([]byteRange, 0, 4)
 	for _, line := range lines {
@@ -168,26 +170,42 @@ func splitLines(data []byte) []lineRange {
 	return result
 }
 
-func pythonTraceback(data []byte, lines []lineRange) (byteRange, bool) {
+func pythonTracebacks(data []byte, lines []lineRange) []byteRange {
 	const marker = "traceback (most recent call last):"
+	result := make([]byteRange, 0, 2)
 	for index, line := range lines {
 		if !bytes.Contains(bytes.ToLower(data[line.start:line.end]), []byte(marker)) {
 			continue
 		}
 		end := boundedEnd(line.start, line.end, data, lines[index+1:])
-		for _, following := range lines[index+1:] {
-			trimmed := bytes.TrimSpace(data[following.start:following.end])
-			if len(trimmed) != 0 && !leadingSpace(data[following.start:following.end]) &&
-				bytes.Contains(trimmed, []byte{':'}) {
-				end = min(following.end, line.start+maximumRange)
-				break
-			}
+		result = append(result, byteRange{
+			start: line.start, end: end, code: CodePythonTraceback, format: "python_traceback",
+		})
+		if len(result) == 4 {
+			break
 		}
-
-		return byteRange{start: line.start, end: end, code: CodePythonTraceback, format: "python_traceback"}, true
 	}
 
-	return byteRange{}, false
+	return result
+}
+
+func pythonSyntaxDiagnostics(data []byte, lines []lineRange) []byteRange {
+	result := make([]byteRange, 0, 2)
+	for index, line := range lines {
+		if !bytes.Contains(bytes.TrimSpace(data[line.start:line.end]), []byte("SyntaxError:")) {
+			continue
+		}
+		startIndex := max(0, index-3)
+		start := lines[startIndex].start
+		result = append(result, byteRange{
+			start: start, end: line.end, code: CodeCompilerDiagnostic, format: "python_syntax",
+		})
+		if len(result) == 4 {
+			break
+		}
+	}
+
+	return result
 }
 
 func goPanic(data []byte, lines []lineRange) (byteRange, bool) {
@@ -297,8 +315,4 @@ func boundedEnd(start, initialEnd int, data []byte, following []lineRange) int {
 	}
 
 	return min(end, start+maximumRange)
-}
-
-func leadingSpace(value []byte) bool {
-	return len(value) != 0 && (value[0] == ' ' || value[0] == '\t')
 }

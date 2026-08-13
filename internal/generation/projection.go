@@ -348,6 +348,8 @@ func selectDiagnosticLines(format string, lines []string) []string {
 		return firstDiagnosticLine(lines, func(line string) bool { return strings.HasPrefix(line, "panic:") })
 	case "compiler_diagnostic":
 		return firstDiagnosticLine(lines, func(line string) bool { return strings.Contains(strings.ToLower(line), ": error:") })
+	case "python_syntax":
+		return pythonSyntaxDiagnosticLines(lines)
 	case "causal_message":
 		return firstDiagnosticLine(lines, func(line string) bool { return strings.TrimSpace(line) != "" })
 	default:
@@ -357,9 +359,16 @@ func selectDiagnosticLines(format string, lines []string) []string {
 
 func pythonDiagnosticLines(lines []string) []string {
 	result := make([]string, 0, 4)
+	captureDetails := false
 	for _, line := range lines {
-		candidate := strings.TrimSpace(line)
-		candidate = strings.TrimLeft(candidate, "|+- ")
+		trimmed := strings.TrimSpace(line)
+		candidate := strings.TrimLeft(trimmed, "|+- ")
+		if captureDetails && strings.HasPrefix(strings.TrimLeft(trimmed, "|+ "), "- ") {
+			result = appendBoundedDiagnosticLine(result, strings.TrimSpace(strings.TrimPrefix(
+				strings.TrimLeft(trimmed, "|+ "), "- ",
+			)))
+			continue
+		}
 		separator := strings.IndexByte(candidate, ':')
 		if separator <= 0 {
 			continue
@@ -369,6 +378,7 @@ func pythonDiagnosticLines(lines []string) []string {
 			continue
 		}
 		result = appendBoundedDiagnosticLine(result, candidate)
+		captureDetails = true
 	}
 
 	return result
@@ -376,6 +386,22 @@ func pythonDiagnosticLines(lines []string) []string {
 
 func jvmDiagnosticLines(lines []string) []string {
 	result := make([]string, 0, 4)
+	for index, line := range lines {
+		candidate := strings.TrimSpace(line)
+		if candidate == "" || strings.HasPrefix(candidate, "at ") || strings.HasPrefix(candidate, "Caused by:") {
+			continue
+		}
+		if strings.Contains(candidate, "Exception") || strings.Contains(candidate, "Error") {
+			result = appendBoundedDiagnosticLine(result, candidate)
+			frame := firstDiagnosticLine(lines[index+1:], func(next string) bool {
+				return strings.HasPrefix(next, "at ")
+			})
+			if len(frame) != 0 {
+				result = appendBoundedDiagnosticLine(result, frame[0])
+			}
+			break
+		}
+	}
 	for index, line := range lines {
 		if !strings.HasPrefix(strings.TrimSpace(line), "Caused by:") {
 			continue
@@ -386,6 +412,22 @@ func jvmDiagnosticLines(lines []string) []string {
 		})
 		if len(frame) != 0 {
 			result = appendBoundedDiagnosticLine(result, frame[0])
+		}
+	}
+
+	return result
+}
+
+func pythonSyntaxDiagnosticLines(lines []string) []string {
+	result := make([]string, 0, 4)
+	for _, line := range lines {
+		candidate := strings.TrimSpace(line)
+		if candidate == "" || candidate == "^" {
+			continue
+		}
+		if strings.HasPrefix(candidate, "File ") || strings.HasPrefix(candidate, "SyntaxError:") ||
+			strings.HasPrefix(candidate, "def ") || strings.HasPrefix(candidate, "class ") {
+			result = appendBoundedDiagnosticLine(result, candidate)
 		}
 	}
 
