@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD041 -->
 <!-- markdownlint-disable MD033 -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-diagnose.svg">
@@ -63,6 +64,8 @@ docs/screencaps/tape/diagnose.tape, then replace this comment with:
 | Diagnose locally | `jobman diagnose JOB` |
 | Add AI hypotheses | `jobman diagnose --ai JOB` |
 | Share a bounded redacted log tail with AI | `jobman diagnose --ai-logs JOB` |
+| Add source near the failing line | `jobman diagnose --ai-logs --ai-source limited JOB` |
+| Add one complete source file | `jobman diagnose --ai-logs --ai-source full JOB` |
 | Include local system constraints | `jobman diagnose --system JOB` |
 | Produce stable machine output | `jobman diagnose --json JOB` |
 | Expand the human audit or control color | `jobman diagnose --details JOB`, `jobman diagnose --color=never JOB` |
@@ -107,6 +110,7 @@ AI mode uses the default profile in the strict per-user `diagnosis.yml`:
 ```console
 jobman diagnose --ai JOB
 jobman diagnose --ai-logs JOB
+jobman diagnose --ai-logs --ai-source limited JOB
 jobman diagnose config paths
 jobman diagnose config validate
 ```
@@ -124,7 +128,21 @@ Profiles fix the endpoint, model, locality, timeout, credentials by reference,
 and allowed evidence classes. AI activation shares bounded metadata, command
 arguments, paths, environment variable names—never values—and typed execution
 context when the profile permits them. Log bytes remain a separate opt-in via
-`--ai-logs` or `--share log_content`.
+`--ai-logs` or `--share log_content`. Current source text is another separate
+opt-in: enable it persistently for a profile with `source_context`, or override
+that profile for one run with `--ai-source none|limited|full`. Source sharing
+always requires a profile that allows `source_content`.
+
+Limited mode sends the profile's configured number of lines before and after
+an explicit `--source-line`, a matching location inferred from the selected runtime log,
+or line 1 as a visible fallback; an explicit CLI limited mode retains the
+20-lines-per-side default when the profile has no limited source policy. Full
+mode sends the exact complete file and fails rather than truncating it. Jobman
+Diagnose infers a file only when the recorded direct command names exactly one
+supported source path; use `--source-file PATH` otherwise. Source text is not
+redacted and may contain secrets. It is a point-in-time snapshot of the current
+file, not proof of the code executed by the recorded run, so pair it with
+`--ai-logs` for grounded diagnosis.
 
 Provider responses are untrusted proposals. Jobman-Diagnose validates their
 schema, taxonomy, citations, contradictions, actions, and request identity;
@@ -163,6 +181,7 @@ possible secret.
 | Jobman version support | [Compatibility contract][compatibility contract] |
 | Component boundaries | [Architecture] |
 | Quality corpus and model evaluation | [Evaluation guide] |
+| Executable multi-language failure lab | [Failure labs] |
 | Release artifacts and verification | [Release guide] |
 
 Use the [issue tracker] for reproducible bugs and feature proposals. Report
@@ -191,6 +210,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution requirements.
 [configuration guide]: docs/CONFIGURATION.md
 [documentation]: docs/README.md
 [evaluation guide]: docs/EVALUATION.md
+[failure labs]: examples/failure-labs/README.md
 [generation protocol]: docs/GENERATION_PROTOCOL.md
 [installation guide]: docs/INSTALLATION.md
 [issue tracker]: https://github.com/ryancswallace/jobman-diagnose/issues

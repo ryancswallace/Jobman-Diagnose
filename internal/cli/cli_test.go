@@ -21,6 +21,7 @@ import (
 	diagnosisconfig "github.com/ryancswallace/jobman-diagnose/internal/config"
 	"github.com/ryancswallace/jobman-diagnose/internal/coreclient"
 	"github.com/ryancswallace/jobman-diagnose/internal/enrichment"
+	"github.com/ryancswallace/jobman-diagnose/internal/sourcecontext"
 	"github.com/ryancswallace/jobman-diagnose/internal/supportbundle"
 	"github.com/ryancswallace/jobman-diagnose/internal/testevidence"
 	"github.com/ryancswallace/jobman-diagnose/provider"
@@ -250,7 +251,7 @@ func TestRunHelpIsSuccessful(t *testing.T) {
 	}
 }
 
-func TestRunUsesDefaultGeneratedProfileWithImpliedMetadata(t *testing.T) {
+func TestRunUsesDefaultGeneratedProfileWithImpliedMetadataAndAbstains(t *testing.T) {
 	evidence, evidencePath := writeEvidenceFixture(t)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, incoming *http.Request) {
 		var payload struct {
@@ -269,13 +270,7 @@ func TestRunUsesDefaultGeneratedProfileWithImpliedMetadata(t *testing.T) {
 		}
 		proposalJSON, marshalErr := json.Marshal(provider.Proposal{
 			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
-			Hypotheses: []provider.Hypothesis{{
-				Code: "generated.application_configuration", Category: "process", Summary: "Generated CLI alternative",
-				RootCause:             "The projected deployment setting is incompatible with this worker.",
-				Explanation:           "Worker initialization rejects the setting before processing begins.",
-				SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
-				ContradictingEvidence: []string{}, ContradictsFindings: []string{},
-			}},
+			Hypotheses:         []provider.Hypothesis{},
 			RecommendedActions: []string{}, MissingEvidence: []provider.MissingEvidence{},
 		})
 		if marshalErr != nil {
@@ -310,8 +305,9 @@ func TestRunUsesDefaultGeneratedProfileWithImpliedMetadata(t *testing.T) {
 	if err := diagnosis.ValidateAgainstEvidence(report, collectAnalysisEvidence(t, evidence)); err != nil {
 		t.Fatal(err)
 	}
-	if report.Mode != diagnosis.ModeMixed || !report.Disclosure.ProviderInvoked ||
-		!report.Disclosure.GeneratedContentUsed {
+	if report.Mode != diagnosis.ModeDeterministic || !report.Disclosure.ProviderInvoked ||
+		report.Disclosure.GeneratedContentUsed || len(report.Warnings) == 0 ||
+		report.Warnings[len(report.Warnings)-1].Code != "generator_abstained" {
 		t.Fatalf("generated report = %#v", report)
 	}
 	if stderr.Len() != 0 {
@@ -384,6 +380,67 @@ func TestRunGeneratedFailureFallsBackUnlessRequired(t *testing.T) {
 	}
 }
 
+func TestRunCollectsExplicitSourceContextForAIRequest(t *testing.T) {
+	_, evidencePath := writeEvidenceFixture(t)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	configuration := writeDiagnosisConfigWithSource(t, server.URL+"/v1/chat/completions")
+	sourcePath := filepath.Join(t.TempDir(), "worker.py")
+	if err := os.WriteFile(sourcePath, []byte("raise RuntimeError('source context test')\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	err := Run([]string{
+		"--from-evidence", evidencePath, "--json", "--ai-source", "limited",
+		"--source-file", sourcePath, "--source-line", "1", "--diagnosis-config", configuration,
+	}, bytes.NewReader(nil), &stdout, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := diagnosis.Decode(&stdout, diagnosis.DecodeLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(report.Disclosure.Classes, string(diagnosis.DisclosureSourceContent)) ||
+		!slices.Contains(report.Disclosure.ArtifactIDs, "context:source:001") ||
+		!slices.ContainsFunc(report.Warnings, func(warning diagnosis.Warning) bool {
+			return warning.Code == "source_context_point_in_time"
+		}) {
+		t.Fatalf("source disclosure report = %#v", report)
+	}
+}
+
+func TestRunUsesProfileSourceContextWithoutCLIEnablement(t *testing.T) {
+	_, evidencePath := writeEvidenceFixture(t)
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	configuration := writeDiagnosisConfigWithSourcePolicy(t, server.URL+"/v1/chat/completions", "limited", 3)
+	sourcePath := filepath.Join(t.TempDir(), "worker.py")
+	if err := os.WriteFile(sourcePath, []byte("one = 1\ntwo = 2\nraise RuntimeError('boom')\nfour = 4\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	err := Run([]string{
+		"--from-evidence", evidencePath, "--json", "--ai", "--source-file", sourcePath,
+		"--source-line", "3", "--diagnosis-config", configuration,
+	}, bytes.NewReader(nil), &stdout, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := diagnosis.Decode(&stdout, diagnosis.DecodeLimits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(report.Disclosure.Classes, string(diagnosis.DisclosureSourceContent)) ||
+		!slices.Contains(report.Disclosure.ArtifactIDs, "context:source:001") {
+		t.Fatalf("profile source disclosure report = %#v", report)
+	}
+}
+
 func TestRunRejectsIncompleteAIUsage(t *testing.T) {
 	_, evidencePath := writeEvidenceFixture(t)
 	tests := [][]string{
@@ -424,6 +481,144 @@ func TestParseAIShortcutsAndLogSharing(t *testing.T) {
 	}
 	if _, err := parse([]string{"--ai-logs", "--logs", "none", "demo"}, &bytes.Buffer{}); !errors.Is(err, errUsage) {
 		t.Fatalf("conflicting log options error = %v", err)
+	}
+}
+
+func TestParseSourceContextOptIn(t *testing.T) {
+	t.Parallel()
+
+	limited, err := parse([]string{
+		"--ai-source", "limited", "--source-file", "/srv/app.py", "--source-line", "42", "demo",
+	}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if limited.aiSource != "limited" || limited.sourceFile != "/srv/app.py" || limited.sourceLine != 42 ||
+		!limited.aiEnabled() || !slices.Contains(limited.share, string(diagnosis.DisclosureSourceContent)) ||
+		limited.request.Logs != diagnostic.LogsMetadata {
+		t.Fatalf("limited source options = %#v", limited)
+	}
+	full, err := parse([]string{"--ai-source", "FULL", "demo"}, &bytes.Buffer{})
+	if err != nil || full.aiSource != "full" {
+		t.Fatalf("full source options = %#v, %v", full, err)
+	}
+	none, err := parse([]string{"--ai-source", "NONE", "demo"}, &bytes.Buffer{})
+	if err != nil || none.aiSource != "none" || slices.Contains(none.share, string(diagnosis.DisclosureSourceContent)) {
+		t.Fatalf("disabled source options = %#v, %v", none, err)
+	}
+	for _, arguments := range [][]string{
+		{"--source-file", "app.py", "demo"},
+		{"--source-line", "2", "demo"},
+		{"--ai-source", "full", "--source-line", "2", "demo"},
+		{"--ai-source", "summary", "demo"},
+	} {
+		if _, err := parse(arguments, &bytes.Buffer{}); !errors.Is(err, errUsage) {
+			t.Fatalf("parse(%v) error = %v, want usage", arguments, err)
+		}
+	}
+}
+
+func TestSelectGeneratorResolvesProfileSourcePolicyAndCLIOverrides(t *testing.T) {
+	t.Parallel()
+
+	configuration := writeDiagnosisConfigWithSourcePolicy(
+		t, "http://127.0.0.1:8000/v1/chat/completions", "limited", 7,
+	)
+	tests := []struct {
+		name       string
+		arguments  []string
+		wantMode   diagnosis.SourceContextMode
+		wantRadius uint64
+		wantSource bool
+	}{
+		{name: "profile default", arguments: []string{"--ai", "demo"}, wantMode: diagnosis.SourceContextLimited, wantRadius: 7, wantSource: true},
+		{name: "command line none", arguments: []string{"--ai", "--ai-source", "none", "demo"}},
+		{name: "command line full", arguments: []string{"--ai", "--ai-source", "full", "demo"}, wantMode: diagnosis.SourceContextFull, wantSource: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			arguments := append([]string{}, test.arguments...)
+			arguments = append(arguments[:len(arguments)-1], "--diagnosis-config", configuration, "demo")
+			parsed, err := parse(arguments, &bytes.Buffer{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			selection, err := selectGenerator(parsed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selection.sourceMode != test.wantMode || selection.sourceRadius != test.wantRadius ||
+				slices.Contains(selection.approved, string(diagnosis.DisclosureSourceContent)) != test.wantSource {
+				t.Fatalf("selection = %#v", selection)
+			}
+		})
+	}
+}
+
+func TestSelectGeneratorResolvesFullAndDisabledProfileSourcePolicies(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		policyMode string
+		arguments  []string
+		wantMode   diagnosis.SourceContextMode
+		wantRadius uint64
+	}{
+		{name: "full profile", policyMode: "full", arguments: []string{"--ai", "demo"}, wantMode: diagnosis.SourceContextFull},
+		{name: "disabled profile", policyMode: "none", arguments: []string{"--ai", "demo"}},
+		{
+			name: "limited override uses standard radius", policyMode: "full",
+			arguments: []string{"--ai", "--ai-source", "limited", "demo"},
+			wantMode:  diagnosis.SourceContextLimited, wantRadius: sourcecontext.DefaultLinesBeforeAndAfter,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			configuration := writeDiagnosisConfigWithSourcePolicy(
+				t, "http://127.0.0.1:8000/v1/chat/completions", test.policyMode, 0,
+			)
+			arguments := append([]string{}, test.arguments...)
+			arguments = append(arguments[:len(arguments)-1], "--diagnosis-config", configuration, "demo")
+			parsed, err := parse(arguments, &bytes.Buffer{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			selection, err := selectGenerator(parsed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selection.sourceMode != test.wantMode || selection.sourceRadius != test.wantRadius {
+				t.Fatalf("selection = %#v", selection)
+			}
+		})
+	}
+}
+
+func TestSelectGeneratorRequiresSourceDisclosureInProfile(t *testing.T) {
+	t.Parallel()
+
+	configuration := writeDiagnosisConfig(t, "http://127.0.0.1:8000/v1/chat/completions")
+	parsed, err := parse([]string{
+		"--ai-source", "limited", "--diagnosis-config", configuration, "demo",
+	}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, selectionErr := selectGenerator(parsed)
+	if selectionErr == nil || !strings.Contains(selectionErr.Error(), "does not allow source_content") {
+		t.Fatalf("selectGenerator() error = %v", selectionErr)
+	}
+	parsed, err = parse([]string{
+		"--ai", "--share", "source_content", "--diagnosis-config", configuration, "demo",
+	}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, selectionErr = selectGenerator(parsed)
+	if !errors.Is(selectionErr, errUsage) ||
+		!strings.Contains(selectionErr.Error(), "requires profile source_context") {
+		t.Fatalf("selectGenerator(source share without mode) error = %v", selectionErr)
 	}
 }
 
@@ -468,7 +663,7 @@ func TestRunConfigurationInspectionCommands(t *testing.T) {
 		{arguments: []string{"config", "paths"}, contains: []string{"effective:", configuration, "environment"}},
 		{arguments: []string{"config", "validate"}, contains: []string{"configuration is valid", configuration}},
 		{arguments: []string{"config", "show"}, contains: []string{`"schema_version": 2`, `"profile": "test"`}},
-		{arguments: []string{"profiles"}, contains: []string{"* test", "provider=openai_compatible", "disclosure=metadata"}},
+		{arguments: []string{"profiles"}, contains: []string{"* test", "provider=openai_compatible", "source=none", "disclosure=metadata"}},
 	}
 	for _, test := range tests {
 		var stdout, stderr bytes.Buffer
@@ -480,6 +675,19 @@ func TestRunConfigurationInspectionCommands(t *testing.T) {
 				t.Fatalf("Run(%v) output = %q, want %q", test.arguments, stdout.String(), expected)
 			}
 		}
+	}
+	sourceConfiguration := writeDiagnosisConfigWithSourcePolicy(
+		t, "http://127.0.0.1:8000/v1/chat/completions", "limited", 7,
+	)
+	var profiles bytes.Buffer
+	if err := Run(
+		[]string{"profiles", "--diagnosis-config", sourceConfiguration},
+		bytes.NewReader(nil), &profiles, &bytes.Buffer{},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(profiles.String(), "source=limited:7-lines-each-side") {
+		t.Fatalf("profiles output = %q", profiles.String())
 	}
 }
 
@@ -526,6 +734,34 @@ func collectAnalysisEvidence(t *testing.T, evidence diagnostic.Evidence) diagnos
 
 func writeDiagnosisConfig(t *testing.T, endpoint string) string {
 	t.Helper()
+	return writeDiagnosisConfigDocument(t, endpoint, "")
+}
+
+func writeDiagnosisConfigWithSource(t *testing.T, endpoint string) string {
+	t.Helper()
+	return writeDiagnosisConfigDocument(t, endpoint, `      source_content:
+        maximum_artifacts: 1
+        maximum_bytes: 65536
+`)
+}
+
+func writeDiagnosisConfigWithSourcePolicy(t *testing.T, endpoint, mode string, lines uint64) string {
+	t.Helper()
+	policy := fmt.Sprintf(`      source_content:
+        maximum_artifacts: 1
+        maximum_bytes: 65536
+    source_context:
+      mode: %s
+`, mode)
+	if mode == diagnosisconfig.SourceContextModeLimited {
+		policy += fmt.Sprintf("      lines_before_and_after: %d\n", lines)
+	}
+
+	return writeDiagnosisConfigDocument(t, endpoint, policy)
+}
+
+func writeDiagnosisConfigDocument(t *testing.T, endpoint, extraDisclosure string) string {
+	t.Helper()
 	contents := fmt.Sprintf(`schema_version: 2
 defaults:
   profile: test
@@ -543,7 +779,7 @@ profiles:
       metadata:
         maximum_items: 256
         maximum_bytes: 131072
-`, endpoint)
+%s`, endpoint, extraDisclosure)
 	path := filepath.Join(t.TempDir(), "diagnosis.yml")
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)

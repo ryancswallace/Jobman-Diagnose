@@ -14,12 +14,13 @@ jobman show evidence JOB --json
         | jobman.diagnostic_evidence schema 1
         v
 core client -> verification -> exact-range enrichment -> deterministic engine
+                          \-> opt-in current source snapshot
                                                         -> sealed local report
                                                    |
                                   explicit --ai/--profile activation
                                                    |
                                                    v
-                           disclosure projection -> sealed request schema 2
+                           disclosure projection -> sealed request schema 4
                                                    |
                                                    v
                              one StructuredGenerator call (optional)
@@ -39,6 +40,11 @@ and the evidence schema. The companion owns deterministic interpretation,
 confidence, citations, actions, retry advice, report schema, disclosure policy,
 provider configuration, and generated hypotheses. Core never reads a diagnosis
 report, and a report never changes lifecycle state.
+
+The companion additionally owns opt-in current-source collection. Jobman does
+not read, redact, or attest to source files. The companion seals selected source
+bytes into analysis evidence with point-in-time quality and preserves core
+evidence unchanged.
 
 Live acquisition invokes a validated absolute Jobman executable directly,
 without a shell. When launched as `jobman diagnose`, extension protocol 1
@@ -90,11 +96,17 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    context, environment variable names/roles, and point-in-time
    state-filesystem/cgroup constraints. `--ai-logs` or
    `--share log_content` additionally requests
-   and approves a bounded live tail. The CLI approvals and profile disclosure
-   allowlist are intersected; `local_only` evidence is never projected on its
-   own. Exact-range structure derived from a disclosed log is projected only
+   and approves a bounded live tail. Effective invocation approvals, including
+   any profile source default, are intersected with the profile disclosure
+   allowlist; `local_only` evidence is never projected on its own. Exact-range
+   structure derived from a disclosed log is projected only
    with that source artifact and accounted separately. Log
    content also requires Jobman's `configured_value_redaction_v1` capability.
+   Profile `source_context` or `--ai-source limited|full` separately approves
+   one current source snapshot; `--ai-source none` suppresses a profile
+   default. Inference must resolve exactly one direct-command source path, and
+   `--source-file` supplies an explicit override. Source context is unredacted,
+   point-in-time data and never independently authorizes a generated cause.
 3. The projection is rejected, not silently truncated, if a class or total
    request exceeds its configured ceiling. Deterministic findings supported by
    excluded evidence are omitted from the request as well.

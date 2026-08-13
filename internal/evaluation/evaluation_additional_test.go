@@ -36,9 +36,9 @@ func TestLoadRejectsUnreadableOrMalformedCorpus(t *testing.T) {
 		encoded []byte
 	}{
 		{name: "malformed", encoded: []byte(`{"kind":`)},
-		{name: "unknown field", encoded: []byte(`{"kind":"` + Kind + `","schema_version":2,"cases":[],"extra":true}`)},
-		{name: "trailing value", encoded: []byte(`{"kind":"` + Kind + `","schema_version":2,"cases":[]} {}`)},
-		{name: "invalid header", encoded: []byte(`{"kind":"wrong","schema_version":2,"cases":[]}`)},
+		{name: "unknown field", encoded: []byte(`{"kind":"` + Kind + `","schema_version":4,"cases":[],"extra":true}`)},
+		{name: "trailing value", encoded: []byte(`{"kind":"` + Kind + `","schema_version":4,"cases":[]} {}`)},
+		{name: "invalid header", encoded: []byte(`{"kind":"wrong","schema_version":4,"cases":[]}`)},
 		{name: "oversized", encoded: bytes.Repeat([]byte(" "), maximumCorpusBytes+1)},
 	}
 	for _, test := range tests {
@@ -79,6 +79,11 @@ func TestValidateCorpusRejectsInvalidExpectationContracts(t *testing.T) {
 			corpus.Cases[0].Evidence = filepath.Join(root, "outside.json")
 		}},
 		{name: "escaping evidence", mutate: func(corpus *Corpus) { corpus.Cases[0].Evidence = "../outside.json" }},
+		{name: "absolute source", mutate: func(corpus *Corpus) {
+			root := filepath.VolumeName(corpus.root) + string(os.PathSeparator)
+			corpus.Cases[0].Source = filepath.Join(root, "outside.py")
+		}},
+		{name: "escaping source", mutate: func(corpus *Corpus) { corpus.Cases[0].Source = "../outside.py" }},
 		{name: "no primary codes", mutate: func(corpus *Corpus) { corpus.Cases[0].AcceptedPrimaryCodes = nil }},
 		{name: "negative confidence", mutate: func(corpus *Corpus) { corpus.Cases[0].MinimumConfidence = -1 }},
 		{name: "excess confidence", mutate: func(corpus *Corpus) { corpus.Cases[0].MaximumConfidence = 101 }},
@@ -94,49 +99,78 @@ func TestValidateCorpusRejectsInvalidExpectationContracts(t *testing.T) {
 		{name: "invalid code", mutate: func(corpus *Corpus) {
 			corpus.Cases[0].AcceptedPrimaryCodes = []string{"UPPER"}
 		}},
+		{name: "missing tags", mutate: func(corpus *Corpus) { corpus.Cases[0].Tags = nil }},
+		{name: "unsorted tags", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].Tags = []string{"z.tag", "a.tag"}
+		}},
 		{name: "missing retry", mutate: func(corpus *Corpus) { corpus.Cases[0].ExpectedRetry = "" }},
 		{name: "missing policy", mutate: func(corpus *Corpus) { corpus.Cases[0].ExpectedExistingPolicy = "" }},
-		{name: "concepts without generated cause", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].GeneratedConcepts = [][]string{{"specific cause"}}
+		{name: "unknown generated disposition", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].GeneratedExpectation.Disposition = "unknown"
 		}},
-		{name: "generated cause without allowed code", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
-			corpus.Cases[0].GeneratedConcepts = [][]string{{"specific cause"}}
-		}},
-		{name: "generated cause without concepts", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
-			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
-		}},
-		{name: "empty generated concept", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
-			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
-			corpus.Cases[0].GeneratedConcepts = [][]string{{" "}}
-		}},
-		{name: "multiline generated concept", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
-			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
-			corpus.Cases[0].GeneratedConcepts = [][]string{{"cause\nother"}}
-		}},
-		{name: "too many generated concept groups", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
-			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
-			corpus.Cases[0].GeneratedConcepts = make([][]string, 17)
-			for index := range corpus.Cases[0].GeneratedConcepts {
-				corpus.Cases[0].GeneratedConcepts[index] = []string{"cause"}
+		{name: "required cause without allowed code", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{
+				Disposition:   GeneratedCauseRequired,
+				RequiredFacts: []ExpectedConcept{{Name: "cause", Alternatives: []string{"specific cause"}}},
 			}
 		}},
-		{name: "too many generated concept alternatives", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
+		{name: "required cause without facts", mutate: func(corpus *Corpus) {
 			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
-			corpus.Cases[0].GeneratedConcepts = [][]string{make([]string, 17)}
-			for index := range corpus.Cases[0].GeneratedConcepts[0] {
-				corpus.Cases[0].GeneratedConcepts[0][index] = "cause"
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{Disposition: GeneratedCauseRequired}
+		}},
+		{name: "empty generated fact", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{
+				Disposition:   GeneratedCauseRequired,
+				RequiredFacts: []ExpectedConcept{{Name: "cause", Alternatives: []string{" "}}},
 			}
 		}},
-		{name: "oversized generated concept", mutate: func(corpus *Corpus) {
-			corpus.Cases[0].RequireGeneratedCause = true
+		{name: "multiline generated fact", mutate: func(corpus *Corpus) {
 			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
-			corpus.Cases[0].GeneratedConcepts = [][]string{{strings.Repeat("c", 257)}}
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{
+				Disposition:   GeneratedCauseRequired,
+				RequiredFacts: []ExpectedConcept{{Name: "cause", Alternatives: []string{"cause\nother"}}},
+			}
+		}},
+		{name: "too many generated facts", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{
+				Disposition: GeneratedCauseRequired, RequiredFacts: make([]ExpectedConcept, 17),
+			}
+			for index := range corpus.Cases[0].GeneratedExpectation.RequiredFacts {
+				corpus.Cases[0].GeneratedExpectation.RequiredFacts[index] = ExpectedConcept{
+					Name: "cause", Alternatives: []string{"cause"},
+				}
+			}
+		}},
+		{name: "too many generated fact alternatives", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			alternatives := make([]string, 17)
+			for index := range alternatives {
+				alternatives[index] = "cause"
+			}
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{
+				Disposition:   GeneratedCauseRequired,
+				RequiredFacts: []ExpectedConcept{{Name: "cause", Alternatives: alternatives}},
+			}
+		}},
+		{name: "oversized generated fact", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+			corpus.Cases[0].GeneratedExpectation = GeneratedExpectation{
+				Disposition:   GeneratedCauseRequired,
+				RequiredFacts: []ExpectedConcept{{Name: "cause", Alternatives: []string{strings.Repeat("c", 257)}}},
+			}
+		}},
+		{name: "abstention with allowed code", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].AllowedGeneratedCodes = []string{"generated.application_defect"}
+		}},
+		{name: "abstention with required relation", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].GeneratedExpectation.RequiredRelations = []ExpectedRelation{{
+				Name: "cause", Causes: []string{"cause"}, Effects: []string{"effect"},
+			}}
+		}},
+		{name: "excess citation limit", mutate: func(corpus *Corpus) {
+			corpus.Cases[0].GeneratedExpectation.MaximumCitations = 9
 		}},
 	}
 	for _, test := range tests {
@@ -173,6 +207,16 @@ func TestRunValidatesInputsAndCancellation(t *testing.T) {
 			t.Fatalf("Run(%s) error = nil", test.name)
 		}
 	}
+	for _, repeats := range []int{0, 21} {
+		if _, err := RunWithOptions(t.Context(), corpus, target, "test", RunOptions{Repeats: repeats}); err == nil {
+			t.Fatalf("RunWithOptions(repeats %d) error = nil", repeats)
+		}
+	}
+	if _, err := RunWithOptions(t.Context(), corpus, target, "test", RunOptions{
+		Repeats: 1, SourceContext: &SourceContextOptions{Mode: "unknown", MaximumBytes: 1},
+	}); err == nil {
+		t.Fatal("RunWithOptions(invalid source mode) error = nil")
+	}
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := Run(canceled, corpus, target, "test"); !errors.Is(err, context.Canceled) {
@@ -186,6 +230,142 @@ func TestRunValidatesInputsAndCancellation(t *testing.T) {
 	if summary.Passed != 0 || len(summary.Results) != 1 ||
 		!strings.Contains(strings.Join(summary.Results[0].Violations, " "), "diagnose: target failed") {
 		t.Fatalf("failing target summary = %#v", summary)
+	}
+}
+
+func TestRunAttachesCheckedInSourceContext(t *testing.T) {
+	t.Parallel()
+
+	corpus, err := Select(loadCorpus(t), []string{"python_zero_division"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := engine.New("source-context-test", func() time.Time {
+		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := RunWithOptions(t.Context(), corpus, target, "source", RunOptions{
+		Repeats: 1,
+		SourceContext: &SourceContextOptions{
+			Mode: diagnosis.SourceContextFull, MaximumBytes: 256 * 1024,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Passed != 1 || summary.Metrics.SourceContextCases != 1 ||
+		len(summary.Results) != 1 || !summary.Results[0].SourceContextUsed {
+		t.Fatalf("source-enabled summary = %#v", summary)
+	}
+}
+
+func TestSelectCorpusByNameAndTag(t *testing.T) {
+	t.Parallel()
+
+	corpus := loadCorpus(t)
+	selected, err := Select(corpus, nil, []string{"language.node"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected.Cases) != 4 {
+		t.Fatalf("node case count = %d", len(selected.Cases))
+	}
+	selected, err = Select(corpus, []string{"node_type_error"}, []string{"language.node"})
+	if err != nil || len(selected.Cases) != 1 || selected.Cases[0].Name != "node_type_error" {
+		t.Fatalf("selected corpus = %#v, %v", selected.Cases, err)
+	}
+	for _, test := range []struct {
+		names []string
+		tags  []string
+	}{
+		{names: []string{"missing_case"}},
+		{names: []string{"node_type_error"}, tags: []string{"language.go"}},
+		{tags: []string{"missing.tag"}},
+		{tags: []string{"INVALID"}},
+	} {
+		if _, err := Select(corpus, test.names, test.tags); err == nil {
+			t.Fatalf("Select(%#v, %#v) error = nil", test.names, test.tags)
+		}
+	}
+}
+
+func TestRunWithOptionsRepeatsCasesDeterministically(t *testing.T) {
+	t.Parallel()
+
+	corpus := loadCorpus(t)
+	corpus.Cases = corpus.Cases[:1]
+	target, err := engine.New("repeat-test", func() time.Time {
+		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := RunWithOptions(t.Context(), corpus, target, "repeat", RunOptions{Repeats: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.UniqueCases != 1 || summary.Repeats != 3 || summary.Cases != 3 ||
+		summary.Passed != 3 || len(summary.Results) != 3 || summary.Results[2].Iteration != 3 {
+		t.Fatalf("repeated summary = %#v", summary)
+	}
+}
+
+//nolint:cyclop // One table verifies the independent semantic counter dimensions and violations.
+func TestEvaluateGeneratedMeasuresSemanticQualityAndAbstention(t *testing.T) {
+	t.Parallel()
+
+	test := Case{
+		AllowedGeneratedCodes: []string{"generated.dependency_unavailable"},
+		GeneratedExpectation: GeneratedExpectation{
+			Disposition: GeneratedCauseRequired,
+			RequiredFacts: []ExpectedConcept{
+				{Name: "endpoint", Alternatives: []string{"127.0.0.1:5432"}},
+				{Name: "condition", Alternatives: []string{"connection refused"}},
+			},
+			RequiredRelations: []ExpectedRelation{{
+				Name: "refusal prevented connection", Causes: []string{"connection refused"},
+				Effects: []string{"could not connect"},
+			}},
+			ForbiddenClaims:  []ExpectedConcept{{Name: "missing module", Alternatives: []string{"module is missing"}}},
+			MaximumCitations: 1,
+		},
+	}
+	finding := diagnosis.Finding{
+		Code: "generated.dependency_unavailable", SupportingEvidence: []string{"stderr"},
+	}
+	result := Result{Violations: []string{}}
+	quality := evaluateGenerated(
+		&result, test, []diagnosis.Finding{finding},
+		"Connection refused at 127.0.0.1:5432, so the worker could not connect.", true,
+	)
+	if len(result.Violations) != 0 || quality.usefulDiagnoses != 1 || quality.taxonomyCorrect != 1 ||
+		quality.entitiesMatched != 2 || quality.relationsMatched != 1 || quality.economicalCitations != 1 {
+		t.Fatalf("valid generated quality = %#v, violations %#v", quality, result.Violations)
+	}
+
+	result = Result{Violations: []string{}}
+	finding.Code = "generated.application_defect"
+	finding.SupportingEvidence = []string{"stderr", "exit"}
+	quality = evaluateGenerated(
+		&result, test, []diagnosis.Finding{finding}, "A module is missing, so processing stopped.", true,
+	)
+	if len(result.Violations) < 5 || quality.usefulDiagnoses != 0 || quality.forbiddenClaims != 1 ||
+		quality.economicalCitations != 0 {
+		t.Fatalf("invalid generated quality = %#v, violations %#v", quality, result.Violations)
+	}
+
+	abstainCase := Case{GeneratedExpectation: GeneratedExpectation{Disposition: GeneratedMustAbstain}}
+	result = Result{Violations: []string{}}
+	quality = evaluateGenerated(&result, abstainCase, nil, "", true)
+	if len(result.Violations) != 0 || quality.abstentionsCorrect != 1 || quality.proposalsAccepted != 1 {
+		t.Fatalf("accepted abstention = %#v, violations %#v", quality, result.Violations)
+	}
+	result = Result{Violations: []string{}}
+	quality = evaluateGenerated(&result, abstainCase, nil, "", false)
+	if len(result.Violations) != 1 || quality.abstentionsCorrect != 0 {
+		t.Fatalf("fallback abstention = %#v, violations %#v", quality, result.Violations)
 	}
 }
 
@@ -237,6 +417,7 @@ func TestRunRecordsUnreadableAndInvalidEvidence(t *testing.T) {
 	}
 }
 
+//nolint:cyclop // Compact helper assertions cover all zero-denominator and signature semantics.
 func TestEvaluationHelpersPreserveMetricSemantics(t *testing.T) {
 	t.Parallel()
 
@@ -264,12 +445,13 @@ func TestEvaluationHelpersPreserveMetricSemantics(t *testing.T) {
 	if primaryCode(report) != "selected" || findPrimary(diagnosis.Report{}).Code != "" {
 		t.Fatal("primary finding lookup changed")
 	}
-	concepts := [][]string{{"ValueError"}, {"missing field", "required key"}}
-	if missing := missingGeneratedConcept("ValueError: required key region is absent", concepts); missing != "" {
-		t.Fatalf("missingGeneratedConcept(specific) = %q", missing)
+	if !matchesAlternatives("ValueError: required key region is absent", []string{"missing field", "required key"}) ||
+		matchesAlternatives("ValueError: input failed", []string{"missing field", "required key"}) {
+		t.Fatal("matchesAlternatives() changed concept matching semantics")
 	}
-	if missing := missingGeneratedConcept("ValueError: input failed", concepts); missing != "missing field | required key" {
-		t.Fatalf("missingGeneratedConcept(generic) = %q", missing)
+	if generatedSignature(Result{ProposalAccepted: true, GeneratedCodes: []string{"generated.data_validation"}}) !=
+		"true:generated.data_validation" {
+		t.Fatal("generatedSignature() changed consistency identity")
 	}
 }
 
@@ -355,7 +537,7 @@ func TestRunMeasuresGeneratedCauseSpecificity(t *testing.T) {
 				t.Fatalf("specificity summary = %#v, want passed %t", summary, test.wantPassed)
 			}
 			if !test.wantPassed && (len(summary.Results[0].Violations) == 0 ||
-				!strings.Contains(strings.Join(summary.Results[0].Violations, " "), "omitted required issue concept")) {
+				!strings.Contains(strings.Join(summary.Results[0].Violations, " "), "omitted required fact")) {
 				t.Fatalf("generic violations = %#v", summary.Results[0].Violations)
 			}
 		})
@@ -423,16 +605,36 @@ func cloneCorpus(source Corpus) Corpus {
 	cloned := source
 	cloned.Cases = slices.Clone(source.Cases)
 	for index := range cloned.Cases {
+		cloned.Cases[index].Tags = slices.Clone(source.Cases[index].Tags)
 		cloned.Cases[index].AcceptedPrimaryCodes = slices.Clone(source.Cases[index].AcceptedPrimaryCodes)
 		cloned.Cases[index].AllowedGeneratedCodes = slices.Clone(source.Cases[index].AllowedGeneratedCodes)
 		cloned.Cases[index].RequiredFindingCodes = slices.Clone(source.Cases[index].RequiredFindingCodes)
 		cloned.Cases[index].ForbiddenFindingCodes = slices.Clone(source.Cases[index].ForbiddenFindingCodes)
 		cloned.Cases[index].RequiredActionCodes = slices.Clone(source.Cases[index].RequiredActionCodes)
 		cloned.Cases[index].ForbiddenActionCodes = slices.Clone(source.Cases[index].ForbiddenActionCodes)
-		cloned.Cases[index].GeneratedConcepts = make([][]string, len(source.Cases[index].GeneratedConcepts))
-		for conceptIndex := range source.Cases[index].GeneratedConcepts {
-			cloned.Cases[index].GeneratedConcepts[conceptIndex] = slices.Clone(source.Cases[index].GeneratedConcepts[conceptIndex])
+		expectation := source.Cases[index].GeneratedExpectation
+		expectation.RequiredFacts = slices.Clone(expectation.RequiredFacts)
+		for conceptIndex := range expectation.RequiredFacts {
+			expectation.RequiredFacts[conceptIndex].Alternatives = slices.Clone(
+				expectation.RequiredFacts[conceptIndex].Alternatives,
+			)
 		}
+		expectation.RequiredRelations = slices.Clone(expectation.RequiredRelations)
+		for relationIndex := range expectation.RequiredRelations {
+			expectation.RequiredRelations[relationIndex].Causes = slices.Clone(
+				expectation.RequiredRelations[relationIndex].Causes,
+			)
+			expectation.RequiredRelations[relationIndex].Effects = slices.Clone(
+				expectation.RequiredRelations[relationIndex].Effects,
+			)
+		}
+		expectation.ForbiddenClaims = slices.Clone(expectation.ForbiddenClaims)
+		for conceptIndex := range expectation.ForbiddenClaims {
+			expectation.ForbiddenClaims[conceptIndex].Alternatives = slices.Clone(
+				expectation.ForbiddenClaims[conceptIndex].Alternatives,
+			)
+		}
+		cloned.Cases[index].GeneratedExpectation = expectation
 	}
 
 	return cloned

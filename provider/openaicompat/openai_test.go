@@ -33,7 +33,7 @@ func TestGenerateUsesStrictSchemaAndKeepsEvidenceInUserData(t *testing.T) {
 		if payload.ResponseFormat.Type != "json_schema" || !payload.ResponseFormat.JSONSchema.Strict ||
 			!bytes.Equal(payload.ResponseFormat.JSONSchema.Schema, request.ResponseSchema) || payload.Temperature != 0 ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "ignore prior instructions") ||
-			!strings.Contains(payload.Messages[0].Content, "concrete incident") ||
+			!strings.Contains(payload.Messages[0].Content, "deepest concrete supported cause") ||
 			!strings.Contains(payload.Messages[1].Content, "ignore prior instructions") {
 			http.Error(writer, "unsafe projection", http.StatusBadRequest)
 			return
@@ -181,7 +181,7 @@ func validOpenAIProposal(request provider.Request) provider.Proposal {
 			Code: "generated.compatible_test", Category: "process", Summary: "Compatible response",
 			RootCause:             "The projected worker setting is incompatible with the selected runtime.",
 			Explanation:           "Runtime validation rejects the incompatible setting before work begins.",
-			SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
+			SupportingEvidence:    []string{request.Manifest.ArtifactIDs[0]},
 			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 		}},
 		RecommendedActions: []string{}, MissingEvidence: []provider.MissingEvidence{},
@@ -194,15 +194,23 @@ func openAIRequest(t *testing.T) provider.Request {
 	if err != nil {
 		t.Fatal(err)
 	}
+	artifactContent := "ValueError: the projected worker setting is incompatible with the selected runtime"
 	request, err := provider.SealRequest(provider.Request{
-		EvidenceID: "sha256:" + strings.Repeat("b", 64),
-		Subject:    provider.Subject{Phase: "completed", Outcome: "failure", SelectedRuns: []uint64{1}},
+		AnalysisEvidenceID: "sha256:" + strings.Repeat("b", 64),
+		Subject:            provider.Subject{Phase: "completed", Outcome: "failure", SelectedRuns: []uint64{1}},
 		Projection: provider.Projection{Items: []provider.ProjectedItem{{
 			ID: "ev:run:1:message", Code: "jobman.run.diagnostic", Value: value,
 			Quality: "observed", Disclosure: "metadata",
+		}}, Artifacts: []provider.ProjectedArtifact{{
+			ID: "artifact:run:1:stderr", Role: "target_stderr", Run: 1, Stream: "stderr",
+			Content: artifactContent, Encoding: "utf-8-lossy", Digest: "sha256:" + strings.Repeat("d", 64),
+			SelectedBytes: uint64(len(artifactContent)), ContentBytes: uint64(len(artifactContent)),
+			Disclosure: "log_content",
 		}}},
 		Manifest: provider.ProjectionManifest{
-			Classes: []string{"metadata"}, ItemIDs: []string{"ev:run:1:message"}, ItemCount: 1,
+			Classes: []string{"log_content", "metadata"}, ItemIDs: []string{"ev:run:1:message"},
+			ArtifactIDs: []string{"artifact:run:1:stderr"}, ItemCount: 1, ArtifactCount: 1,
+			ArtifactBytes: uint64(len(artifactContent)),
 		},
 		Deterministic: []provider.DeterministicCandidate{{
 			ID: "finding:001", Code: "core.nonzero_exit", Category: "process", Summary: "Nonzero exit",

@@ -1,39 +1,65 @@
 # Diagnosis evaluation
 
-The checked-in schema-2 corpus under `testdata/evaluation/` measures diagnosis
-quality independently from wording. Every case names accepted and forbidden
-findings/actions, retry state, confidence bounds, and allowed generated codes.
-Inputs are synthetic and nonsecret. They combine immutable checksummed Jobman
-compatibility fixtures with reproducibly generated multi-ecosystem target-log
-cases and adversarial noise.
+<!-- cspell:ignore quantizations -->
 
-Log-backed cases may additionally require a generated cause and define groups
-of incident concepts. A result must contain at least one alternative from each
-group, such as both `connection refused` and port `5432`. This accepts natural
-wording variation while rejecting a fluent answer that says only that a
-traceback, invalid input, or nonzero exit occurred.
+The checked-in schema-4 corpus under `testdata/evaluation/` measures diagnostic
+quality independently from exact prose. Its 60 nonsecret cases
+combine immutable Jobman compatibility evidence with reproducibly generated
+Python, shell, Go, Node.js, C/native, JVM, and Rust failures. The corpus also
+contains ambiguous, truncated, and prompt-injection controls where the correct
+model behavior is to abstain.
 
-Run deterministic evaluation with no network or configuration:
+Every case defines deterministic finding, action, retry, and confidence
+expectations. Generated behavior uses one of three dispositions:
+
+- `required`: the disclosed evidence supports one concrete generated cause;
+- `allowed`: a supported cause is useful but an abstention is acceptable; or
+- `must_abstain`: the evidence does not justify a concrete generated cause.
+
+Required-cause cases describe incident facts as sets of accepted wording
+alternatives, causal relations whose cause and effect must both survive, claims
+that must not appear, and a citation ceiling. For example, a network case can
+require both `connection refused` and port `5432`, plus a relation from that
+refusal to the failed database connection. This accepts natural wording while
+rejecting fluent restatements such as “invalid input caused a nonzero exit.”
+
+## Deterministic evaluation
+
+Run the entire corpus without a provider, network, or diagnosis configuration:
 
 ```console
 make evaluate
 ```
 
-The JSON result reports each violation plus these separate metrics:
+Regenerate the stable synthetic evidence and its manifest after intentionally
+changing the generator:
 
-- primary-code precision;
-- unsupported generated-claim rate;
-- citation/provenance validity;
-- safe-action rate;
-- retry-advice accuracy;
-- deterministic fingerprint stability; and
-- provider-fallback rate; and
-- generated specificity for provider-invoked cases with required cause
-  concepts.
+```console
+make gen-evaluation-fixtures
+make evaluation-fixtures-check
+```
 
-The JSON result includes `generated_specificity_cases` as that metric's
-denominator. The compact deterministic summary prints specificity as `n/a`
-because it deliberately invokes no provider.
+The check regenerates both into a temporary directory and compares them byte
+for byte. Never add developer logs, credentials, or production job data.
+
+## Focused and repeated runs
+
+Cases carry orthogonal `language.*`, `failure.*`, `format.*`, `lifecycle.*`,
+`source.*`, `context.source`, and control tags. `context.source` identifies a
+case with a checked-in source mapping. A case matches when it has any requested tag;
+exact case names and tags are intersected when both filters are supplied.
+
+```console
+go run ./devel/evaluate --tags language.python --summary
+go run ./devel/evaluate --cases tls_certificate,dns_failure --summary
+go run ./devel/evaluate --tags language.go,language.node --repeat 3 --summary
+```
+
+`--repeat` accepts 1–20 and runs each selected case sequentially. Sequential
+execution avoids turning provider capacity or scheduling into an accidental
+test variable. The result records a one-based iteration for every execution.
+
+## Live model evaluation
 
 Live evaluation is manual and explicit because it may disclose the approved
 fixture projection and consume provider capacity:
@@ -44,20 +70,78 @@ go run ./devel/evaluate \
   --diagnosis-config /absolute/path/diagnosis.yml \
   --profile local-vllm \
   --share metadata,log_content \
+  --repeat 3 \
   --output evaluation-local-vllm.json
 ```
 
 Live mode requires an explicit configuration path and requires the provider by
-default. Use `--allow-fallback` only when measuring fallback behavior. Add
-`log_content` to `--share` only for corpus evidence that already contains a
-sanitized log and the required value-redaction capability. No developer or
-production logs belong in the checked-in corpus.
+default. Use `--allow-fallback` only when intentionally measuring fallback
+behavior. Approve `log_content` only for sanitized corpus evidence that carries
+the configured-value redaction capability. Older immutable fixtures that lack
+that capability are automatically evaluated with metadata only.
 
-A model/runtime release should not be promoted because its prose sounds better.
-It must preserve valid citations and safe actions, avoid unsupported codes,
-meet the generated-specificity expectations, and leave deterministic primary
-findings and retry policy unchanged. Strict JSON Schema proves shape and
-bounded authority, not diagnostic quality; compare candidate models and
-quantized variants with the same corpus. Record the model identifier, runtime
-version, profile limits, corpus commit, and evaluation JSON with
+When the selected profile has `source_context.mode: limited` or `full`, live
+evaluation automatically approves `source_content` and applies that mode and
+the configured symmetric radius to every `context.source` case. The current
+corpus runs all 60 cases and attaches checked-in source to 28 of them; the
+remaining evidence-only cases still run without source. No additional
+`--share` class or source flag is required. Each result records
+`source_context_used`, and the summary reports the number of source-enabled
+executions. Source mappings are repository-relative, strictly bounded, and
+validated by the corpus generator.
+
+To inspect rejected as well as accepted raw model output, capture proposals to
+a separate private file:
+
+```console
+go run ./devel/evaluate \
+  --live \
+  --diagnosis-config /absolute/path/diagnosis.yml \
+  --profile local-vllm \
+  --share metadata,log_content \
+  --allow-fallback \
+  --output evaluation-local-vllm.json \
+  --capture-proposals proposals-local-vllm.json
+```
+
+Proposal-capture schema 3 labels every record with its case and iteration,
+binds it to the companion analysis-evidence ID,
+provider result, parsed proposal when available, and the host acceptance or
+rejection reason. The file can contain complete model output and disclosed
+fixture content. Evaluation results and proposal captures are atomically
+written with user-only permissions and replace an existing file at their
+explicit paths, so repeated runs can use stable filenames. They must not be
+committed.
+
+## Metrics and promotion criteria
+
+Evaluation-result schema 4 records both core and companion analysis-evidence
+IDs and keeps correctness, safety, usefulness, and
+stability separate:
+
+- deterministic precision, citation validity, safe actions, retry accuracy,
+  fingerprint stability, and provider fallback;
+- proposal acceptance and taxonomy accuracy;
+- useful-diagnosis rate for `required` cases;
+- expected-entity preservation and causal-relation completeness;
+- abstention accuracy for `must_abstain` cases;
+- forbidden-claim rate and citation economy; and
+- generated consistency across repeated executions; and
+- the number of executions that received checked-in source context.
+
+Every conditional metric includes its denominator. A metric with no applicable
+cases is reported as `n/a` in the compact summary rather than as a misleading
+zero. Generated consistency compares the accepted/abstained disposition and
+generated code against the first iteration; it does not demand identical
+wording.
+
+A model/runtime should not be promoted because its prose sounds better or
+because its schema acceptance rate is high. It should preserve deterministic
+findings and retry policy, meet the case-level semantic expectations, cite
+economically, abstain on controls, and remain stable under repetition. Compare
+candidate models and quantizations against the same corpus commit and record
+the model identifier, runtime version, profile limits, and evaluation JSON with
 release-candidate evidence.
+
+Strict JSON Schema establishes shape and bounded authority. The host's
+evidence-grounding checks and this corpus establish diagnostic usefulness.

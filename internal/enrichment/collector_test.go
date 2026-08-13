@@ -67,3 +67,27 @@ func TestCollectHonorsCancellationAndRejectsNilContext(t *testing.T) {
 		t.Fatal("Collect(cancelled) error = nil")
 	}
 }
+
+func TestCollectAttributesBoundedCausalMessageLines(t *testing.T) {
+	t.Parallel()
+
+	log := []byte("starting request\nsynchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded\n")
+	core, err := testevidence.Failed("nonzero_exit", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := Collect(t.Context(), core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	index := slices.IndexFunc(evidence.Enrichment, func(item diagnosis.EnrichmentItem) bool {
+		return item.Code == CodeCausalMessage
+	})
+	if index < 0 {
+		t.Fatalf("causal-message enrichment missing: %#v", evidence.Enrichment)
+	}
+	item := evidence.Enrichment[index]
+	if got := string(log[item.ByteStart:item.ByteEnd]); got != "synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded\n" {
+		t.Fatalf("causal-message range = %q", got)
+	}
+}

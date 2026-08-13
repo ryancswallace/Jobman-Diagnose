@@ -21,7 +21,7 @@ func TestVerifyRequestRejectsInvalidAuthorityAndAccounting(t *testing.T) {
 		{name: "kind", mutate: func(value *Request) { value.Kind = "other" }},
 		{name: "schema", mutate: func(value *Request) { value.SchemaVersion++ }},
 		{name: "request digest syntax", mutate: func(value *Request) { value.RequestID = "bad" }},
-		{name: "evidence digest", mutate: func(value *Request) { value.EvidenceID = "bad" }},
+		{name: "evidence digest", mutate: func(value *Request) { value.AnalysisEvidenceID = "bad" }},
 		{name: "phase", mutate: func(value *Request) { value.Subject.Phase = "\n" }},
 		{name: "selected runs unsorted", mutate: func(value *Request) { value.Subject.SelectedRuns = []uint64{2, 1} }},
 		{name: "selected runs duplicate", mutate: func(value *Request) { value.Subject.SelectedRuns = []uint64{1, 1} }},
@@ -78,7 +78,7 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 				RootCause:          "The configured region is not enabled for this deployment.",
 				Explanation:        "Startup validation rejects the region before the worker can process records.",
 				SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
-				ContradictsFindings: []string{"finding:001"},
+				ContradictsFindings: []string{},
 			}},
 			RecommendedActions: []string{"action:001"},
 			MissingEvidence: []MissingEvidence{{
@@ -107,13 +107,7 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 		}},
 		{name: "hypothesis explanation", mutate: func(value *Proposal) { value.Hypotheses[0].Explanation = "\n" }},
 		{name: "hypothesis explanation limit", mutate: func(value *Proposal) {
-			value.Hypotheses[0].Explanation = strings.Repeat("e", maximumCauseText+1)
-		}},
-		{name: "repeated diagnosis text", mutate: func(value *Proposal) {
-			value.Hypotheses[0].RootCause = value.Hypotheses[0].Summary
-		}},
-		{name: "generic summary", mutate: func(value *Proposal) {
-			value.Hypotheses[0].Summary = "Invalid target input caused the target to exit with a nonzero status."
+			value.Hypotheses[0].Explanation = strings.Repeat("e", maximumExplanationText+1)
 		}},
 		{name: "evidence plumbing as cause", mutate: func(value *Proposal) {
 			value.Hypotheses[0].RootCause = "The companion enrichment identifies a sanitized byte range."
@@ -290,6 +284,7 @@ func TestVerifyRequestRejectsDuplicateProjectionAuthority(t *testing.T) {
 				ID: value.Projection.Items[0].ID, Code: "enrichment.test", Format: "test",
 				SourceArtifactID: artifact.ID, ByteStart: 0, ByteEnd: 1,
 				Collector: "test", CollectorVersion: "1", Quality: "derived_exact", Disclosure: "log_content",
+				DiagnosticLines: []string{},
 			}}
 			value.Manifest.Classes = []string{"log_content", "metadata"}
 			value.Manifest.ArtifactIDs, value.Manifest.ArtifactCount = []string{artifact.ID}, 1

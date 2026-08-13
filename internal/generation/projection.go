@@ -18,7 +18,7 @@ import (
 
 var allowedCategories = []string{
 	"application", "history", "launch", "lifecycle", "logging", "notification", "ownership",
-	"policy", "prerequisite", "process", "resource", "state", "storage",
+	"network", "policy", "prerequisite", "process", "resource", "state", "storage",
 }
 
 var allowedHypothesisCodes = []string{
@@ -77,14 +77,14 @@ func Prepare(
 		})
 	}
 	request, err := provider.SealRequest(provider.Request{
-		EvidenceID: evidence.Core.EvidenceID,
+		AnalysisEvidenceID: evidence.AnalysisEvidenceID,
 		Subject: provider.Subject{
 			Phase: evidence.Core.Subject.Phase, Outcome: evidence.Core.Subject.Outcome,
 			SelectedRuns: slices.Clone(evidence.Core.Subject.SelectedRuns),
 		},
 		Projection: projection, Manifest: manifest, Deterministic: deterministic,
 		AllowedCategories:      slices.Clone(allowedCategories),
-		AllowedHypothesisCodes: slices.Clone(allowedHypothesisCodes), AllowedActions: actions,
+		AllowedHypothesisCodes: relevantHypothesisCodes(projection), AllowedActions: actions,
 		Instructions: provider.RequiredInstructions(), MaximumOutputBytes: profile.MaximumOutputBytes,
 	})
 	if err != nil {
@@ -105,6 +105,23 @@ func Prepare(
 		Request: request, ProfileName: profileName, Provider: profile.Provider, Model: profile.Model,
 		Locality: profile.Locality, RequestBytes: uint64(len(encoded)),
 	}, nil
+}
+
+func relevantHypothesisCodes(projection provider.Projection) []string {
+	result := make([]string, 0, len(allowedHypothesisCodes))
+	for _, code := range allowedHypothesisCodes {
+		if provider.RequiresDirectCauseSignal(code) && !provider.DirectCauseSignalSupported(code, projection) {
+			continue
+		}
+		result = append(result, code)
+	}
+	if len(result) == 0 {
+		// Request/schema validation requires a nonempty authority enum even when
+		// the specialized hypothesis array is constrained to empty.
+		return []string{"generated.unknown_target_error"}
+	}
+
+	return result
 }
 
 // Disclosure builds a report manifest after a provider invocation was
@@ -158,7 +175,7 @@ func projectEvidence(
 		}
 		var itemCount, classBytes uint64
 		for _, item := range evidence.Items {
-			if item.Disclosure != class {
+			if item.Disclosure != class || !usefulGenerationItem(item.Code) {
 				continue
 			}
 			observedAt := item.ObservedAt
@@ -222,7 +239,7 @@ func projectEvidence(
 		}
 		if len(projection.Artifacts) != 0 {
 			manifest.Classes = append(manifest.Classes, string(diagnostic.DisclosureLogContent))
-			manifest.ArtifactBytes = contentBytes
+			manifest.ArtifactBytes += contentBytes
 			for _, item := range failureEvidence.Enrichment {
 				if !slices.Contains(manifest.ArtifactIDs, item.SourceArtifactID) {
 					continue
@@ -232,6 +249,7 @@ func projectEvidence(
 					SourceArtifactID: item.SourceArtifactID, ByteStart: item.ByteStart, ByteEnd: item.ByteEnd,
 					Collector: item.Collector.Name, CollectorVersion: item.Collector.Version,
 					Quality: string(item.Quality), Disclosure: string(diagnostic.DisclosureLogContent),
+					DiagnosticLines: projectedDiagnosticLines(evidence.Artifacts, item),
 				}
 				size, err := encodedSize(projected)
 				if err != nil {
@@ -241,6 +259,45 @@ func projectEvidence(
 				manifest.EnrichmentIDs = append(manifest.EnrichmentIDs, item.ID)
 				manifest.EnrichmentBytes += size
 			}
+		}
+	}
+	if slices.Contains(approved, string(diagnosis.DisclosureSourceContent)) &&
+		len(failureEvidence.SourceContext) != 0 {
+		limits, allowed := profile.Disclosure[string(diagnosis.DisclosureSourceContent)]
+		if !allowed {
+			return provider.Projection{}, provider.ProjectionManifest{}, errors.New(
+				"prepare generated diagnosis: source_content is not allowed by the selected profile",
+			)
+		}
+		var sourceCount, contentBytes uint64
+		for _, source := range failureEvidence.SourceContext {
+			if source.Disclosure != diagnosis.DisclosureSourceContent {
+				continue
+			}
+			if sourceCount+1 > limits.MaximumArtifacts || source.ContentBytes > limits.MaximumBytes ||
+				contentBytes > limits.MaximumBytes-source.ContentBytes {
+				return provider.Projection{}, provider.ProjectionManifest{}, errors.New(
+					"prepare generated diagnosis: source_content exceeds the selected profile disclosure limit",
+				)
+			}
+			capturedAt := source.CapturedAt.UTC().Round(0)
+			projection.Artifacts = append(projection.Artifacts, provider.ProjectedArtifact{
+				ID: source.ID, Role: source.Role, Path: source.Path, Language: source.Language,
+				MediaType: source.MediaType, Selection: string(source.Mode), AnchorLine: source.AnchorLine,
+				AnchorReason: source.AnchorReason, StartLine: source.StartLine, EndLine: source.EndLine,
+				TotalLines: source.TotalLines, ByteStart: source.ByteStart, ByteEnd: source.ByteEnd,
+				FileBytes: source.FileBytes, Content: string(source.Data), Encoding: "utf-8",
+				Digest: source.Digest, ContentDigest: source.ContentDigest, CapturedAt: &capturedAt,
+				Quality: string(source.Quality), SelectedBytes: source.ContentBytes,
+				ContentBytes: source.ContentBytes, Disclosure: string(source.Disclosure),
+			})
+			manifest.ArtifactIDs = append(manifest.ArtifactIDs, source.ID)
+			sourceCount++
+			contentBytes += source.ContentBytes
+		}
+		if sourceCount != 0 {
+			manifest.Classes = append(manifest.Classes, string(diagnosis.DisclosureSourceContent))
+			manifest.ArtifactBytes += contentBytes
 		}
 	}
 	manifest.ItemCount = uint64(len(manifest.ItemIDs))
@@ -266,33 +323,161 @@ func projectEvidence(
 	return projection, manifest, nil
 }
 
+func projectedDiagnosticLines(
+	artifacts []diagnostic.Artifact,
+	item diagnosis.EnrichmentItem,
+) []string {
+	for _, artifact := range artifacts {
+		if artifact.ID != item.SourceArtifactID || item.ByteStart >= item.ByteEnd || item.ByteEnd > uint64(len(artifact.Data)) {
+			continue
+		}
+		selected := strings.ToValidUTF8(string(artifact.Data[item.ByteStart:item.ByteEnd]), "�")
+		return selectDiagnosticLines(item.Format, strings.Split(selected, "\n"))
+	}
+
+	return []string{}
+}
+
+func selectDiagnosticLines(format string, lines []string) []string {
+	switch format {
+	case "jvm_exception":
+		return jvmDiagnosticLines(lines)
+	case "python_traceback":
+		return pythonDiagnosticLines(lines)
+	case "go_panic":
+		return firstDiagnosticLine(lines, func(line string) bool { return strings.HasPrefix(line, "panic:") })
+	case "compiler_diagnostic":
+		return firstDiagnosticLine(lines, func(line string) bool { return strings.Contains(strings.ToLower(line), ": error:") })
+	case "causal_message":
+		return firstDiagnosticLine(lines, func(line string) bool { return strings.TrimSpace(line) != "" })
+	default:
+		return []string{}
+	}
+}
+
+func pythonDiagnosticLines(lines []string) []string {
+	result := make([]string, 0, 4)
+	for _, line := range lines {
+		candidate := strings.TrimSpace(line)
+		candidate = strings.TrimLeft(candidate, "|+- ")
+		separator := strings.IndexByte(candidate, ':')
+		if separator <= 0 {
+			continue
+		}
+		class := candidate[:separator]
+		if strings.ContainsAny(class, " \t,\"") || strings.EqualFold(class, "traceback (most recent call last)") {
+			continue
+		}
+		result = appendBoundedDiagnosticLine(result, candidate)
+	}
+
+	return result
+}
+
+func jvmDiagnosticLines(lines []string) []string {
+	result := make([]string, 0, 4)
+	for index, line := range lines {
+		if !strings.HasPrefix(strings.TrimSpace(line), "Caused by:") {
+			continue
+		}
+		result = appendBoundedDiagnosticLine(result, line)
+		frame := firstDiagnosticLine(lines[index+1:], func(candidate string) bool {
+			return strings.HasPrefix(candidate, "at ")
+		})
+		if len(frame) != 0 {
+			result = appendBoundedDiagnosticLine(result, frame[0])
+		}
+	}
+
+	return result
+}
+
+func firstDiagnosticLine(lines []string, matches func(string) bool) []string {
+	for _, line := range lines {
+		if matches(strings.TrimSpace(line)) {
+			return appendBoundedDiagnosticLine([]string{}, line)
+		}
+	}
+
+	return []string{}
+}
+
+func appendBoundedDiagnosticLine(lines []string, value string) []string {
+	value = strings.TrimSpace(value)
+	totalBytes := len(value)
+	for _, line := range lines {
+		totalBytes += len(line)
+	}
+	if value == "" || len(value) > 512 || len(lines) >= 8 || totalBytes > 2048 {
+		return lines
+	}
+
+	return append(lines, value)
+}
+
+func usefulGenerationItem(code string) bool {
+	// A store-local fingerprint cannot explain a target failure, and an
+	// ordinary complete-at-exit resource observation reports usage rather than
+	// a configured limit. Keeping both out of the provider projection reduces
+	// small-model anchoring on causally irrelevant metadata. The deterministic
+	// engine still retains and analyzes the complete evidence bundle.
+	switch code {
+	case diagnostic.CodeSourceContext,
+		diagnostic.CodeJobRevision,
+		diagnostic.CodeJobSubmittedAt,
+		diagnostic.CodeJobClaimedAt,
+		diagnostic.CodeJobStartedAt,
+		diagnostic.CodeJobCompletedAt,
+		diagnostic.CodeRunRevision,
+		diagnostic.CodeRunReservedAt,
+		diagnostic.CodeRunStartedAt,
+		diagnostic.CodeRunCompletedAt,
+		diagnostic.CodeLogStdoutBytes,
+		diagnostic.CodeLogStderrBytes,
+		diagnostic.CodeLifecycleEvent,
+		diagnostic.CodeFailureFingerprint,
+		diagnostic.CodeResourceObservation:
+		return false
+	default:
+		return true
+	}
+}
+
 func projectDeterministic(report diagnosis.Report, manifest provider.ProjectionManifest) []provider.DeterministicCandidate {
 	available := append(slices.Clone(manifest.ItemIDs), manifest.ArtifactIDs...)
 	available = append(available, manifest.EnrichmentIDs...)
 	result := make([]provider.DeterministicCandidate, 0, len(report.Findings))
 	for _, finding := range report.Findings {
-		references := append(slices.Clone(finding.SupportingEvidence), finding.ContradictingEvidence...)
-		if !allAvailable(references, available) {
+		// Target-log signatures confirm that a recognizable structure exists but
+		// intentionally stop short of root-cause analysis. Sending their generic
+		// prose to a small model encourages paraphrase instead of inspection of
+		// the already projected artifact content and enrichment range.
+		if strings.HasPrefix(finding.Code, "target.") {
+			continue
+		}
+		supporting := availableReferences(finding.SupportingEvidence, available)
+		if len(supporting) == 0 {
 			continue
 		}
 		result = append(result, provider.DeterministicCandidate{
 			ID: finding.ID, Code: finding.Code, Category: finding.Category, Summary: finding.Summary,
-			Explanation: finding.Explanation, SupportingEvidence: slices.Clone(finding.SupportingEvidence),
-			ContradictingEvidence: slices.Clone(finding.ContradictingEvidence),
+			Explanation: finding.Explanation, SupportingEvidence: supporting,
+			ContradictingEvidence: availableReferences(finding.ContradictingEvidence, available),
 		})
 	}
 
 	return result
 }
 
-func allAvailable(references, available []string) bool {
+func availableReferences(references, available []string) []string {
+	result := make([]string, 0, len(references))
 	for _, reference := range references {
-		if !slices.Contains(available, reference) {
-			return false
+		if slices.Contains(available, reference) {
+			result = append(result, reference)
 		}
 	}
 
-	return true
+	return result
 }
 
 func encodedSize(value any) (uint64, error) {

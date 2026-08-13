@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ type reportView struct {
 	items            map[string]diagnostic.Item
 	artifacts        map[string]diagnostic.Artifact
 	enrichment       map[string]diagnosis.EnrichmentItem
+	sourceContext    map[string]diagnosis.SourceContext
 	evidenceAliases  map[string]string
 	evidenceOrder    []string
 	findingAliases   map[string]string
@@ -47,6 +49,7 @@ func newReportView(report diagnosis.Report, evidence diagnosis.FailureEvidence) 
 		items:           make(map[string]diagnostic.Item, len(evidence.Core.Items)),
 		artifacts:       make(map[string]diagnostic.Artifact, len(evidence.Core.Artifacts)),
 		enrichment:      make(map[string]diagnosis.EnrichmentItem, len(evidence.Enrichment)),
+		sourceContext:   make(map[string]diagnosis.SourceContext, len(evidence.SourceContext)),
 		evidenceAliases: make(map[string]string, len(report.Citations)),
 		findingAliases:  make(map[string]string, len(report.Findings)),
 	}
@@ -61,6 +64,9 @@ func newReportView(report diagnosis.Report, evidence diagnosis.FailureEvidence) 
 	}
 	for _, item := range evidence.Enrichment {
 		view.enrichment[item.ID] = item
+	}
+	for _, source := range evidence.SourceContext {
+		view.sourceContext[source.ID] = source
 	}
 	view.assignAliases()
 	view.collectJobContext()
@@ -169,6 +175,9 @@ func (view reportView) evidencePriority(id string) int {
 	if _, ok := view.artifacts[id]; ok {
 		return 0
 	}
+	if _, ok := view.sourceContext[id]; ok {
+		return 1
+	}
 	if _, ok := view.enrichment[id]; ok {
 		return 1
 	}
@@ -270,8 +279,24 @@ func (view reportView) evidenceDetail(id string) string {
 	if artifact, ok := view.artifacts[id]; ok {
 		return qualityText(artifact.Quality) + " — " + artifactDetail(artifact)
 	}
+	if source, ok := view.sourceContext[id]; ok {
+		return qualityText(source.Quality) + " — " + sourceContextDetail(source)
+	}
 
 	return strings.TrimSuffix(citation.Summary, ".")
+}
+
+func sourceContextDetail(source diagnosis.SourceContext) string {
+	detail := "Current source " + filepath.Base(source.Path)
+	if source.Mode == diagnosis.SourceContextFull {
+		detail += ": full file, lines 1-" + strconv.FormatUint(source.TotalLines, 10)
+	} else {
+		detail += ": lines " + strconv.FormatUint(source.StartLine, 10) + "-" +
+			strconv.FormatUint(source.EndLine, 10) + " around line " + strconv.FormatUint(source.AnchorLine, 10)
+	}
+	detail += "; may differ from the code that ran"
+
+	return detail
 }
 
 //nolint:cyclop // Evidence codes are deliberately rendered through an explicit, safe display allowlist.

@@ -179,7 +179,7 @@ func assertFailureCode(t *testing.T, err error, want provider.FailureCode) {
 }
 
 func TestCommandBridgeHelper(_ *testing.T) {
-	if os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL") != "2" {
+	if os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL") != "3" {
 		return
 	}
 	if os.Getenv("UNRELATED_PROVIDER_SECRET") != "" {
@@ -237,8 +237,8 @@ func TestCommandBridgeHelper(_ *testing.T) {
 func bridgeRequest(t *testing.T) provider.Request {
 	t.Helper()
 	request, err := provider.SealRequest(provider.Request{
-		EvidenceID: "sha256:" + strings.Repeat("a", 64),
-		Subject:    provider.Subject{Phase: "completed", Outcome: "failure", SelectedRuns: []uint64{1}},
+		AnalysisEvidenceID: "sha256:" + strings.Repeat("a", 64),
+		Subject:            provider.Subject{Phase: "completed", Outcome: "failure", SelectedRuns: []uint64{1}},
 		Projection: provider.Projection{Items: []provider.ProjectedItem{{
 			ID: "ev:run:1:exit", Code: "jobman.run.exit.code", Value: json.RawMessage(`7`),
 			Quality: "observed", Disclosure: "metadata",

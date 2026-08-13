@@ -152,11 +152,11 @@ workflow-check: tool-actionlint ## Validate GitHub Actions workflows.
 .PHONY: shellcheck
 shellcheck: ## Statically analyze repository shell scripts.
 	@if command -v shellcheck >/dev/null 2>&1; then \
-		find devel -type f -name '*.sh' -print0 | xargs -0 shellcheck; \
+		find devel examples -type f -name '*.sh' -print0 | xargs -0 shellcheck; \
 	elif $(DOCKER) info >/dev/null 2>&1; then \
 		$(DOCKER) run --rm -v '$(CURDIR):/mnt:ro' \
 			koalaman/shellcheck-alpine:v0.11.0 \
-			$$(find devel -type f -name '*.sh' -print); \
+			$$(find devel examples -type f -name '*.sh' -print); \
 	else \
 		echo 'shellcheck requires shellcheck or a running Docker daemon.' >&2; \
 		exit 2; \
@@ -222,15 +222,20 @@ evaluate: evaluation-fixtures-check ## Run the checked-in deterministic diagnosi
 
 .PHONY: gen-evaluation-fixtures
 gen-evaluation-fixtures: ## Regenerate synthetic nonsecret diagnostic evaluation evidence.
-	$(GO) run ./devel/evaluationfixtures -output testdata/evaluation/evidence
+	$(GO) run ./devel/evaluationfixtures \
+		-output testdata/evaluation/evidence \
+		-manifest testdata/evaluation/manifest.json
 
 .PHONY: evaluation-fixtures-check
 evaluation-fixtures-check: ## Verify checked-in synthetic evidence matches its generator.
 	@set -eu; \
 	temporary=$$(mktemp -d "$${TMPDIR:-/tmp}/jobman-diagnose-fixtures.XXXXXXXXXX"); \
 	trap 'rm -rf "$$temporary"' EXIT HUP INT TERM; \
-	$(GO) run ./devel/evaluationfixtures -output "$$temporary"; \
-	diff -ru testdata/evaluation/evidence "$$temporary"
+	$(GO) run ./devel/evaluationfixtures \
+		-output "$$temporary/evidence" \
+		-manifest "$$temporary/manifest.json"; \
+	diff -ru testdata/evaluation/evidence "$$temporary/evidence"; \
+	diff -u testdata/evaluation/manifest.json "$$temporary/manifest.json"
 
 .PHONY: build
 build: ## Build the companion binary.

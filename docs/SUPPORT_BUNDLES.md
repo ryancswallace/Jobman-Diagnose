@@ -21,14 +21,14 @@ The path is created with private permissions, published atomically, and never
 overwritten. The normal diagnosis is still written to standard output. JSON
 mode remains a clean report stream; the archive path is not injected into JSON.
 
-Schema-1 archives contain one fixed root directory and these members:
+Schema-2 archives contain one fixed root directory and these members:
 
 | File | Contents |
 | --- | --- |
 | `INVENTORY.txt` | Human-readable member list and sharing caution |
 | `manifest.json` | Bundle IDs, member descriptions, disclosure labels, sizes, and SHA-256 values |
 | `evidence.json` | Exact sealed, sanitized core evidence selected for diagnosis |
-| `enrichment.json` | Companion enrichment IDs, collectors, and exact source ranges |
+| `analysis-context.json` | Companion enrichment plus any explicitly selected point-in-time source snapshot |
 | `diagnosis.json` | Validated diagnosis report |
 | `disclosure.json` | Exact optional-provider disclosure manifest |
 | `capabilities.json` | Jobman capability and omission facts |
@@ -40,6 +40,6 @@ reproducible. The manifest hashes every member other than itself.
 
 The writer never includes provider credentials, environment values, a Jobman
 database, raw state files, or the store fingerprint key. The selected evidence
-may include commands, arguments, paths, or bounded logs when the invocation
-explicitly collected them. Review `evidence.json` before sending an archive
-outside your security boundary.
+may include commands, arguments, paths, bounded logs, or unredacted source text
+when the invocation explicitly collected them. Review `evidence.json` and
+`analysis-context.json` before sending an archive outside your security boundary.

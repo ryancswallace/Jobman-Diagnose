@@ -145,7 +145,7 @@ func validateActionSubjects(actions []Action, subject diagnostic.Subject) error 
 //nolint:cyclop,gocognit // This security boundary cross-checks every report reference and disclosed ID against one source.
 func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 	core := evidence.Core
-	available := make(map[string]string, len(core.Items)+len(core.Artifacts)+len(evidence.Enrichment))
+	available := make(map[string]string, len(core.Items)+len(core.Artifacts)+len(evidence.Enrichment)+len(evidence.SourceContext))
 	for _, item := range core.Items {
 		available[item.ID] = item.Code
 	}
@@ -156,6 +156,11 @@ func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 	for _, item := range evidence.Enrichment {
 		available[item.ID] = item.Code
 		enrichment[item.ID] = item
+	}
+	sourceContext := make(map[string]SourceContext, len(evidence.SourceContext))
+	for _, source := range evidence.SourceContext {
+		available[source.ID] = source.Role
+		sourceContext[source.ID] = source
 	}
 	cited := make(map[string]struct{}, len(report.Citations))
 	for _, citation := range report.Citations {
@@ -170,6 +175,11 @@ func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 			if citation.Kind != "enrichment" || citation.SourceEvidenceID != item.SourceArtifactID ||
 				citation.ByteStart != item.ByteStart || citation.ByteEnd != item.ByteEnd {
 				return fmt.Errorf("validate diagnosis evidence: enrichment citation %q has invalid provenance", citation.EvidenceID)
+			}
+		} else if _, ok := sourceContext[citation.EvidenceID]; ok {
+			if citation.Kind != "artifact" || citation.SourceEvidenceID != "" ||
+				citation.ByteStart != 0 || citation.ByteEnd != 0 {
+				return fmt.Errorf("validate diagnosis evidence: source citation %q has invalid provenance", citation.EvidenceID)
 			}
 		} else if citation.SourceEvidenceID != "" || citation.ByteStart != 0 || citation.ByteEnd != 0 {
 			return fmt.Errorf("validate diagnosis evidence: core citation %q has enrichment provenance", citation.EvidenceID)
@@ -188,9 +198,12 @@ func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 	for _, item := range core.Items {
 		coreItems[item.ID] = struct{}{}
 	}
-	coreArtifacts := make(map[string]struct{}, len(core.Artifacts))
+	availableArtifacts := make(map[string]struct{}, len(core.Artifacts)+len(evidence.SourceContext))
 	for _, artifact := range core.Artifacts {
-		coreArtifacts[artifact.ID] = struct{}{}
+		availableArtifacts[artifact.ID] = struct{}{}
+	}
+	for _, source := range evidence.SourceContext {
+		availableArtifacts[source.ID] = struct{}{}
 	}
 	for _, id := range report.Disclosure.ItemIDs {
 		if _, ok := coreItems[id]; !ok {
@@ -198,7 +211,7 @@ func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 		}
 	}
 	for _, id := range report.Disclosure.ArtifactIDs {
-		if _, ok := coreArtifacts[id]; !ok {
+		if _, ok := availableArtifacts[id]; !ok {
 			return fmt.Errorf("validate diagnosis evidence: disclosed artifact %q is unavailable", id)
 		}
 	}
@@ -345,7 +358,7 @@ func validateVersions(versions Versions) error {
 	if versions.CompanionVersion == "" || versions.EngineVersion == "" ||
 		versions.JobmanVersion == "" || versions.EvidenceSchemaVersion < 1 ||
 		versions.ReportSchemaVersion != SchemaVersion || versions.GenerationRequestSchemaVersion < 0 ||
-		versions.GenerationRequestSchemaVersion > 2 || versions.ProposalSchemaVersion < 0 ||
+		versions.GenerationRequestSchemaVersion > 4 || versions.ProposalSchemaVersion < 0 ||
 		versions.ProposalSchemaVersion > 2 || !validGenerationProtocolVersions(
 		versions.GenerationRequestSchemaVersion,
 		versions.ProposalSchemaVersion,
@@ -359,7 +372,8 @@ func validateVersions(versions Versions) error {
 func validGenerationProtocolVersions(requestVersion, proposalVersion int) bool {
 	return requestVersion == 0 && proposalVersion == 0 ||
 		requestVersion == 1 && proposalVersion == 1 ||
-		requestVersion == 2 && (proposalVersion == 1 || proposalVersion == 2)
+		requestVersion == 2 && (proposalVersion == 1 || proposalVersion == 2) ||
+		(requestVersion == 3 || requestVersion == 4) && proposalVersion == 2
 }
 
 func validateReportContents(report Report) error {

@@ -5,8 +5,8 @@ provider credential. `--deterministic` makes that choice explicit. Even when
 `--diagnosis-config` names a malformed file, deterministic mode does not open
 it.
 
-Generated augmentation is activated by `--ai`, `-a`, `--ai-logs`, or
-`--profile NAME`. `--ai` uses the configured default profile and approves the
+Generated augmentation is activated by `--ai`, `-a`, `--ai-logs`,
+`--ai-source none|limited|full`, or `--profile NAME`. `--ai` uses the configured default profile and approves the
 bounded `metadata`, `command`, `path`, and `environment_name` classes for that
 invocation. Command evidence preserves executable and ordered argument
 boundaries; environment evidence contains names and roles but never values or
@@ -109,6 +109,12 @@ profiles:
       environment_name:
         maximum_items: 256
         maximum_bytes: 131072
+      source_content:
+        maximum_artifacts: 1
+        maximum_bytes: 262144
+    source_context:
+      mode: limited
+      lines_before_and_after: 20
     credential:
       environment: PROVIDER_API_KEY
 ```
@@ -122,8 +128,8 @@ through 256 KiB.
 `disclosure.metadata` is mandatory and requires `maximum_items` and
 `maximum_bytes`. Optional `command`, `path`, and `environment_name` classes
 bound typed execution-context items with `maximum_items` and `maximum_bytes`;
-optional `log_content` requires
-`maximum_artifacts` and `maximum_bytes`:
+optional `log_content` and `source_content` require `maximum_artifacts` and
+`maximum_bytes`. A `source_content` byte ceiling may not exceed 1 MiB:
 
 ```yaml
     disclosure:
@@ -142,6 +148,9 @@ optional `log_content` requires
       log_content:
         maximum_artifacts: 2
         maximum_bytes: 65536
+      source_content:
+        maximum_artifacts: 1
+        maximum_bytes: 262144
 ```
 
 These are hard ceilings, not truncation requests. If the approved evidence
@@ -149,8 +158,8 @@ exceeds a profile limit, the provider is not invoked and the command reports a
 policy error. Reduce core collection (`--run`, `--log-bytes`, or omit
 `--all-runs`) or deliberately revise the profile.
 
-The AI activation flag and profile are intersected. A profile allowance alone
-never sends a class. `--ai` and `--profile` approve metadata plus bounded
+The AI activation flag and profile are intersected. A disclosure allowance
+alone never sends a class. `--ai` and `--profile` approve metadata plus bounded
 command, path, environment-name, and system context; selecting a non-default profile is
 therefore concise:
 
@@ -160,8 +169,8 @@ jobman-diagnose --from-evidence evidence.json \
 ```
 
 `--share` approves additional classes and accepts repeated or comma-separated
-values. Schema 2 supports `metadata`, `command`, `path`, `environment_name`, and
-`log_content`. For a live job,
+values. Schema 2 supports `metadata`, `command`, `path`, `environment_name`,
+`log_content`, and `source_content`. For a live job,
 `--share log_content` automatically changes the default log collection mode to
 `tail`; an explicit `--logs metadata` or `--logs none` conflicts. `--ai-logs`
 combines AI activation, execution-context approval, tail collection, and
@@ -180,6 +189,88 @@ the collector, traceback structure, or byte range as the root cause.
 Use `--log-bytes` to reduce or enlarge the bounded tail. Log content is never a
 persistent configuration default; each invocation must use `--ai-logs` or
 `--share log_content`.
+
+## Source-code context
+
+Source text is never included by a `source_content` disclosure allowance alone.
+It requires either an enabled `source_context` policy on the selected profile
+or one of these explicit per-invocation overrides:
+
+```console
+# Share a symmetric limited window (20 lines per side without a profile radius).
+jobman diagnose --ai-logs --ai-source limited JOB
+
+# Share the exact complete current file, without truncation.
+jobman diagnose --ai-logs --ai-source full JOB
+
+# Suppress a selected profile's source default for this invocation.
+jobman diagnose --ai-logs --ai-source none JOB
+```
+
+Configure a persistent default independently for each profile:
+
+```yaml
+profiles:
+  local-development:
+    # Provider, model, and other limits omitted here.
+    disclosure:
+      metadata:
+        maximum_items: 256
+        maximum_bytes: 131072
+      source_content:
+        maximum_artifacts: 1
+        maximum_bytes: 262144
+    source_context:
+      mode: limited
+      lines_before_and_after: 30
+
+  local-full-source:
+    # source_content disclosure is also required.
+    source_context:
+      mode: full
+
+  hosted-no-source:
+    source_context:
+      mode: none
+```
+
+`source_context` is optional and defaults to no source sharing. `mode` is
+`none`, `limited`, or `full`. Limited mode requires
+`lines_before_and_after`, which is the number selected independently on each
+side of the anchor and must be between 1 and 1,048,576. Full and none modes do
+not accept that field. Limited or full mode requires a bounded
+`disclosure.source_content` entry; none does not. The policy takes effect only
+after AI is explicitly activated—it never makes an ordinary deterministic
+diagnosis invoke a provider. `--ai-source` has higher precedence than the
+profile: `none` suppresses its source default, while `limited` or `full`
+overrides its mode. An explicit limited override uses the profile's configured
+radius when that profile also defaults to limited; otherwise it uses 20 lines
+on each side.
+
+The companion infers a source path only when the recorded direct target
+command contains exactly one argument or executable with a supported source
+extension. Relative inferred paths are resolved against the recorded target
+working directory. Shell snippets, extensionless executables, and commands
+that name multiple source files require `--source-file PATH`. An explicit
+relative path is resolved against the diagnosis process's current directory.
+
+Limited mode selects the resolved symmetric radius, clipped at the file
+boundaries. The anchor is chosen in this order: `--source-line N`, the
+last matching source location in a selected Python/JVM/compiler-style runtime
+log, then line 1. `--source-line` is invalid with full mode. The selected
+window must fit `source_content.maximum_bytes`. Full mode requires the entire
+file to fit that ceiling. Both modes reject an empty file, a final-path
+symlink, a non-regular file, invalid UTF-8, NUL bytes, concurrent replacement,
+and files larger than the 1 MiB hard limit.
+
+Source is read by the companion at diagnosis time. Jobman does not collect,
+redact, or attest to it. The snapshot can differ from the code that ran and can
+contain credentials, tokens, private algorithms, prompt-injection text, or
+other sensitive data. Review the file before opting in, especially before
+enabling a persistent default on a remote profile. Pair source with
+`--ai-logs`: source context can explain a cited
+runtime signal, but host validation never lets source text alone establish a
+generated failure cause.
 
 ## Inspection commands
 
@@ -337,7 +428,7 @@ The child receives one `jobman.diagnosis_generation_request` schema-2 JSON
 value on standard input and must write one raw
 `jobman.diagnosis_proposal` schema-2 JSON value to standard output. Its
 environment is minimal and does not inherit ambient variables. The bridge sets
-`JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=2`, `JOBMAN_DIAGNOSE_PROVIDER_MODEL`, and
+`JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=3`, `JOBMAN_DIAGNOSE_PROVIDER_MODEL`, and
 `JOBMAN_DIAGNOSE_REQUEST_ID`; an explicitly referenced credential is available
 only as `JOBMAN_DIAGNOSE_PROVIDER_CREDENTIAL`. Standard output, standard error,
 wall time, and the Unix process group are bounded.
