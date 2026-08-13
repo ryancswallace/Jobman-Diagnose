@@ -86,3 +86,54 @@ func TestWriteAtomicRejectsInvalidInputsAndCleansUp(t *testing.T) {
 		t.Fatalf("temporary files remain: %v", entries)
 	}
 }
+
+func TestWriteAtomicReplacePreservesPrivacyAndExistingFileOnFailure(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	destination := filepath.Join(directory, "evaluation.json")
+	// #nosec G306 -- the fixture is deliberately public to verify that replacement restores privacy.
+	if err := os.WriteFile(destination, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteAtomicReplace(destination, func(writer io.Writer) error {
+		_, err := writer.Write([]byte("new"))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(destination) // #nosec G304 -- test-owned path.
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "new" || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+		t.Fatalf("replacement contents/mode = %q / %o", contents, info.Mode().Perm())
+	}
+	sentinel := errors.New("replacement failed")
+	if replaceErr := WriteAtomicReplace(destination, func(writer io.Writer) error {
+		if _, writeErr := writer.Write([]byte("partial")); writeErr != nil {
+			return writeErr
+		}
+		return sentinel
+	}); !errors.Is(replaceErr, sentinel) {
+		t.Fatalf("replacement callback error = %v", replaceErr)
+	}
+	contents, err = os.ReadFile(destination) // #nosec G304 -- test-owned path.
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "new" {
+		t.Fatalf("failed replacement changed destination to %q", contents)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "evaluation.json" {
+		t.Fatalf("replacement left temporary files: %v", entries)
+	}
+}

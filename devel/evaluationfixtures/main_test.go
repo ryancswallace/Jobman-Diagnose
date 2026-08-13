@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestGenerateEvaluationFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 9 {
+	if len(entries) != 50 {
 		t.Fatalf("fixture count = %d", len(entries))
 	}
 	prior := ""
@@ -67,13 +68,43 @@ func TestGenerateEvaluationFixturesRejectsInvalidOutput(t *testing.T) {
 	}
 }
 
+func TestEvaluationCorpusSourceMappingsResolve(t *testing.T) {
+	t.Parallel()
+
+	corpus := evaluationCorpus()
+	sourceCases := 0
+	for _, test := range corpus.Cases {
+		if test.Source == "" {
+			continue
+		}
+		sourceCases++
+		if !slices.Contains(test.Tags, "context.source") {
+			t.Fatalf("source case %q lacks context.source tag", test.Name)
+		}
+		path := filepath.Join("..", "..", filepath.FromSlash(test.Source))
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("source case %q path %q: %v", test.Name, path, err)
+		}
+	}
+	if sourceCases != 28 {
+		t.Fatalf("source case count = %d", sourceCases)
+	}
+}
+
 func TestExecuteEvaluationFixtures(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	var stderr bytes.Buffer
-	if status := execute([]string{"-output", filepath.Join(root, "fixtures")}, &stderr); status != 0 {
+	manifest := filepath.Join(root, "manifest.json")
+	if status := execute([]string{
+		"-output", filepath.Join(root, "fixtures"), "-manifest", manifest,
+	}, &stderr); status != 0 {
 		t.Fatalf("execute(valid) = %d, stderr %q", status, stderr.String())
+	}
+	if _, err := os.Stat(manifest); err != nil {
+		t.Fatalf("generated manifest: %v", err)
 	}
 	for _, arguments := range [][]string{{"-unknown"}, {"positional"}} {
 		stderr.Reset()

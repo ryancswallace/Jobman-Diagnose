@@ -1,4 +1,4 @@
-// Package securefile writes explicit exports privately and without overwrite.
+// Package securefile writes explicit exports privately with atomic publication.
 package securefile
 
 import (
@@ -12,6 +12,17 @@ import (
 // WriteAtomic creates destination with private permissions, atomically, and
 // fails when the destination already exists.
 func WriteAtomic(destination string, write func(io.Writer) error) (returned error) {
+	return writeAtomic(destination, write, false)
+}
+
+// WriteAtomicReplace creates or atomically replaces destination with a new
+// private file. A callback or synchronization failure leaves an existing
+// destination unchanged.
+func WriteAtomicReplace(destination string, write func(io.Writer) error) (returned error) {
+	return writeAtomic(destination, write, true)
+}
+
+func writeAtomic(destination string, write func(io.Writer) error, replace bool) (returned error) {
 	if destination == "" || destination == "-" {
 		return errors.New("write private file: destination must be a file path")
 	}
@@ -42,6 +53,13 @@ func WriteAtomic(destination string, write func(io.Writer) error) (returned erro
 	closeErr := temporary.Close()
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 		return fmt.Errorf("write private file: %w", err)
+	}
+	if replace {
+		if err := os.Rename(temporaryPath, absolute); err != nil {
+			return fmt.Errorf("write private file: replace destination: %w", err)
+		}
+
+		return nil
 	}
 	if err := os.Link(temporaryPath, absolute); err != nil {
 		if errors.Is(err, os.ErrExist) {

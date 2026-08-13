@@ -16,6 +16,8 @@ coverage.*
 !/diagnosis.example.yaml
 /evidence*.json
 /report*.json
+/evaluation*.json
+/proposals*.json
 /diagnosis-support*.tar.gz
 
 # Workspace and editor files
