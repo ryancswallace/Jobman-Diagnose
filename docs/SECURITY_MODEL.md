@@ -12,6 +12,8 @@ executes a suggested action, or starts a retry.
   semantic verification.
 - Target stdout and stderr are untrusted bytes. They may contain secrets,
   terminal control text, prompt injection, or misleading error messages.
+- Explicitly selected current source text is untrusted and unredacted. It may
+  contain secrets, prompt injection, or code that differs from what the run executed.
 - Every generator response is untrusted proposal data even when a backend
   enforces JSON Schema.
 - Human report text is presentation, not an executable command vector.
@@ -33,7 +35,8 @@ specifications (including ordered arguments), filesystem context, and
 environment variable names/roles, plus allowlisted point-in-time capacity and
 cgroup constraints from core. System context contains no hostname, mount or
 cgroup path, process list, or system log. A profile must allow each class before
-projection. Log content is separately opt-in and bounded.
+projection. Log content is separately opt-in and bounded. Source content is a
+second, independent opt-in collected by the companion at diagnosis time.
 The companion does not echo artifact bytes in the human report. Human output
 may render allowlisted typed values from the already sealed evidence, including
 sanitized command arguments, outcomes, exit details, resource observations,
@@ -42,13 +45,29 @@ evidence IDs and controlled citation summaries remain unchanged in JSON.
 Generated summaries are labeled advisory. To avoid useless generic diagnoses,
 proposal schema 2 bounds diagnostic text, and fixed instructions permit short
 fragments from an explicitly approved projection, such as an exception name,
-setting, path, endpoint, or rejected value. Those instructions forbid complete
+setting, path, endpoint, or rejected value. Bounded diagnostic-line
+enrichments deterministically copy only already disclosed source ranges; they
+add structure, not bytes or authority. Those instructions forbid complete
 artifact reproduction, secrets, and instruction-like target text. Generated
 prose is still untrusted and can repeat sensitive text that escaped core
 redaction, so users must review both logs and reports before sharing them.
 Contextual recommendations are selected from fixed host-authored text by a
 validated controlled hypothesis code; model output still cannot introduce
-commands, URLs, tools, or execution vectors.
+commands, invented links, tools, or execution vectors. It may reproduce a
+bounded failing endpoint from cited evidence as diagnostic data.
+
+The model may return at most one generated root cause. Host validation requires
+the model's cited evidence to retain the exact direct signal before accepting
+high-impact causal classes such as resource pressure, application defect,
+missing or unavailable dependency, access denial, external-service failure, or
+transient infrastructure. Routine complete-at-exit resource usage and
+store-local fingerprints are not sent to the generator. These controls prevent
+ordinary telemetry from becoming an unsupported exhaustion claim while leaving
+the full evidence available to deterministic analysis and local report output.
+They also reject substitutions such as turning a TLS certificate failure into
+connection refusal, and require a visible endpoint when the disclosed failure
+identifies one. An explicit statement that the log was truncated before its
+terminal cause removes generated-cause authority and forces abstention.
 
 Core failure fingerprints are HMAC values created with a private key held in
 the Jobman state store. The key never enters evidence or this process. Command
@@ -61,15 +80,18 @@ Deterministic mode opens no diagnosis configuration, resolves no credential,
 invokes no provider, and performs no network operation. Generated augmentation
 requires all of the following:
 
-- explicit per-invocation activation through `--ai`, `-a`, `--ai-logs`, or
-  `--profile NAME`;
+- explicit per-invocation activation through `--ai`, `-a`, `--ai-logs`,
+  `--ai-source none|limited|full`, or `--profile NAME`;
 - a strict schema-2 configuration resolved from an explicit override or the
   platform per-user Jobman configuration directory;
 - a strict profile allowance for each disclosure class; and
-- matching per-invocation approval, with metadata, command, path, and
+- matching effective approval, with metadata, command, path, and
   environment-name context implied by explicit AI activation, bounded system
   context requested automatically for a live job, and log content requiring `--ai-logs` or
-  `--share log_content`.
+  `--share log_content`; source content separately requires either an enabled
+  profile `source_context` default or `--ai-source limited|full`, plus a
+  `source_content` profile allowance. `--ai-source none` suppresses the profile
+  default for one invocation.
 
 For live evidence, log-content approval automatically requests a bounded tail;
 an explicit conflicting log mode is rejected. Log content additionally
@@ -77,6 +99,23 @@ requires the sealed core capability `configured_value_redaction_v1`.
 That capability proves a value-aware configured redaction rule was active; it
 does not prove that arbitrary output contains no secrets. Review evidence
 before authorizing disclosure.
+
+Source collection accepts one supported UTF-8 regular file, rejects a final
+symbolic link and concurrent replacement, and enforces a 1 MiB hard ceiling.
+Limited mode seals exact line and byte bounds for a continuous window; full
+mode fails rather than truncating. The snapshot has `point_in_time` quality and
+whole-file and selected-content digests, but these prove only what the
+companion read during diagnosis. They do not prove which bytes Jobman executed.
+Source is not passed through core configured-value redaction, so users must
+review it before disclosure. Host validation requires a direct runtime log
+signal and citation even when source text is also cited; source strings or
+comments cannot independently authorize a generated cause.
+
+A profile source default is a persistent disclosure choice, not persistent AI
+activation. It is consulted only after an AI flag or profile selection activates
+generation. Because source is unredacted, users should reserve enabled defaults
+for profiles whose locality and trust boundary are appropriate, and use
+`jobman diagnose profiles` to audit the effective default mode and radius.
 
 System context is collector-host, point-in-time metadata rather than a durable
 per-run measurement. Linux cgroup event counters may include other processes
@@ -96,8 +135,8 @@ fails.
 
 Projected values remain typed data and are sent separately from fixed system
 instructions. Every request says that projected values and artifacts are
-untrusted data, forbids tools, commands, URLs, mutations, and retry verdicts,
-and supplies a strict response schema.
+untrusted data, forbids tools, commands, invented links, mutations, and retry
+verdicts, and supplies a strict response schema.
 
 Host validation remains authoritative after backend schema enforcement. It
 rejects duplicate keys, trailing data, excessive nesting or size, unknown
@@ -106,11 +145,15 @@ action IDs outside the deterministic catalog, repeated diagnosis fields,
 known generic exit restatements, and evidence-collection metadata presented as
 a root cause. A proposal can append an
 uncalibrated hypothesis, reorder existing action IDs, or name missing evidence.
-It cannot create a fact, action, command, URL, retry decision, or lifecycle
-operation. Deterministic findings remain primary and deterministic retry advice
-is never replaced.
+It cannot create a fact, action, command, link, retry decision, or lifecycle
+operation; a cited endpoint remains evidence rather than an action.
+Deterministic findings remain primary and deterministic retry advice is never
+replaced.
 
-Generation-request schema 2 derives a response schema from the sealed request.
+Generation-request schema 4 derives a response schema from the sealed request
+and may include bounded traceback, exception-group, compiler, panic, or causal
+diagnostic lines deterministically selected from an already disclosed
+enrichment byte range. Those lines remain untrusted data.
 It constrains the model to the exact request ID and request-specific hypothesis,
 category, evidence, finding, and action catalogs before decoding. The host
 reconstructs that derived schema during request verification and rejects any
@@ -169,9 +212,17 @@ publish with a no-overwrite hard link. A destination race therefore fails
 instead of replacing existing data. Evidence and reports can still contain
 sensitive operational metadata and should be retained only as needed. A
 support bundle contains only selected sealed evidence, attributed enrichment,
-the report, disclosure, capability, and build metadata. It excludes provider
+explicitly selected source context, the report, disclosure, capability, and
+build metadata. It excludes provider
 credentials, environment values, database files, and the fingerprint key;
 `--bundle-dry-run` lists every member without creating the archive.
+
+The development-only evaluation runner has a different lifecycle for its
+repeatable experiment artifacts: explicit `--output` and
+`--capture-proposals` paths are atomically replaced with newly written private
+files. The previous file remains intact if encoding, synchronization, or close
+fails before publication. This exception does not apply to runtime evidence,
+reports, or support bundles.
 
 Report vulnerabilities privately using the process in the repository root
 [`SECURITY.md`](../SECURITY.md).

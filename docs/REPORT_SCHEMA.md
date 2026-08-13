@@ -11,7 +11,7 @@ The machine document kind is `jobman.diagnosis_report`; `schema_version` is
 | `report_id` | SHA-256 identity of normalized semantic report content |
 | `generated_at` | UTC presentation timestamp, excluded from semantic identity |
 | `core_evidence_id` | Exact sealed source evidence identity |
-| `analysis_evidence_id` | Identity of core evidence plus attributed companion enrichment |
+| `analysis_evidence_id` | Identity of core evidence plus attributed companion enrichment and selected source context |
 | `versions` | Companion, engine, Jobman, evidence, report, generation-request, and proposal versions |
 | `analyzers` | Sorted name/version descriptors for rules and contributing collectors |
 | `generators` | Selected provider/model/profile/locality when invocation was attempted |
@@ -21,7 +21,7 @@ The machine document kind is `jobman.diagnosis_report`; `schema_version` is
 | `findings` | Controlled code, category, severity, explanation, confidence, analyzer, and supporting/contradicting references |
 | `actions` | Recommendations with `none` or allowlisted `read_only_argv` execution class |
 | `retry` | Verdict, current Jobman policy, reasons, confidence, evidence, and optional earliest time |
-| `citations` | Core references or enrichment with source artifact and exact byte range |
+| `citations` | Core or companion artifact references, or enrichment with source artifact and exact byte range |
 | `missing_evidence` | Facts that could materially improve confidence |
 | `warnings` | Consistency, trust, provider, or security limitations |
 | `disclosure` | Exact optional-generator invocation and projection provenance |
@@ -119,7 +119,7 @@ When invocation is attempted, the manifest records locality (`local` or
 classes, exact item, artifact, and enrichment IDs, counts, artifact and
 enrichment bytes, encoded request
 bytes, and projected redaction-notice count. The generation request protocol
-version is 2 and the current proposal protocol version is 2. The decoder
+version is 4 and the current proposal protocol version is 2. The decoder
 retains schema-1 proposal provenance in historical reports. These values
 describe the request that may have reached the provider even if the provider
 failed or its proposal was rejected.

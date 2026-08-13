@@ -5,6 +5,68 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Changed
+
+- Added profile-level `source_context` defaults and
+  `--ai-source none|limited|full` overrides for disabled, symmetric limited,
+  or full-file source sharing, including configurable lines on each side of
+  the failure anchor.
+- Extended live corpus evaluation to honor profile source defaults, attach 28
+  checked-in source mappings while still running all 60 cases, and report
+  source use per result and in aggregate.
+- Made development evaluation results and proposal captures atomically replace
+  existing private files so repeated runs can reuse stable output paths.
+- Added source-code context with exact
+  line/byte provenance, direct-command inference, `--source-file` and
+  `--source-line` controls, strict profile limits, provider projection,
+  citations, human disclosure, and support-bundle retention.
+- Upgraded generation requests to schema 4 so request identity commits to the
+  complete companion analysis evidence, including attributed enrichment and
+  any explicitly selected source snapshot.
+- Upgraded support bundles to schema 2 and replaced `enrichment.json` with
+  `analysis-context.json`, which retains enrichment and explicitly selected
+  source context together.
+- Focused AI augmentation on one evidence-backed root cause, removed routine
+  resource-usage observations and store-local fingerprints from model context,
+  and refined traceback, dependency, permission, configuration, network, and
+  resource classification guidance for smaller local models.
+- Prevented schema-description echoes, Jobman lifecycle narration, and
+  evidence-unsupported secondary cause phrases from appearing as generated
+  failure paths while retaining a separately supported root cause.
+- Made the Python failure-lab runner prefer the companion built in this
+  checkout and report the exact Jobman and Jobman Diagnose executables used.
+- Added private live-evaluation proposal capture with host acceptance reasons
+  and automatic metadata-only routing for fixtures that do not advertise the
+  configured-value redaction capability required for log disclosure.
+- Upgraded generation requests to schema 3 with bounded diagnostic lines
+  deterministically selected from already disclosed traceback/compiler ranges,
+  making inner exception causes and operations explicit without expanding log
+  disclosure.
+- Expanded the generated evaluation corpus to 60 multi-ecosystem cases with
+  required facts and causal relations, forbidden claims, abstention controls,
+  language/failure/format tags, focused selection, bounded repetition, and
+  proposal captures labeled by case and iteration.
+- Added usefulness, taxonomy, entity-preservation, causal-completeness,
+  abstention, forbidden-claim, citation-economy, acceptance, and repeated-run
+  consistency metrics without collapsing them into one quality score.
+- Added an executable shell, Go, Node.js, C, JVM, and Rust failure lab that
+  prefers the freshly built companion and skips unavailable optional
+  toolchains explicitly.
+
+### Security
+
+- Kept current source text outside core execution truth: it is unredacted,
+  point-in-time supplemental context, cannot independently authorize a
+  generated cause, and is rejected when ambiguous, non-regular, symlinked,
+  unstable, invalid UTF-8, NUL-bearing, or over its hard/profile byte limits.
+- Added host-side causal-class validation that rejects generated claims when
+  the model's own citations do not contain a corresponding direct signal. When
+  no projected artifact supports any generated cause, the strict schema forces
+  the model to abstain and Jobman returns the deterministic diagnosis.
+- Added exact-signal preservation for endpoints, TLS, DNS, database, linker,
+  panic, and related causal messages, and schema-enforced abstention when a log
+  declares that it was truncated before the terminal cause.
+
 ## [0.4.0] - 2026-08-11
 
 ### Changed
