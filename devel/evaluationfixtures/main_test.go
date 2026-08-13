@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/ryancswallace/jobman/diagnostic"
+
+	"github.com/ryancswallace/jobman-diagnose/internal/evaluation"
 )
 
 func TestGenerateEvaluationFixtures(t *testing.T) {
@@ -89,6 +91,36 @@ func TestEvaluationCorpusSourceMappingsResolve(t *testing.T) {
 	}
 	if sourceCases != 28 {
 		t.Fatalf("source case count = %d", sourceCases)
+	}
+}
+
+func TestGeneratedEvaluationExpectationsExcludeIncidentalDetails(t *testing.T) {
+	t.Parallel()
+
+	cases := make(map[string]evaluation.Case)
+	for _, test := range evaluationCorpus().Cases {
+		cases[test.Name] = test
+	}
+
+	child := cases["python_child_process_exit"].GeneratedExpectation
+	if len(child.RequiredFacts) != 1 || child.RequiredFacts[0].Name != "schema mismatch" ||
+		len(child.RequiredRelations) != 0 {
+		t.Fatalf("python_child_process_exit expectation = %#v", child)
+	}
+
+	shell := cases["shell_pipeline_command"].GeneratedExpectation
+	if len(shell.RequiredFacts) != 1 || shell.RequiredFacts[0].Name != "command" {
+		t.Fatalf("shell_pipeline_command expectation = %#v", shell)
+	}
+
+	service := cases["node_service_cause"].GeneratedExpectation.RequiredRelations
+	if len(service) != 1 || !slices.Contains(service[0].Effects, "target failed") {
+		t.Fatalf("node_service_cause relations = %#v", service)
+	}
+
+	pipeline := cases["python_pipeline_cause_chain"].GeneratedExpectation.RequiredRelations
+	if len(pipeline) != 1 || !slices.Contains(pipeline[0].Causes, "trying to parse the amount") {
+		t.Fatalf("python_pipeline_cause_chain relations = %#v", pipeline)
 	}
 }
 

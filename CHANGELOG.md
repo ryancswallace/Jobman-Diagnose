@@ -7,6 +7,17 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Changed
 
+- Focused structured generation with a shorter evidence-first instruction
+  contract and richer bounded diagnostic lines that preserve multi-traceback
+  chains, exception-group branches, validation details, syntax locations,
+  operations, and remediation messages.
+- Made explicit HTTP 5xx responses authorize
+  `generated.external_service_failure` without also authorizing generic
+  reachability or transience classifications.
+- Aligned generated-quality evaluation expectations with the diagnosis
+  contract by accepting equivalent causal phrasing, excluding incidental
+  remediation, lifecycle, and output details, and normalizing formatting-only
+  diagnostic identifier differences.
 - Added profile-level `source_context` defaults and
   `--ai-source none|limited|full` overrides for disabled, symmetric limited,
   or full-file source sharing, including configurable lines on each side of
@@ -55,6 +66,9 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Corrected the pipeline cause-chain evaluation traceback to reference the
+  actual outer source line so limited source collection can use its runtime
+  anchor.
 - Made persisted source-context and generation-request paths validate
   consistently when evidence is moved between POSIX and Windows systems.
 

@@ -1036,13 +1036,14 @@
         ],
         "required_relations": [
           {
-            "name": "service response caused checkout failure",
+            "name": "service response caused target failure",
             "causes": [
               "HTTP 503",
               "Service Unavailable"
             ],
             "effects": [
-              "checkout request failed"
+              "checkout request failed",
+              "target failed"
             ]
           }
         ],
@@ -1453,25 +1454,6 @@
             "alternatives": [
               "schema is version 8",
               "expected version 11"
-            ]
-          },
-          {
-            "name": "remediation range",
-            "alternatives": [
-              "migrations 009 through 011"
-            ]
-          }
-        ],
-        "required_relations": [
-          {
-            "name": "schema mismatch caused child exit",
-            "causes": [
-              "schema is version 8",
-              "migration rejected"
-            ],
-            "effects": [
-              "exit status 17",
-              "CalledProcessError"
             ]
           }
         ],
@@ -1970,7 +1952,8 @@
             "name": "decimal parse caused transform failure",
             "causes": [
               "InvalidOperation",
-              "ConversionSyntax"
+              "ConversionSyntax",
+              "trying to parse the amount"
             ],
             "effects": [
               "RecordTransformError",
@@ -2466,12 +2449,6 @@
             "name": "command",
             "alternatives": [
               "report-converter"
-            ]
-          },
-          {
-            "name": "output",
-            "alternatives": [
-              "summary.pdf"
             ]
           }
         ],

@@ -135,6 +135,14 @@ zero. Generated consistency compares the accepted/abstained disposition and
 generated code against the first iteration; it does not demand identical
 wording.
 
+Case-level semantic expectations require details that distinguish or make the
+diagnosis actionable, not every incidental log operand. They accept bounded
+wording alternatives for equivalent causal statements and do not require
+remediation commands, generic lifecycle narration, or downstream output names
+when the concrete root cause is already specific. Host grounding checks apply
+the same principle to diagnostic identifiers, so formatting-only variants such
+as `TimeoutError` and `timeout error` retain the same supported signal.
+
 A model/runtime should not be promoted because its prose sounds better or
 because its schema acceptance rate is high. It should preserve deterministic
 findings and retry policy, meet the case-level semantic expectations, cite
