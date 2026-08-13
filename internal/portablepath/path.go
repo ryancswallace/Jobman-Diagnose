@@ -15,6 +15,10 @@ func IsCleanAbsolute(value string) bool {
 	if value == "" || strings.ContainsRune(value, '\x00') {
 		return false
 	}
+	slashPath := strings.ReplaceAll(value, `\`, "/")
+	if strings.HasPrefix(slashPath, "//") {
+		return isCleanUNCPath(slashPath)
+	}
 	if filepath.IsAbs(value) && filepath.Clean(value) == value {
 		return true
 	}
@@ -22,12 +26,8 @@ func IsCleanAbsolute(value string) bool {
 		return path.Clean(value) == value
 	}
 
-	slashPath := strings.ReplaceAll(value, `\`, "/")
 	if isWindowsDriveAbsolute(slashPath) {
 		return path.Clean(slashPath) == slashPath
-	}
-	if strings.HasPrefix(slashPath, "//") {
-		return isCleanUNCPath(slashPath)
 	}
 
 	return false
