@@ -39,6 +39,36 @@ func TestCheckReportsMissingRelativeLink(t *testing.T) {
 	}
 }
 
+func TestCheckContractVersions(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "go.mod"), "module example.com/docs\n")
+	for _, reference := range contractVersionReferences() {
+		mustWrite(t, filepath.Join(root, filepath.FromSlash(reference.path)), strings.Join(reference.fragments, "\n"))
+	}
+	problems, err := checkContractVersions(root)
+	if err != nil || len(problems) != 0 {
+		t.Fatalf("checkContractVersions(current) = %v, %v", problems, err)
+	}
+
+	configurationPath := filepath.Join(root, "docs", "CONFIGURATION.md")
+	// #nosec G304 -- the test path is a fixed name beneath t.TempDir().
+	content, err := os.ReadFile(configurationPath)
+	if err != nil {
+		t.Fatalf("read configuration fixture: %v", err)
+	}
+	content = bytes.Replace(content, []byte("schema-4 JSON"), []byte("schema-3 JSON"), 1)
+	// #nosec G703 -- the test path is a fixed name beneath t.TempDir().
+	if writeErr := os.WriteFile(configurationPath, content, 0o600); writeErr != nil {
+		t.Fatalf("write stale configuration fixture: %v", writeErr)
+	}
+	problems, err = checkContractVersions(root)
+	if err != nil || len(problems) != 1 || !strings.Contains(problems[0], "schema-4 JSON") {
+		t.Fatalf("checkContractVersions(stale) = %v, %v", problems, err)
+	}
+}
+
 func TestDestinationsHandleTitlesAndReferenceLinks(t *testing.T) {
 	t.Parallel()
 
@@ -73,7 +103,7 @@ func TestExecuteReportsSuccessBrokenLinksAndUsage(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "guide.md"), "guide\n")
 	var stdout, stderr bytes.Buffer
 	if status := execute([]string{"-root", root}, &stdout, &stderr); status != 0 ||
-		!strings.Contains(stdout.String(), "links resolve") {
+		!strings.Contains(stdout.String(), "links and contract versions are consistent") {
 		t.Fatalf("execute(valid) = %d, stdout %q, stderr %q", status, stdout.String(), stderr.String())
 	}
 

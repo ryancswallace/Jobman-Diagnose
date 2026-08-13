@@ -18,7 +18,11 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
-const maximumStderrBytes = 16 * 1024
+const (
+	// ProtocolVersion identifies the command-bridge environment contract.
+	ProtocolVersion    = 3
+	maximumStderrBytes = 16 * 1024
+)
 
 // Config defines one immutable command bridge.
 type Config struct {
@@ -143,7 +147,7 @@ func (generator *Generator) Generate(ctx context.Context, request provider.Reque
 func bridgeEnvironment(model, requestID string, credential []byte) []string {
 	result := platformEnvironment()
 	result = append(result,
-		"JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=3",
+		fmt.Sprintf("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=%d", ProtocolVersion),
 		"JOBMAN_DIAGNOSE_PROVIDER_MODEL="+model,
 		"JOBMAN_DIAGNOSE_REQUEST_ID="+requestID,
 	)

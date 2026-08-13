@@ -1,5 +1,4 @@
-// Command docscheck verifies that relative links in repository Markdown files
-// resolve to files or directories in the checkout.
+// Command docscheck verifies relative links and documented contract versions.
 package main
 
 import (
@@ -16,6 +15,13 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/ryancswallace/jobman-diagnose/diagnosis"
+	diagnosisconfig "github.com/ryancswallace/jobman-diagnose/internal/config"
+	"github.com/ryancswallace/jobman-diagnose/internal/evaluation"
+	"github.com/ryancswallace/jobman-diagnose/internal/supportbundle"
+	"github.com/ryancswallace/jobman-diagnose/provider"
+	"github.com/ryancswallace/jobman-diagnose/provider/commandbridge"
 )
 
 var (
@@ -56,7 +62,7 @@ func execute(arguments []string, stdout, stderr io.Writer) int {
 		}
 		return 1
 	}
-	if _, err := fmt.Fprintln(stdout, "relative documentation links resolve"); err != nil {
+	if _, err := fmt.Fprintln(stdout, "documentation links and contract versions are consistent"); err != nil {
 		return 2
 	}
 	return 0
@@ -94,7 +100,75 @@ func check(root string) ([]string, error) {
 		}
 		problems = append(problems, fileProblems...)
 	}
+	versionProblems, err := checkContractVersions(absRoot)
+	if err != nil {
+		return nil, err
+	}
+	problems = append(problems, versionProblems...)
+
 	return problems, nil
+}
+
+type contractReference struct {
+	path      string
+	fragments []string
+}
+
+func checkContractVersions(root string) ([]string, error) {
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	} else if err != nil {
+		return nil, fmt.Errorf("inspect module manifest: %w", err)
+	}
+
+	var problems []string
+	for _, reference := range contractVersionReferences() {
+		path := filepath.Join(root, filepath.FromSlash(reference.path))
+		// #nosec G304 -- every path is a fixed repository documentation path.
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read contract documentation %s: %w", reference.path, err)
+		}
+		for _, fragment := range reference.fragments {
+			if !bytes.Contains(content, []byte(fragment)) {
+				problems = append(problems, fmt.Sprintf(
+					"%s: documented contract version is stale; expected %q",
+					reference.path, fragment,
+				))
+			}
+		}
+	}
+
+	return problems, nil
+}
+
+func contractVersionReferences() []contractReference {
+	return []contractReference{
+		{path: "docs/COMPATIBILITY.md", fragments: []string{
+			fmt.Sprintf("| Diagnosis report | Schema %d |", diagnosis.SchemaVersion),
+			fmt.Sprintf("| Diagnosis configuration | YAML schema %d |", diagnosisconfig.SchemaVersion),
+			fmt.Sprintf("`jobman.diagnosis_generation_request` schema %d", provider.RequestSchemaVersion),
+			fmt.Sprintf("`jobman.diagnosis_proposal` schema %d", provider.ProposalSchemaVersion),
+			fmt.Sprintf("`jobman.diagnosis_support_bundle` schema %d", supportbundle.SchemaVersion),
+			fmt.Sprintf("Corpus schema %d; result schema %d", evaluation.SchemaVersion, evaluation.ResultSchemaVersion),
+			fmt.Sprintf("Command protocol %d", commandbridge.ProtocolVersion),
+		}},
+		{path: "docs/CONFIGURATION.md", fragments: []string{
+			fmt.Sprintf("`jobman.diagnosis_generation_request` schema-%d JSON", provider.RequestSchemaVersion),
+			fmt.Sprintf("`jobman.diagnosis_proposal` schema-%d JSON", provider.ProposalSchemaVersion),
+			fmt.Sprintf("`JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=%d`", commandbridge.ProtocolVersion),
+		}},
+		{path: "docs/EVALUATION.md", fragments: []string{
+			fmt.Sprintf("checked-in schema-%d corpus", evaluation.SchemaVersion),
+			fmt.Sprintf("Evaluation-result schema %d", evaluation.ResultSchemaVersion),
+		}},
+		{path: "docs/GENERATION_PROTOCOL.md", fragments: []string{
+			fmt.Sprintf("schema-%d generation request and a schema-%d", provider.RequestSchemaVersion, provider.ProposalSchemaVersion),
+		}},
+		{path: "testdata/evaluation/README.md", fragments: []string{
+			fmt.Sprintf("Corpus schema %d", evaluation.SchemaVersion),
+		}},
+	}
 }
 
 func skippedDirectory(name string) bool {

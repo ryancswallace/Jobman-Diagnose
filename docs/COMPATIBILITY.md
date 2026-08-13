@@ -1,13 +1,13 @@
 # Compatibility
 
-Status: Jobman Diagnose v0.4.0 compatibility matrix
+Status: Jobman Diagnose v0.5.0 compatibility matrix
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
-| Jobman Diagnose release | v0.4.0 |
+| Jobman Diagnose release | v0.5.0 |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schema 1 |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
@@ -18,8 +18,8 @@ semantic versions.
 | Generation request | `jobman.diagnosis_generation_request` schema 4 |
 | Generated proposal | `jobman.diagnosis_proposal` schema 2; report decoding retains recorded schema 1 provenance |
 | Support bundle | `jobman.diagnosis_support_bundle` schema 2 |
-| Evaluation corpus/result | Corpus schema 3; result schema 3 |
-| Provider adapters | Command protocol 2, strict OpenAI-compatible Chat Completions, local Ollama `/api/chat` |
+| Evaluation corpus/result | Corpus schema 4; result schema 4 |
+| Provider adapters | Command protocol 3, strict OpenAI-compatible Chat Completions, local Ollama `/api/chat` |
 
 The companion rejects a newer required evidence schema with an actionable
 error. It ignores unknown additive evidence item codes, but validates all known

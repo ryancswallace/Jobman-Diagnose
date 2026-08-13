@@ -424,7 +424,7 @@ profiles:
         maximum_bytes: 131072
 ```
 
-The child receives one `jobman.diagnosis_generation_request` schema-2 JSON
+The child receives one `jobman.diagnosis_generation_request` schema-4 JSON
 value on standard input and must write one raw
 `jobman.diagnosis_proposal` schema-2 JSON value to standard output. Its
 environment is minimal and does not inherit ambient variables. The bridge sets

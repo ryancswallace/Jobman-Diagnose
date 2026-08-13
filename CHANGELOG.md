@@ -5,6 +5,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-13
+
 ### Changed
 
 - Focused structured generation with a shorter evidence-first instruction
@@ -66,6 +68,10 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Corrected the compatibility and command-bridge documentation to identify
+  evaluation corpus/result schema 4, generation request schema 4, and command
+  protocol 3, and made documentation validation reject contract-version drift
+  from code constants.
 - Corrected the pipeline cause-chain evaluation traceback to reference the
   actual outer source line so limited source collection can use its runtime
   anchor.
@@ -286,7 +292,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.4.0
 [0.3.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.2.0

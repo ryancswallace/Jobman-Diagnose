@@ -189,7 +189,7 @@ coverage-check: coverage ## Enforce the aggregate statement coverage floor.
 	$(GO) tool cover -func=coverage.txt | awk -v minimum='$(COVERAGE_MIN)' -f devel/check-coverage.awk
 
 .PHONY: docs-check
-docs-check: ## Verify repository-relative links in Markdown documentation.
+docs-check: ## Verify Markdown links and documented contract versions.
 	@if git --no-pager grep -nI -E '[[:blank:]]+$$' -- '*.md'; then \
 		echo 'Markdown files contain trailing whitespace.' >&2; \
 		exit 1; \

@@ -29,6 +29,8 @@ const (
 	Kind = "jobman.diagnosis_evaluation_corpus"
 	// SchemaVersion is the newest corpus schema supported by this package.
 	SchemaVersion = 4
+	// ResultSchemaVersion is the newest evaluation-result schema emitted by this package.
+	ResultSchemaVersion = 4
 
 	maximumCorpusBytes = 1024 * 1024
 	maximumCases       = 512
@@ -307,7 +309,7 @@ func RunWithOptions(
 		return Summary{}, err
 	}
 	summary := Summary{
-		Kind: "jobman.diagnosis_evaluation_result", SchemaVersion: 4, Mode: mode,
+		Kind: "jobman.diagnosis_evaluation_result", SchemaVersion: ResultSchemaVersion, Mode: mode,
 		UniqueCases: len(corpus.Cases), Repeats: options.Repeats,
 		Cases:   len(corpus.Cases) * options.Repeats,
 		Results: make([]Result, 0, len(corpus.Cases)*options.Repeats),
