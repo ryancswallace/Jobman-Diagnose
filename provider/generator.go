@@ -19,7 +19,7 @@ type Request struct {
 	Kind                   string                   `json:"kind"`
 	SchemaVersion          int                      `json:"schema_version"`
 	RequestID              string                   `json:"request_id"`
-	EvidenceID             string                   `json:"evidence_id"`
+	AnalysisEvidenceID     string                   `json:"analysis_evidence_id"`
 	Subject                Subject                  `json:"subject"`
 	Deterministic          []DeterministicCandidate `json:"deterministic_candidates"`
 	AllowedCategories      []string                 `json:"allowed_categories"`

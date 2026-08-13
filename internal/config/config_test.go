@@ -42,21 +42,29 @@ profiles:
       log_content:
         maximum_artifacts: 2
         maximum_bytes: 65536
+      source_content:
+        maximum_artifacts: 1
+        maximum_bytes: 131072
+    source_context:
+      mode: limited
+      lines_before_and_after: 37
 `)
 	profile, err := Load(path, "local-ollama")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Provider != "ollama" || profile.Locality != provider.LocalityLocal || profile.TimeoutDuration() == 0 {
+	if profile.Provider != "ollama" || profile.Locality != provider.LocalityLocal || profile.TimeoutDuration() == 0 ||
+		profile.SourceContext == nil || profile.SourceContext.Mode != SourceContextModeLimited ||
+		profile.SourceContext.LinesBeforeAndAfter != 37 {
 		t.Fatalf("profile = %#v", profile)
 	}
 	approved, err := profile.ApprovedClasses([]string{
-		"log_content", "command", "path", "environment_name", "metadata", "metadata",
+		"log_content", "source_content", "command", "path", "environment_name", "metadata", "metadata",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(approved, ",") != "command,environment_name,log_content,metadata,path" {
+	if strings.Join(approved, ",") != "command,environment_name,log_content,metadata,path,source_content" {
 		t.Fatalf("approved classes = %v", approved)
 	}
 }

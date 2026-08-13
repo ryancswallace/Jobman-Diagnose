@@ -3,6 +3,7 @@ package presentation
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -159,6 +160,52 @@ func TestHumanColorStylesSemanticsWithoutChangingWrapping(t *testing.T) {
 	styled := "\x1b[1m\x1b[35m" + "colored" + "\x1b[0m"
 	if visibleWidth(styled) != len("colored") {
 		t.Fatal("visibleWidth counted ANSI styling bytes")
+	}
+}
+
+//nolint:gocognit // The presentation matrix checks width, color, ordering, and wrapping together.
+func TestHumanLayoutsRemainAnswerFirstAcrossTerminalWidths(t *testing.T) {
+	t.Parallel()
+
+	report, evidence := mixedPresentationFixture(t)
+	for _, width := range []int{60, 80, 120} {
+		for _, color := range []bool{false, true} {
+			name := fmt.Sprintf("width_%d_color_%t", width, color)
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				var output bytes.Buffer
+				if err := HumanWithOptions(&output, report, evidence, HumanOptions{
+					Color: color, Width: width,
+				}); err != nil {
+					t.Fatal(err)
+				}
+				rendered := output.String()
+				if !strings.Contains(rendered, "AI-assisted likely cause") ||
+					strings.Index(rendered, "AI-assisted likely cause") > strings.Index(rendered, "Confirmed by Jobman") {
+					t.Fatalf("AI diagnosis is not answer-first at width %d:\n%s", width, rendered)
+				}
+				for _, line := range strings.Split(rendered, "\n") {
+					if visibleWidth(line) > width && !strings.Contains(line, "sha256:") {
+						t.Fatalf("line exceeds %d visible columns: %q", width, line)
+					}
+				}
+				if !color && strings.Contains(rendered, "\x1b[") {
+					t.Fatalf("plain layout contains ANSI styling: %q", rendered)
+				}
+			})
+		}
+	}
+}
+
+func TestHumanRejectsUnsafeLayoutWidths(t *testing.T) {
+	t.Parallel()
+
+	report, evidence := presentationFixture(t, nil)
+	for _, width := range []int{minimumHumanWidth - 1, maximumHumanWidth + 1} {
+		if err := HumanWithOptions(&bytes.Buffer{}, report, evidence, HumanOptions{Width: width}); err == nil ||
+			!strings.Contains(err.Error(), "width must be between") {
+			t.Fatalf("HumanWithOptions(width %d) error = %v", width, err)
+		}
 	}
 }
 

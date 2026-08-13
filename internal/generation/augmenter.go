@@ -62,6 +62,8 @@ func NewAugmenter(
 
 // Diagnose produces the deterministic report first, then optionally appends
 // only validated, uncalibrated generated proposals.
+//
+//nolint:cyclop // The provider boundary keeps each provenance, validation, abstention, and fallback decision explicit.
 func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.FailureEvidence) (diagnosis.Report, error) {
 	if ctx == nil {
 		return diagnosis.Report{}, errors.New("diagnose with generator: nil context")
@@ -103,6 +105,8 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 		detail := "proposal_validation_failed: model output did not satisfy Jobman's bounded proposal rules"
 		if errors.Is(err, provider.ErrProposalNotSpecific) {
 			detail = "proposal_not_specific: model output did not provide a distinct, incident-specific root cause"
+		} else if errors.Is(err, provider.ErrProposalUnsupported) {
+			detail = "proposal_evidence_unsupported: model output asserted a cause class not supported by its cited evidence"
 		}
 		return augmenter.handleFailure(
 			report, evidence, prepared, "generator_proposal_invalid",
@@ -178,6 +182,7 @@ func sealFallback(
 		Code:    code,
 		Message: message,
 	})
+	report = appendSourceContextWarning(report, evidence, prepared.Request.Manifest.ArtifactIDs)
 	sealed, err := diagnosis.Seal(report)
 	if err != nil {
 		return diagnosis.Report{}, fmt.Errorf("seal deterministic fallback: %w", err)
@@ -230,6 +235,7 @@ func reconcile(
 		Code:    "generated_content_uncalibrated",
 		Message: "Generated hypotheses are advisory and uncalibrated; deterministic facts, actions, and retry policy remain authoritative.",
 	})
+	report = appendSourceContextWarning(report, evidence, prepared.Request.Manifest.ArtifactIDs)
 	report.Citations = appendGeneratedCitations(report.Citations, evidence, proposal)
 	report.Mode = diagnosis.ModeMixed
 	report.Disclosure = prepared.Disclosure(true)
@@ -243,6 +249,26 @@ func reconcile(
 	}
 
 	return sealed, nil
+}
+
+func appendSourceContextWarning(
+	report diagnosis.Report,
+	evidence diagnosis.FailureEvidence,
+	disclosedArtifactIDs []string,
+) diagnosis.Report {
+	for _, source := range evidence.SourceContext {
+		if !slices.Contains(disclosedArtifactIDs, source.ID) {
+			continue
+		}
+		report.Warnings = append(report.Warnings, diagnosis.Warning{
+			Code:    "source_context_point_in_time",
+			Message: "Shared source context is a point-in-time snapshot of the current file and may differ from the code executed by the recorded run.",
+		})
+
+		return report
+	}
+
+	return report
 }
 
 func generatedExplanation(hypothesis provider.Hypothesis) string {
@@ -437,6 +463,10 @@ func appendGeneratedCitations(
 	for _, item := range evidence.Enrichment {
 		enrichment[item.ID] = item
 	}
+	sourceContext := make(map[string]diagnosis.SourceContext, len(evidence.SourceContext))
+	for _, source := range evidence.SourceContext {
+		sourceContext[source.ID] = source
+	}
 	for _, reference := range references {
 		if _, ok := seen[reference]; ok {
 			continue
@@ -456,6 +486,12 @@ func appendGeneratedCitations(
 				Summary: "A bounded deterministic structure derived from the selected sanitized artifact.",
 				Kind:    "enrichment", SourceEvidenceID: item.SourceArtifactID,
 				ByteStart: item.ByteStart, ByteEnd: item.ByteEnd,
+			})
+		} else if source, ok := sourceContext[reference]; ok {
+			citations = append(citations, diagnosis.Citation{
+				EvidenceID: source.ID, Code: source.Role,
+				Summary: "Explicitly selected point-in-time source context; it may differ from the code that ran.",
+				Kind:    "artifact",
 			})
 		}
 	}

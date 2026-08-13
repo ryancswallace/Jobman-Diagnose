@@ -26,6 +26,7 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/internal/generation"
 	"github.com/ryancswallace/jobman-diagnose/internal/presentation"
 	"github.com/ryancswallace/jobman-diagnose/internal/securefile"
+	"github.com/ryancswallace/jobman-diagnose/internal/sourcecontext"
 	"github.com/ryancswallace/jobman-diagnose/internal/supportbundle"
 )
 
@@ -81,8 +82,11 @@ func runWithEnvironment(
 }
 
 type generatorSelection struct {
-	name    string
-	profile *diagnosisconfig.Profile
+	name         string
+	profile      *diagnosisconfig.Profile
+	approved     []string
+	sourceMode   diagnosis.SourceContextMode
+	sourceRadius uint64
 }
 
 func runInspectionCommand(arguments []string, stdout, stderr io.Writer) (bool, error) {
@@ -124,8 +128,56 @@ func selectGenerator(parsed options) (generatorSelection, error) {
 	if err != nil {
 		return generatorSelection{}, err
 	}
+	mode, radius, err := resolveSourceContext(parsed, profile)
+	if err != nil {
+		return generatorSelection{}, err
+	}
+	approved := slices.Clone(parsed.share)
+	if mode != "" {
+		if _, allowed := profile.Disclosure[string(diagnosis.DisclosureSourceContent)]; !allowed {
+			return generatorSelection{}, fmt.Errorf(
+				"AI source context requested, but profile %q does not allow source_content disclosure", name,
+			)
+		}
+		approved = append(approved, string(diagnosis.DisclosureSourceContent))
+	} else if slices.Contains(approved, string(diagnosis.DisclosureSourceContent)) {
+		return generatorSelection{}, usageError(errors.New(
+			"source_content sharing requires profile source_context or --ai-source limited|full",
+		))
+	}
 
-	return generatorSelection{name: name, profile: &profile}, nil
+	return generatorSelection{
+		name: name, profile: &profile, approved: approved, sourceMode: mode, sourceRadius: radius,
+	}, nil
+}
+
+func resolveSourceContext(parsed options, profile diagnosisconfig.Profile) (diagnosis.SourceContextMode, uint64, error) {
+	mode := parsed.aiSource
+	if mode == "" && profile.SourceContext != nil {
+		mode = profile.SourceContext.Mode
+	}
+	if mode == diagnosisconfig.SourceContextModeNone {
+		mode = ""
+	}
+	radius := uint64(0)
+	if mode == string(diagnosis.SourceContextLimited) {
+		radius = sourcecontext.DefaultLinesBeforeAndAfter
+		if profile.SourceContext != nil && profile.SourceContext.Mode == diagnosisconfig.SourceContextModeLimited {
+			radius = profile.SourceContext.LinesBeforeAndAfter
+		}
+	}
+	if parsed.sourceFile != "" && mode == "" {
+		return "", 0, usageError(errors.New(
+			"--source-file requires source sharing from profile source_context or --ai-source limited|full",
+		))
+	}
+	if parsed.sourceLine != 0 && mode != string(diagnosis.SourceContextLimited) {
+		return "", 0, usageError(errors.New(
+			"--source-line requires limited source sharing from profile source_context or --ai-source limited",
+		))
+	}
+
+	return diagnosis.SourceContextMode(mode), radius, nil
 }
 
 //nolint:cyclop,gocognit // This command boundary owns acquisition, enrichment, optional generation, exports, and rendering.
@@ -185,6 +237,22 @@ func runDiagnosis(
 	if err != nil {
 		return err
 	}
+	if selection.sourceMode != "" {
+		limits := selection.profile.Disclosure[string(diagnosis.DisclosureSourceContent)]
+		source, sourceErr := sourcecontext.Collect(ctx, evidence, sourcecontext.Options{
+			Mode: selection.sourceMode, File: parsed.sourceFile, Line: parsed.sourceLine,
+			LinesBeforeAndAfter: selection.sourceRadius, MaximumBytes: limits.MaximumBytes,
+		})
+		if sourceErr != nil {
+			return sourceErr
+		}
+		failureEvidence, err = diagnosis.SealFailureEvidenceWithContext(
+			evidence, failureEvidence.Enrichment, source,
+		)
+		if err != nil {
+			return fmt.Errorf("attach source context: %w", err)
+		}
+	}
 	deterministic, err := engine.New(buildinfo.Version, time.Now)
 	if err != nil {
 		return err
@@ -196,7 +264,7 @@ func runDiagnosis(
 			return generatorErr
 		}
 		augmented, augmenterErr := generation.NewAugmenter(
-			deterministic, generator, selection.name, *selection.profile, parsed.share, parsed.requireModel,
+			deterministic, generator, selection.name, *selection.profile, selection.approved, parsed.requireModel,
 			generationProgressObserver(progress),
 		)
 		if augmenterErr != nil {
@@ -282,6 +350,9 @@ type options struct {
 	version         bool
 	ai              bool
 	aiLogs          bool
+	aiSource        string
+	sourceFile      string
+	sourceLine      uint64
 	profile         string
 	requireModel    bool
 	deterministic   bool
@@ -294,7 +365,9 @@ type options struct {
 	includeSystem   bool
 }
 
-func (parsed options) aiEnabled() bool { return parsed.ai || parsed.aiLogs || parsed.profile != "" }
+func (parsed options) aiEnabled() bool {
+	return parsed.ai || parsed.aiLogs || parsed.aiSource != "" || parsed.profile != ""
+}
 
 func parse(arguments []string, stderr io.Writer) (options, error) {
 	parsed := options{
@@ -370,11 +443,14 @@ func registerFlags(flags *flag.FlagSet, parsed *options) {
 	flags.BoolVar(&parsed.ai, "ai", false, "use the default AI profile and share bounded execution context")
 	flags.BoolVar(&parsed.ai, "a", false, "short form of --ai")
 	flags.BoolVar(&parsed.aiLogs, "ai-logs", false, "use AI and share a bounded redacted target-log tail")
+	flags.StringVar(&parsed.aiSource, "ai-source", "", "override profile source sharing as none, limited, or full")
+	flags.StringVar(&parsed.sourceFile, "source-file", "", "current source file to share instead of inferring it from the target command")
+	flags.Uint64Var(&parsed.sourceLine, "source-line", 0, "line around which to select limited source context")
 	flags.BoolVar(&parsed.includeSystem, "system", false,
 		"collect bounded point-in-time filesystem and cgroup constraints")
 	flags.StringVar(&parsed.diagnosisConfig, "diagnosis-config", "", "override the per-user diagnosis configuration path")
 	flags.StringVar(&parsed.profile, "profile", "", "use a named AI profile instead of the configured default")
-	flags.Var(&parsed.share, "share", "approve an additional disclosure class; log_content collects a live tail")
+	flags.Var(&parsed.share, "share", "approve an additional disclosure class")
 	flags.BoolVar(&parsed.requireModel, "require-model", false, "fail rather than degrade when generated analysis is unavailable")
 	flags.Var((*progressModeValue)(&parsed.progress), "progress", "show AI progress as auto, plain, or off")
 }
@@ -395,6 +471,12 @@ func normalizeAIOptions(parsed *options) error {
 	}
 	if parsed.aiLogs {
 		parsed.share = append(parsed.share, string(diagnostic.DisclosureLogContent))
+	}
+	if parsed.aiSource != "" {
+		parsed.aiSource = strings.ToLower(strings.TrimSpace(parsed.aiSource))
+		if parsed.aiSource != diagnosisconfig.SourceContextModeNone {
+			parsed.share = append(parsed.share, string(diagnosis.DisclosureSourceContent))
+		}
 	}
 	if !slices.Contains(parsed.share, string(diagnostic.DisclosureLogContent)) || parsed.fromEvidence != "" {
 		return nil
@@ -428,10 +510,25 @@ func validateOptions(parsed options) error {
 		return usageError(errors.New("--details cannot be combined with --json"))
 	}
 	if parsed.requireModel && !parsed.aiEnabled() {
-		return usageError(errors.New("--require-model requires --ai, --ai-logs, or --profile"))
+		return usageError(errors.New("--require-model requires --ai, --ai-logs, --ai-source, or --profile"))
 	}
 	if !parsed.aiEnabled() && len(parsed.share) != 0 {
-		return usageError(errors.New("--share requires --ai, --ai-logs, or --profile"))
+		return usageError(errors.New("--share requires --ai, --ai-logs, --ai-source, or --profile"))
+	}
+	if parsed.aiSource != "" && parsed.aiSource != diagnosisconfig.SourceContextModeNone &&
+		parsed.aiSource != string(diagnosis.SourceContextLimited) &&
+		parsed.aiSource != string(diagnosis.SourceContextFull) {
+		return usageError(errors.New("--ai-source must be none, limited, or full"))
+	}
+	if parsed.sourceFile != "" && !parsed.aiEnabled() {
+		return usageError(errors.New("--source-file requires AI diagnosis"))
+	}
+	if parsed.sourceLine != 0 && !parsed.aiEnabled() {
+		return usageError(errors.New("--source-line requires AI diagnosis"))
+	}
+	if parsed.sourceLine != 0 && parsed.aiSource != "" &&
+		parsed.aiSource != string(diagnosis.SourceContextLimited) {
+		return usageError(errors.New("--source-line requires --ai-source limited"))
 	}
 	if parsed.bundleDryRun && parsed.supportBundle == "" {
 		return usageError(errors.New("--bundle-dry-run requires --support-bundle PATH"))
@@ -558,8 +655,8 @@ func (value *stringListValue) Set(encoded string) error {
 		class = strings.TrimSpace(class)
 		if class != string(diagnostic.DisclosureMetadata) && class != string(diagnostic.DisclosureCommand) &&
 			class != string(diagnostic.DisclosurePath) && class != string(diagnostic.DisclosureEnvironmentName) &&
-			class != string(diagnostic.DisclosureLogContent) {
-			return errors.New("must be metadata, command, path, environment_name, or log_content")
+			class != string(diagnostic.DisclosureLogContent) && class != string(diagnosis.DisclosureSourceContent) {
+			return errors.New("must be metadata, command, path, environment_name, log_content, or source_content")
 		}
 		*value = append(*value, class)
 	}

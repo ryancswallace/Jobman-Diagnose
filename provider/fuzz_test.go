@@ -9,8 +9,8 @@ import (
 
 func FuzzDecodeProposal(f *testing.F) {
 	request, err := SealRequest(Request{
-		EvidenceID: "sha256:" + strings.Repeat("a", 64),
-		Subject:    Subject{Phase: "completed", Outcome: "failure", SelectedRuns: []uint64{1}},
+		AnalysisEvidenceID: "sha256:" + strings.Repeat("a", 64),
+		Subject:            Subject{Phase: "completed", Outcome: "failure", SelectedRuns: []uint64{1}},
 		Projection: Projection{Items: []ProjectedItem{{
 			ID: "ev:run:1:exit", Code: "jobman.run.exit.code", Value: json.RawMessage(`7`),
 			Quality: "observed", Disclosure: "metadata",

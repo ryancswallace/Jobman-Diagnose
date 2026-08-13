@@ -56,7 +56,7 @@ func TestReportCodecRoundTripAndEvidenceValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const expectedReportID = "sha256:5a574a66c1d64b0d25be925e907c5f8d01b0297ffb93e6739f65deb3bd4acb06"
+	const expectedReportID = "sha256:110f91a253824f18a8b4ffc6b678fd3745eff8d5a6bbd08de55829ce75751b2d"
 	if report.ReportID != expectedReportID {
 		t.Fatalf("report ID = %q, want stable contract digest %q", report.ReportID, expectedReportID)
 	}

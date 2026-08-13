@@ -131,7 +131,7 @@ func TestDisclosureAndGeneratorValidation(t *testing.T) {
 func TestReportAcceptsSupportedGenerationProtocolVersions(t *testing.T) {
 	t.Parallel()
 
-	for _, versions := range []struct{ request, proposal int }{{1, 1}, {2, 1}, {2, 2}} {
+	for _, versions := range []struct{ request, proposal int }{{1, 1}, {2, 1}, {2, 2}, {3, 2}} {
 		report, _ := validReportAndEvidence(t)
 		report.Versions.GenerationRequestSchemaVersion = versions.request
 		report.Versions.ProposalSchemaVersion = versions.proposal
@@ -205,7 +205,19 @@ func TestFailureEvidenceValidationAndEncoding(t *testing.T) {
 		Collector:  AnalyzerDescriptor{Name: "collector", Version: "1"},
 		Quality:    diagnostic.QualityDerivedExact, Disclosure: diagnostic.DisclosureLocalOnly,
 	}
-	value, err := SealFailureEvidence(core, []EnrichmentItem{item})
+	sourceData := []byte("package main\n")
+	source := SourceContext{
+		ID: "context:source:001", Role: "source.context", Path: "/srv/main.go",
+		Language: "go", MediaType: "text/x-go", Mode: SourceContextFull,
+		AnchorReason: "full_file", StartLine: 1, EndLine: 1, TotalLines: 1,
+		ByteEnd: uint64(len(sourceData)), FileBytes: uint64(len(sourceData)),
+		ContentBytes: uint64(len(sourceData)), Data: sourceData,
+		Digest: contentDigest(sourceData), ContentDigest: contentDigest(sourceData),
+		CapturedAt: time.Date(2026, 1, 1, 0, 0, 1, 0, time.UTC),
+		Collector:  AnalyzerDescriptor{Name: "source", Version: "1"},
+		Quality:    diagnostic.QualityPointInTime, Disclosure: DisclosureSourceContent,
+	}
+	value, err := SealFailureEvidenceWithContext(core, []EnrichmentItem{item}, []SourceContext{source})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,10 +238,16 @@ func TestFailureEvidenceValidationAndEncoding(t *testing.T) {
 		func(current *FailureEvidence) { current.Enrichment[0].ObservedAt = time.Time{} },
 		func(current *FailureEvidence) { current.Enrichment[0].Collector.Name = "" },
 		func(current *FailureEvidence) { current.Enrichment[0].Quality = diagnostic.QualityObserved },
+		func(current *FailureEvidence) { current.SourceContext = nil },
+		func(current *FailureEvidence) { current.SourceContext[0].Path = "relative.go" },
+		func(current *FailureEvidence) { current.SourceContext[0].Data[0] = 'X' },
+		func(current *FailureEvidence) { current.SourceContext[0].AnchorReason = "runtime_log" },
 	}
 	for index, mutate := range mutations {
 		current := value
 		current.Enrichment = append([]EnrichmentItem{}, value.Enrichment...)
+		current.SourceContext = append([]SourceContext{}, value.SourceContext...)
+		current.SourceContext[0].Data = append([]byte{}, value.SourceContext[0].Data...)
 		mutate(&current)
 		if err := VerifyFailureEvidence(current); err == nil {
 			t.Fatalf("failure evidence variant %d error = nil", index)

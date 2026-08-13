@@ -93,7 +93,14 @@ func specializeHypotheses(
 	evidenceIDs []string,
 	findingIDs []string,
 ) error {
-	hypotheses, err := schemaObject(properties, "hypotheses", "items", "properties")
+	hypothesisCollection, err := schemaObject(properties, "hypotheses")
+	if err != nil {
+		return err
+	}
+	if !requestSupportsGeneratedCause(request) {
+		hypothesisCollection["maxItems"] = float64(0)
+	}
+	hypotheses, err := schemaObject(hypothesisCollection, "items", "properties")
 	if err != nil {
 		return err
 	}
@@ -108,7 +115,13 @@ func specializeHypotheses(
 			return fieldErr
 		}
 	}
-	for _, name := range []string{"supporting_evidence", "contradicting_evidence"} {
+	supportingIDs := append(slices.Clone(request.Manifest.ArtifactIDs), request.Manifest.EnrichmentIDs...)
+	if len(supportingIDs) == 0 {
+		supportingIDs = evidenceIDs
+	}
+	for name, identifiers := range map[string][]string{
+		"supporting_evidence": supportingIDs, "contradicting_evidence": evidenceIDs,
+	} {
 		field, fieldErr := schemaObject(hypotheses, name)
 		if fieldErr != nil {
 			return fieldErr
@@ -117,7 +130,7 @@ func specializeHypotheses(
 		if itemsErr != nil {
 			return itemsErr
 		}
-		items["enum"] = slices.Clone(evidenceIDs)
+		items["enum"] = slices.Clone(identifiers)
 	}
 	supporting, err := schemaObject(hypotheses, "supporting_evidence")
 	if err != nil {
@@ -131,6 +144,16 @@ func specializeHypotheses(
 	contradicts["enum"] = slices.Clone(findingIDs)
 
 	return nil
+}
+
+func requestSupportsGeneratedCause(request Request) bool {
+	for _, code := range request.AllowedHypothesisCodes {
+		if DirectCauseSignalSupported(code, request.Projection) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func specializeActions(properties map[string]any, actionIDs []string) error {

@@ -28,6 +28,17 @@ const (
 	maximumConfigBytes = 1024 * 1024
 	maximumConfigDepth = 32
 	maximumProfiles    = 32
+	// MaximumSourceContextLines bounds the symmetric limited-source radius.
+	// A source file is already capped at 1 MiB, so a larger radius cannot select
+	// any additional lines.
+	MaximumSourceContextLines = 1024 * 1024
+
+	// SourceContextModeNone disables source sharing by default.
+	SourceContextModeNone = "none"
+	// SourceContextModeLimited shares a symmetric window around the anchor.
+	SourceContextModeLimited = "limited"
+	// SourceContextModeFull shares the complete bounded source file.
+	SourceContextModeFull = "full"
 )
 
 // File is one diagnosis.yml document.
@@ -55,8 +66,16 @@ type Profile struct {
 	MaximumInputBytes  int                    `json:"maximum_input_bytes" yaml:"maximum_input_bytes"`
 	MaximumOutputBytes int                    `json:"maximum_output_bytes" yaml:"maximum_output_bytes"`
 	Disclosure         map[string]ClassLimits `json:"disclosure" yaml:"disclosure"`
+	SourceContext      *SourceContextPolicy   `json:"source_context,omitempty" yaml:"source_context,omitempty"`
 	Credential         *SecretReference       `json:"credential,omitempty" yaml:"credential,omitempty"`
 	timeout            time.Duration
+}
+
+// SourceContextPolicy controls a profile's default source disclosure. The
+// source_content class limits remain the independent hard disclosure ceiling.
+type SourceContextPolicy struct {
+	Mode                string `json:"mode" yaml:"mode"`
+	LinesBeforeAndAfter uint64 `json:"lines_before_and_after,omitempty" yaml:"lines_before_and_after,omitempty"`
 }
 
 // Command identifies one absolute bridge executable and fixed argument list.
@@ -237,6 +256,9 @@ func (profile *Profile) validate() error {
 	if err := profile.validateDisclosure(); err != nil {
 		return err
 	}
+	if err := profile.validateSourceContext(); err != nil {
+		return err
+	}
 	if err := validateSecretReference(profile.Credential); err != nil {
 		return err
 	}
@@ -244,9 +266,37 @@ func (profile *Profile) validate() error {
 	return profile.validateTransport()
 }
 
-//nolint:cyclop // Supported classes have deliberately asymmetric limit invariants.
+func (profile Profile) validateSourceContext() error {
+	if profile.SourceContext == nil {
+		return nil
+	}
+	policy := *profile.SourceContext
+	switch policy.Mode {
+	case SourceContextModeNone, SourceContextModeFull:
+		if policy.LinesBeforeAndAfter != 0 {
+			return fmt.Errorf("source_context mode %s does not accept lines_before_and_after", policy.Mode)
+		}
+	case SourceContextModeLimited:
+		if policy.LinesBeforeAndAfter == 0 || policy.LinesBeforeAndAfter > MaximumSourceContextLines {
+			return fmt.Errorf(
+				"source_context limited mode requires lines_before_and_after between 1 and %d",
+				MaximumSourceContextLines,
+			)
+		}
+	default:
+		return errors.New("source_context mode must be none, limited, or full")
+	}
+	if policy.Mode != SourceContextModeNone {
+		if _, allowed := profile.Disclosure["source_content"]; !allowed {
+			return errors.New("source_context sharing requires bounded source_content disclosure")
+		}
+	}
+
+	return nil
+}
+
 func (profile Profile) validateDisclosure() error {
-	if len(profile.Disclosure) == 0 || len(profile.Disclosure) > 5 {
+	if len(profile.Disclosure) == 0 || len(profile.Disclosure) > 6 {
 		return errors.New("disclosure must explicitly allow metadata and optional bounded context classes")
 	}
 	if _, ok := profile.Disclosure["metadata"]; !ok {
@@ -254,7 +304,7 @@ func (profile Profile) validateDisclosure() error {
 	}
 	for class, limits := range profile.Disclosure {
 		if class != "metadata" && class != "command" && class != "path" &&
-			class != "environment_name" && class != "log_content" {
+			class != "environment_name" && class != "log_content" && class != "source_content" {
 			return fmt.Errorf("disclosure class %q is not supported", class)
 		}
 		// #nosec G115 -- profile.MaximumInputBytes was validated positive and at most 2 MiB above.
@@ -262,15 +312,28 @@ func (profile Profile) validateDisclosure() error {
 		if limits.MaximumBytes == 0 || limits.MaximumBytes > maximumInputBytes {
 			return fmt.Errorf("disclosure class %q has an invalid maximum_bytes", class)
 		}
-		switch class {
-		case "metadata", "command", "path", "environment_name":
-			if limits.MaximumItems == 0 || limits.MaximumItems > 1024 || limits.MaximumArtifacts != 0 {
-				return fmt.Errorf("%s disclosure requires maximum_items between 1 and 1024", class)
-			}
-		case "log_content":
-			if limits.MaximumArtifacts == 0 || limits.MaximumArtifacts > 16 || limits.MaximumItems != 0 {
-				return errors.New("log_content disclosure requires maximum_artifacts between 1 and 16")
-			}
+		if err := validateClassLimits(class, limits); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateClassLimits(class string, limits ClassLimits) error {
+	switch class {
+	case "metadata", "command", "path", "environment_name":
+		if limits.MaximumItems == 0 || limits.MaximumItems > 1024 || limits.MaximumArtifacts != 0 {
+			return fmt.Errorf("%s disclosure requires maximum_items between 1 and 1024", class)
+		}
+	case "log_content":
+		if limits.MaximumArtifacts == 0 || limits.MaximumArtifacts > 16 || limits.MaximumItems != 0 {
+			return errors.New("log_content disclosure requires maximum_artifacts between 1 and 16")
+		}
+	case "source_content":
+		if limits.MaximumArtifacts == 0 || limits.MaximumArtifacts > 16 || limits.MaximumItems != 0 ||
+			limits.MaximumBytes > 1024*1024 {
+			return errors.New("source_content disclosure requires 1-16 artifacts, no items, and at most 1 MiB")
 		}
 	}
 
@@ -420,7 +483,7 @@ func (profile Profile) ApprovedClasses(approved []string) ([]string, error) {
 	seen := make(map[string]struct{}, len(approved))
 	for _, class := range approved {
 		if class != "metadata" && class != "command" && class != "path" &&
-			class != "environment_name" && class != "log_content" {
+			class != "environment_name" && class != "log_content" && class != "source_content" {
 			return nil, fmt.Errorf("unsupported --share class %q", class)
 		}
 		seen[class] = struct{}{}

@@ -16,8 +16,8 @@ const (
 	EngineVersion = "1.2.0"
 )
 
-// Diagnostician turns sealed core evidence plus attributed enrichment into a
-// cited report.
+// Diagnostician turns sealed core evidence plus attributed companion context
+// into a cited report.
 type Diagnostician interface {
 	Diagnose(context.Context, FailureEvidence) (Report, error)
 }

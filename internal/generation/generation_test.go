@@ -2,8 +2,10 @@ package generation
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -35,10 +37,21 @@ func TestPrepareSeparatesUntrustedLogDataAndExcludesLocalOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	resource, err := diagnostic.JSONValue(map[string]any{
+		"completeness": "complete_at_exit", "metric": "cpu_user_time", "scope": "process",
+		"source": "process_state", "unit": "nanoseconds", "value": 11_000_000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	evidence.Items = append(evidence.Items, diagnostic.Item{
 		ID: "ev:run:00000000000000000001:failure:fingerprint", Code: diagnostic.CodeFailureFingerprint,
 		Value: fingerprint, Source: diagnostic.ItemSource{Kind: "facts", EntityID: "run"},
 		Quality: diagnostic.QualityDerivedExact, Disclosure: diagnostic.DisclosureLocalOnly,
+	}, diagnostic.Item{
+		ID: "ev:run:00000000000000000001:resource:cpu-user", Code: diagnostic.CodeResourceObservation,
+		Value: resource, Source: diagnostic.ItemSource{Kind: "facts", EntityID: "run"},
+		Quality: diagnostic.QualityObserved, Disclosure: diagnostic.DisclosureMetadata,
 	})
 	evidence, err = diagnostic.Seal(evidence)
 	if err != nil {
@@ -61,6 +74,9 @@ func TestPrepareSeparatesUntrustedLogDataAndExcludesLocalOnly(t *testing.T) {
 	}
 	if slices.Contains(prepared.Request.Manifest.ItemIDs, "ev:run:00000000000000000001:failure:fingerprint") {
 		t.Fatalf("local-only fingerprint was projected: %#v", prepared.Request.Manifest)
+	}
+	if slices.Contains(prepared.Request.Manifest.ItemIDs, "ev:run:00000000000000000001:resource:cpu-user") {
+		t.Fatalf("routine resource usage was projected: %#v", prepared.Request.Manifest)
 	}
 	for _, instruction := range prepared.Request.Instructions {
 		if strings.Contains(instruction, injection) {
@@ -117,8 +133,164 @@ func TestPrepareProjectsAttributedEnrichmentWithApprovedLog(t *testing.T) {
 	if len(prepared.Request.Projection.Enrichment) != 1 ||
 		prepared.Request.Manifest.EnrichmentCount != 1 ||
 		prepared.Request.Manifest.EnrichmentIDs[0] != failureEvidence.Enrichment[0].ID ||
-		prepared.Request.Projection.Enrichment[0].SourceArtifactID != evidence.Artifacts[0].ID {
+		prepared.Request.Projection.Enrichment[0].SourceArtifactID != evidence.Artifacts[0].ID ||
+		!slices.Equal(prepared.Request.Projection.Enrichment[0].DiagnosticLines, []string{"ValueError: bad input"}) {
 		t.Fatalf("projected enrichment = %#v / %#v", prepared.Request.Projection.Enrichment, prepared.Request.Manifest)
+	}
+}
+
+//nolint:cyclop // This end-to-end contract test checks projection, reconciliation, warning, and citation seams together.
+func TestPrepareProjectsExplicitSourceAlongsideRuntimeEvidence(t *testing.T) {
+	t.Parallel()
+
+	core, err := testevidence.Failed(
+		"nonzero_exit",
+		[]byte("Traceback (most recent call last):\n  File \"worker.py\", line 2\nZeroDivisionError: division by zero\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	core.Source.Capabilities = append(core.Source.Capabilities, "configured_value_redaction_v1")
+	core.EvidenceID = ""
+	core, err = diagnostic.Seal(core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	failureEvidence, err := enrichment.Collect(t.Context(), core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("def ratio(total, count):\n    return total / count\n")
+	digest := sha256.Sum256(data)
+	digestText := "sha256:" + fmt.Sprintf("%x", digest[:])
+	source := diagnosis.SourceContext{
+		ID: "context:source:001", Role: "source.context", Path: "/srv/app/worker.py",
+		Language: "python", MediaType: "text/x-python", Mode: diagnosis.SourceContextFull,
+		AnchorReason: "full_file", StartLine: 1, EndLine: 2, TotalLines: 2,
+		ByteEnd: uint64(len(data)), FileBytes: uint64(len(data)), ContentBytes: uint64(len(data)), Data: data,
+		Digest: digestText, ContentDigest: digestText,
+		CapturedAt: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC),
+		Collector:  diagnosis.AnalyzerDescriptor{Name: "test.source", Version: "1"},
+		Quality:    diagnostic.QualityPointInTime, Disclosure: diagnosis.DisclosureSourceContent,
+	}
+	failureEvidence, err = diagnosis.SealFailureEvidenceWithContext(core, failureEvidence.Enrichment, []diagnosis.SourceContext{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := deterministic(t).Diagnose(t.Context(), failureEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(t, true)
+	profile.Disclosure[string(diagnosis.DisclosureSourceContent)] = config.ClassLimits{
+		MaximumArtifacts: 1, MaximumBytes: 64 * 1024,
+	}
+	prepared, err := Prepare(
+		failureEvidence, report, "test", profile,
+		[]string{"metadata", "log_content", string(diagnosis.DisclosureSourceContent)},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Request.AnalysisEvidenceID != failureEvidence.AnalysisEvidenceID ||
+		prepared.Request.Manifest.ArtifactCount != 2 ||
+		!slices.Contains(prepared.Request.Manifest.Classes, string(diagnosis.DisclosureSourceContent)) {
+		t.Fatalf("prepared request = %#v", prepared.Request)
+	}
+	var projected *provider.ProjectedArtifact
+	for index := range prepared.Request.Projection.Artifacts {
+		if prepared.Request.Projection.Artifacts[index].Disclosure == string(diagnosis.DisclosureSourceContent) {
+			projected = &prepared.Request.Projection.Artifacts[index]
+		}
+	}
+	if projected == nil || projected.Path != source.Path || projected.StartLine != 1 ||
+		projected.Content != string(data) || projected.Quality != "point_in_time" {
+		t.Fatalf("projected source = %#v", projected)
+	}
+	mixed, err := reconcile(report, failureEvidence, prepared, provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Code: "generated.application_defect", Category: "application",
+		Summary:            "worker.py divides total by a zero count",
+		RootCause:          "ZeroDivisionError occurs when ratio divides total by count at worker.py line 2",
+		Explanation:        "The runtime traceback identifies division by zero, and the current source snapshot maps line 2 to total / count.",
+		SupportingEvidence: []string{core.Artifacts[0].ID, source.ID},
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasWarning(mixed, "source_context_point_in_time") ||
+		!slices.Contains(mixed.Disclosure.ArtifactIDs, source.ID) ||
+		!slices.ContainsFunc(mixed.Citations, func(citation diagnosis.Citation) bool {
+			return citation.EvidenceID == source.ID && citation.Kind == "artifact"
+		}) {
+		t.Fatalf("mixed source attribution = %#v", mixed)
+	}
+}
+
+func TestSourceContextWarningRequiresActualDisclosure(t *testing.T) {
+	t.Parallel()
+
+	evidence := diagnosis.FailureEvidence{
+		SourceContext: []diagnosis.SourceContext{{ID: "context:source:001"}},
+	}
+	withoutSource := appendSourceContextWarning(diagnosis.Report{}, evidence, []string{"artifact:run:1:stderr"})
+	if hasWarning(withoutSource, "source_context_point_in_time") {
+		t.Fatalf("undisclosed source warning = %#v", withoutSource.Warnings)
+	}
+	withSource := appendSourceContextWarning(diagnosis.Report{}, evidence, []string{"context:source:001"})
+	if !hasWarning(withSource, "source_context_point_in_time") {
+		t.Fatalf("disclosed source warning = %#v", withSource.Warnings)
+	}
+}
+
+func TestProjectedDiagnosticLinesExposeBoundedCauseFocus(t *testing.T) {
+	t.Parallel()
+
+	data := []byte("java.lang.IllegalStateException: queue is closed\n" +
+		"\tat example.Worker.run(Worker.java:42)\n" +
+		"Caused by: java.io.IOException: closed\n" +
+		"\tat example.Queue.read(Queue.java:17)\n")
+	artifact := diagnostic.Artifact{ID: "stderr", Data: data}
+	item := diagnosis.EnrichmentItem{
+		SourceArtifactID: artifact.ID, ByteStart: 0, ByteEnd: uint64(len(data)), Format: "jvm_exception",
+	}
+	want := []string{
+		"Caused by: java.io.IOException: closed",
+		"at example.Queue.read(Queue.java:17)",
+	}
+	if got := projectedDiagnosticLines([]diagnostic.Artifact{artifact}, item); !slices.Equal(got, want) {
+		t.Fatalf("projectedDiagnosticLines() = %#v, want %#v", got, want)
+	}
+	item.ByteEnd++
+	if got := projectedDiagnosticLines([]diagnostic.Artifact{artifact}, item); len(got) != 0 {
+		t.Fatalf("projectedDiagnosticLines(out of bounds) = %#v", got)
+	}
+}
+
+func TestPythonDiagnosticLinesPreserveExceptionGroupsAndCauseChains(t *testing.T) {
+	t.Parallel()
+
+	lines := []string{
+		"  + Exception Group Traceback (most recent call last):",
+		"  | ExceptionGroup: unhandled errors in a TaskGroup (2 sub-exceptions)",
+		"    | LookupError: customer C-1042 was not found",
+		"    | ValueError: invoice INV-778 has a negative settlement amount",
+	}
+	want := []string{
+		"ExceptionGroup: unhandled errors in a TaskGroup (2 sub-exceptions)",
+		"LookupError: customer C-1042 was not found",
+		"ValueError: invoice INV-778 has a negative settlement amount",
+	}
+	if got := selectDiagnosticLines("python_traceback", lines); !slices.Equal(got, want) {
+		t.Fatalf("python diagnostic lines = %#v, want %#v", got, want)
+	}
+}
+
+func TestCausalMessageDiagnosticLinesPreserveCompleteOperation(t *testing.T) {
+	t.Parallel()
+
+	line := "synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded"
+	if got := selectDiagnosticLines("causal_message", []string{line}); !slices.Equal(got, []string{line}) {
+		t.Fatalf("causal-message diagnostic lines = %#v", got)
 	}
 }
 
@@ -183,14 +355,20 @@ func TestPrepareProjectsExplicitCommandContext(t *testing.T) {
 	}
 }
 
+//nolint:cyclop // This integration assertion intentionally checks the complete generated-report contract.
 func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) {
 	t.Parallel()
 
-	evidence, err := testevidence.Failed("nonzero_exit", nil)
+	evidence, err := testevidence.Failed("nonzero_exit", []byte("configuration rejected: region moon-1 is disabled"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	profile := testProfile(t, false)
+	evidence.Source.Capabilities = append(evidence.Source.Capabilities, "configured_value_redaction_v1")
+	evidence, err = diagnostic.Seal(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(t, true)
 	fake := &fakeGenerator{profile: profile}
 	fake.generate = func(request provider.Request) (provider.Response, error) {
 		proposal := provider.Proposal{
@@ -200,8 +378,8 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 				Summary:            "The worker configuration selects an unsupported deployment region",
 				RootCause:          "The selected region is not enabled for this worker deployment.",
 				Explanation:        "Startup validation rejects the unsupported region before processing begins.",
-				SupportingEvidence: []string{request.Manifest.ItemIDs[0]}, ContradictingEvidence: []string{},
-				ContradictsFindings: []string{request.Deterministic[0].ID},
+				SupportingEvidence: []string{request.Manifest.ArtifactIDs[0]}, ContradictingEvidence: []string{},
+				ContradictsFindings: []string{},
 			}},
 			RecommendedActions: []string{request.AllowedActions[0].ID},
 			MissingEvidence: []provider.MissingEvidence{{
@@ -219,7 +397,7 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	augmenter, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, false, nil)
+	augmenter, err := NewAugmenter(base, fake, "test", profile, []string{"metadata", "log_content"}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +410,7 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 		t.Fatalf("reconciled report = %#v", report)
 	}
 	generated := report.Findings[len(report.Findings)-1]
-	if generated.Confidence.Score != 40 || len(generated.ContradictingFindings) != 1 ||
+	if generated.Confidence.Score != 40 || len(generated.ContradictingFindings) != 0 ||
 		!strings.Contains(generated.Explanation, "Root cause: The selected region is not enabled") ||
 		!strings.Contains(generated.Explanation, "Failure path: Startup validation rejects") ||
 		!report.Disclosure.ProviderInvoked || !report.Disclosure.GeneratedContentUsed {
@@ -296,7 +474,7 @@ func TestAugmenterRejectsGenericDuplicateOfDeterministicFinding(t *testing.T) {
 	}
 	if len(report.Findings) != len(deterministicReport.Findings) || report.Mode != diagnosis.ModeDeterministic ||
 		report.Disclosure.GeneratedContentUsed || !hasWarning(report, "generator_proposal_invalid") ||
-		!strings.Contains(warningMessage(report, "generator_proposal_invalid"), "proposal_not_specific") {
+		!strings.Contains(warningMessage(report, "generator_proposal_invalid"), "proposal_evidence_unsupported") {
 		t.Fatalf("generic duplicate did not fall back safely: %#v", report)
 	}
 	required, err := NewAugmenter(base, fake, "test", profile, []string{"metadata"}, true, nil)
@@ -304,7 +482,7 @@ func TestAugmenterRejectsGenericDuplicateOfDeterministicFinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = required.Diagnose(t.Context(), failureEvidence); err == nil ||
-		!strings.Contains(err.Error(), "proposal_not_specific") || strings.Contains(err.Error(), primary.Summary) {
+		!strings.Contains(err.Error(), "proposal_evidence_unsupported") || strings.Contains(err.Error(), primary.Summary) {
 		t.Fatalf("required generic diagnosis error = %v", err)
 	}
 }

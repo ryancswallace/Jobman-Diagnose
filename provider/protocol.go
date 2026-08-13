@@ -9,7 +9,7 @@ const (
 	// RequestKind identifies the structured-generation request protocol.
 	RequestKind = "jobman.diagnosis_generation_request"
 	// RequestSchemaVersion is the newest request schema understood here.
-	RequestSchemaVersion = 2
+	RequestSchemaVersion = 4
 	// ProposalKind identifies generated proposal documents.
 	ProposalKind = "jobman.diagnosis_proposal"
 	// ProposalSchemaVersion is the newest proposal schema understood here.
@@ -44,36 +44,53 @@ type ProjectedItem struct {
 	Disclosure string          `json:"disclosure"`
 }
 
-// ProjectedArtifact is a bounded, sanitized log excerpt represented as
-// UTF-8 data. Invalid source bytes are replaced and never become instructions.
+// ProjectedArtifact is either a bounded, sanitized log excerpt or an
+// explicitly approved point-in-time source snapshot represented as UTF-8.
+// All artifact content is untrusted data and never becomes instructions.
 type ProjectedArtifact struct {
-	ID            string `json:"id"`
-	Role          string `json:"role"`
-	Run           uint64 `json:"run"`
-	Stream        string `json:"stream,omitempty"`
-	Content       string `json:"content"`
-	Encoding      string `json:"encoding"`
-	Digest        string `json:"digest"`
-	Truncated     bool   `json:"truncated"`
-	SelectedBytes uint64 `json:"selected_bytes"`
-	ContentBytes  uint64 `json:"content_bytes"`
-	Disclosure    string `json:"disclosure"`
+	ID            string     `json:"id"`
+	Role          string     `json:"role"`
+	Run           uint64     `json:"run"`
+	Stream        string     `json:"stream,omitempty"`
+	Path          string     `json:"path,omitempty"`
+	Language      string     `json:"language,omitempty"`
+	MediaType     string     `json:"media_type,omitempty"`
+	Selection     string     `json:"selection,omitempty"`
+	AnchorLine    uint64     `json:"anchor_line,omitempty"`
+	AnchorReason  string     `json:"anchor_reason,omitempty"`
+	StartLine     uint64     `json:"start_line,omitempty"`
+	EndLine       uint64     `json:"end_line,omitempty"`
+	TotalLines    uint64     `json:"total_lines,omitempty"`
+	ByteStart     uint64     `json:"byte_start,omitempty"`
+	ByteEnd       uint64     `json:"byte_end,omitempty"`
+	FileBytes     uint64     `json:"file_bytes,omitempty"`
+	Content       string     `json:"content"`
+	Encoding      string     `json:"encoding"`
+	Digest        string     `json:"digest"`
+	ContentDigest string     `json:"content_digest,omitempty"`
+	CapturedAt    *time.Time `json:"captured_at,omitempty"`
+	Quality       string     `json:"quality,omitempty"`
+	Truncated     bool       `json:"truncated"`
+	SelectedBytes uint64     `json:"selected_bytes"`
+	ContentBytes  uint64     `json:"content_bytes"`
+	Disclosure    string     `json:"disclosure"`
 }
 
 // ProjectedEnrichment exposes deterministic structure derived from an
 // explicitly disclosed artifact. It never adds content or expands the source
 // byte range approved by the caller.
 type ProjectedEnrichment struct {
-	ID               string `json:"id"`
-	Code             string `json:"code"`
-	Format           string `json:"format"`
-	SourceArtifactID string `json:"source_artifact_id"`
-	ByteStart        uint64 `json:"byte_start"`
-	ByteEnd          uint64 `json:"byte_end"`
-	Collector        string `json:"collector"`
-	CollectorVersion string `json:"collector_version"`
-	Quality          string `json:"quality"`
-	Disclosure       string `json:"disclosure"`
+	ID               string   `json:"id"`
+	Code             string   `json:"code"`
+	Format           string   `json:"format"`
+	SourceArtifactID string   `json:"source_artifact_id"`
+	ByteStart        uint64   `json:"byte_start"`
+	ByteEnd          uint64   `json:"byte_end"`
+	Collector        string   `json:"collector"`
+	CollectorVersion string   `json:"collector_version"`
+	Quality          string   `json:"quality"`
+	Disclosure       string   `json:"disclosure"`
+	DiagnosticLines  []string `json:"diagnostic_lines"`
 }
 
 // ProjectedRedaction states which projected identifiers were changed by core

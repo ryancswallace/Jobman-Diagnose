@@ -45,6 +45,35 @@ func TestProfileValidationRejectsUnsafeVariants(t *testing.T) {
 		{name: "logs items", mutate: func(value *Profile) {
 			value.Disclosure["log_content"] = ClassLimits{MaximumItems: 1, MaximumArtifacts: 1, MaximumBytes: 1}
 		}},
+		{name: "source artifacts zero", mutate: func(value *Profile) {
+			value.Disclosure["source_content"] = ClassLimits{MaximumBytes: 1}
+		}},
+		{name: "source items", mutate: func(value *Profile) {
+			value.Disclosure["source_content"] = ClassLimits{MaximumItems: 1, MaximumArtifacts: 1, MaximumBytes: 1}
+		}},
+		{name: "source bytes over hard limit", mutate: func(value *Profile) {
+			value.Disclosure["source_content"] = ClassLimits{MaximumArtifacts: 1, MaximumBytes: 1024*1024 + 1}
+		}},
+		{name: "source context mode", mutate: func(value *Profile) {
+			value.SourceContext = &SourceContextPolicy{Mode: "sometimes"}
+		}},
+		{name: "source context limited missing lines", mutate: func(value *Profile) {
+			value.Disclosure["source_content"] = ClassLimits{MaximumArtifacts: 1, MaximumBytes: 64 * 1024}
+			value.SourceContext = &SourceContextPolicy{Mode: SourceContextModeLimited}
+		}},
+		{name: "source context limited excessive lines", mutate: func(value *Profile) {
+			value.Disclosure["source_content"] = ClassLimits{MaximumArtifacts: 1, MaximumBytes: 64 * 1024}
+			value.SourceContext = &SourceContextPolicy{
+				Mode: SourceContextModeLimited, LinesBeforeAndAfter: MaximumSourceContextLines + 1,
+			}
+		}},
+		{name: "source context full with lines", mutate: func(value *Profile) {
+			value.Disclosure["source_content"] = ClassLimits{MaximumArtifacts: 1, MaximumBytes: 64 * 1024}
+			value.SourceContext = &SourceContextPolicy{Mode: SourceContextModeFull, LinesBeforeAndAfter: 20}
+		}},
+		{name: "source context sharing without disclosure", mutate: func(value *Profile) {
+			value.SourceContext = &SourceContextPolicy{Mode: SourceContextModeFull}
+		}},
 		{name: "credential ambiguous", mutate: func(value *Profile) { value.Credential = &SecretReference{} }},
 		{name: "credential environment", mutate: func(value *Profile) { value.Credential = &SecretReference{Environment: "lowercase"} }},
 		{name: "credential file", mutate: func(value *Profile) { value.Credential = &SecretReference{File: "relative"} }},
@@ -70,6 +99,28 @@ func TestProfileValidationRejectsUnsafeVariants(t *testing.T) {
 				t.Fatal("validate() error = nil")
 			}
 		})
+	}
+}
+
+func TestProfileAllowsExplicitBoundedSourceDisclosure(t *testing.T) {
+	t.Parallel()
+
+	profile := validValidationProfile()
+	profile.Disclosure["source_content"] = ClassLimits{MaximumArtifacts: 1, MaximumBytes: 64 * 1024}
+	profile.SourceContext = &SourceContextPolicy{
+		Mode: SourceContextModeLimited, LinesBeforeAndAfter: 20,
+	}
+	if err := profile.validate(); err != nil {
+		t.Fatal(err)
+	}
+	profile.SourceContext = &SourceContextPolicy{Mode: SourceContextModeFull}
+	if err := profile.validate(); err != nil {
+		t.Fatal(err)
+	}
+	profile.Disclosure = map[string]ClassLimits{"metadata": {MaximumItems: 1, MaximumBytes: 1}}
+	profile.SourceContext = &SourceContextPolicy{Mode: SourceContextModeNone}
+	if err := profile.validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 

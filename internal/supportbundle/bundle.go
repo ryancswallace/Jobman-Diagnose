@@ -27,7 +27,7 @@ const (
 	// Kind identifies the support-bundle manifest.
 	Kind = "jobman.diagnosis_support_bundle"
 	// SchemaVersion is the newest bundle schema emitted by this package.
-	SchemaVersion = 1
+	SchemaVersion = 2
 
 	archiveRoot          = "jobman-diagnosis-support/"
 	maximumPayloadBytes  = 8 * 1024 * 1024
@@ -82,12 +82,13 @@ type entry struct {
 	data        []byte
 }
 
-type enrichmentDocument struct {
+type analysisContextDocument struct {
 	Kind               string                     `json:"kind"`
 	SchemaVersion      int                        `json:"schema_version"`
 	CoreEvidenceID     string                     `json:"core_evidence_id"`
 	AnalysisEvidenceID string                     `json:"analysis_evidence_id"`
-	Items              []diagnosis.EnrichmentItem `json:"items"`
+	Enrichment         []diagnosis.EnrichmentItem `json:"enrichment"`
+	SourceContext      []diagnosis.SourceContext  `json:"source_context"`
 }
 
 type capabilityDocument struct {
@@ -142,7 +143,7 @@ func New(evidence diagnosis.FailureEvidence, report diagnosis.Report, build Buil
 		CoreEvidenceID: evidence.Core.EvidenceID, AnalysisEvidenceID: evidence.AnalysisEvidenceID,
 		ReportID: report.ReportID, CreatedAt: report.GeneratedAt.UTC().Format(time.RFC3339Nano),
 		Files: make([]File, 0, len(entries)), Warnings: []string{
-			"Review evidence.json before sharing; explicitly collected commands, paths, or log tails may contain sensitive data.",
+			"Review evidence.json and analysis-context.json before sharing; explicitly collected commands, paths, log tails, or source text may contain sensitive data.",
 			"Provider credentials, environment values, Jobman database files, and the fingerprint key are never collected by this bundle writer.",
 		},
 	}
@@ -274,13 +275,13 @@ func payloadEntries(evidence diagnosis.FailureEvidence, report diagnosis.Report,
 	if err := diagnosis.Encode(&diagnosed, report); err != nil {
 		return nil, fmt.Errorf("build support bundle report: %w", err)
 	}
-	enrichment, err := encodeJSON(enrichmentDocument{
-		Kind: "jobman.diagnosis_enrichment", SchemaVersion: diagnosis.FailureEvidenceSchemaVersion,
+	analysisContext, err := encodeJSON(analysisContextDocument{
+		Kind: "jobman.diagnosis_analysis_context", SchemaVersion: diagnosis.FailureEvidenceSchemaVersion,
 		CoreEvidenceID: evidence.Core.EvidenceID, AnalysisEvidenceID: evidence.AnalysisEvidenceID,
-		Items: evidence.Enrichment,
+		Enrichment: evidence.Enrichment, SourceContext: evidence.SourceContext,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("build support bundle enrichment: %w", err)
+		return nil, fmt.Errorf("build support bundle analysis context: %w", err)
 	}
 	disclosure, err := encodeJSON(report.Disclosure)
 	if err != nil {
@@ -306,11 +307,11 @@ func payloadEntries(evidence diagnosis.FailureEvidence, report diagnosis.Report,
 	}
 
 	return []entry{
+		{path: "analysis-context.json", description: "Attributed enrichment and explicitly selected point-in-time source context.", disclosure: "selected_analysis_context", data: analysisContext},
 		{path: "build.json", description: "Companion build and current platform facts.", disclosure: "metadata", data: buildBytes},
 		{path: "capabilities.json", description: "Core capability and omission facts.", disclosure: "metadata", data: capabilityBytes},
 		{path: "diagnosis.json", description: "Validated diagnosis report.", disclosure: "report", data: diagnosed.Bytes()},
 		{path: "disclosure.json", description: "Exact optional-provider disclosure manifest.", disclosure: "metadata", data: disclosure},
-		{path: "enrichment.json", description: "Attributed exact-range companion enrichment.", disclosure: "local_only", data: enrichment},
 		{path: "evidence.json", description: "Sealed, sanitized core evidence selected for diagnosis.", disclosure: "selected_evidence", data: core.Bytes()},
 	}, nil
 }
@@ -330,7 +331,7 @@ func renderInventory(paths []string) string {
 	for _, path := range paths {
 		fmt.Fprintf(&result, "- %s\n", path)
 	}
-	result.WriteString("\nReview evidence.json before sharing. Explicitly collected command, path, and log data may be sensitive.\n")
+	result.WriteString("\nReview evidence.json and analysis-context.json before sharing. Explicitly collected command, path, log, and source data may be sensitive.\n")
 
 	return result.String()
 }

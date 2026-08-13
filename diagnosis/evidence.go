@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -21,22 +22,31 @@ const (
 	FailureEvidenceKind = "jobman.failure_evidence"
 	// FailureEvidenceSchemaVersion is the newest wrapper schema supported by
 	// this package.
-	FailureEvidenceSchemaVersion = 1
+	FailureEvidenceSchemaVersion = 2
+
+	// DisclosureSourceContent identifies source text collected by the companion
+	// only after a separate command-line opt in. It is deliberately not a core
+	// Jobman disclosure class because Jobman neither reads nor attests to the
+	// current contents of a target source file.
+	DisclosureSourceContent diagnostic.DisclosureClass = "source_content"
 
 	maximumEnrichmentItems = 128
 	maximumCollectorText   = 256
 	maximumEnrichmentBytes = 512 * 1024
+	maximumSourceContexts  = 8
+	maximumSourceBytes     = 1024 * 1024
 )
 
-// FailureEvidence retains immutable Jobman evidence and separately attributed
-// companion enrichment. AnalysisEvidenceID commits to the core evidence ID and
-// all enrichment semantics, but not to a collection wall clock.
+// FailureEvidence retains immutable Jobman evidence, separately attributed
+// companion enrichment, and explicitly selected point-in-time source context.
+// AnalysisEvidenceID commits to every field in that companion-owned context.
 type FailureEvidence struct {
 	Kind               string              `json:"kind"`
 	SchemaVersion      int                 `json:"schema_version"`
 	AnalysisEvidenceID string              `json:"analysis_evidence_id"`
 	Core               diagnostic.Evidence `json:"core"`
 	Enrichment         []EnrichmentItem    `json:"enrichment"`
+	SourceContext      []SourceContext     `json:"source_context"`
 }
 
 // AnalyzerDescriptor identifies one deterministic collector or analyzer.
@@ -62,6 +72,45 @@ type EnrichmentItem struct {
 	Disclosure       diagnostic.DisclosureClass `json:"disclosure"`
 }
 
+// SourceContextMode controls how much of one explicitly approved source file
+// is retained in analysis evidence.
+type SourceContextMode string
+
+// Supported source-context selection modes.
+const (
+	SourceContextLimited SourceContextMode = "limited"
+	SourceContextFull    SourceContextMode = "full"
+)
+
+// SourceContext is a companion-collected, point-in-time snapshot of current
+// source text. It is supplemental diagnostic context, not proof of the bytes
+// executed by the recorded Jobman run. ByteStart and ByteEnd address the
+// complete current file; StartLine and EndLine describe the selected text.
+type SourceContext struct {
+	ID            string                     `json:"id"`
+	Role          string                     `json:"role"`
+	Path          string                     `json:"path"`
+	Language      string                     `json:"language"`
+	MediaType     string                     `json:"media_type"`
+	Mode          SourceContextMode          `json:"mode"`
+	AnchorLine    uint64                     `json:"anchor_line,omitempty"`
+	AnchorReason  string                     `json:"anchor_reason"`
+	StartLine     uint64                     `json:"start_line"`
+	EndLine       uint64                     `json:"end_line"`
+	TotalLines    uint64                     `json:"total_lines"`
+	ByteStart     uint64                     `json:"byte_start"`
+	ByteEnd       uint64                     `json:"byte_end"`
+	FileBytes     uint64                     `json:"file_bytes"`
+	ContentBytes  uint64                     `json:"content_bytes"`
+	Data          []byte                     `json:"data"`
+	Digest        string                     `json:"digest"`
+	ContentDigest string                     `json:"content_digest"`
+	CapturedAt    time.Time                  `json:"captured_at"`
+	Collector     AnalyzerDescriptor         `json:"collector"`
+	Quality       diagnostic.Quality         `json:"quality"`
+	Disclosure    diagnostic.DisclosureClass `json:"disclosure"`
+}
+
 // CoreFailureEvidence constructs a verified wrapper without companion
 // enrichment. Embedders can use it when they deliberately want core-only
 // analysis.
@@ -72,19 +121,35 @@ func CoreFailureEvidence(core diagnostic.Evidence) (FailureEvidence, error) {
 // SealFailureEvidence verifies core evidence, normalizes enrichment, and
 // computes the companion analysis-evidence identity.
 func SealFailureEvidence(core diagnostic.Evidence, enrichment []EnrichmentItem) (FailureEvidence, error) {
+	return SealFailureEvidenceWithContext(core, enrichment, nil)
+}
+
+// SealFailureEvidenceWithContext verifies core evidence, normalizes companion
+// enrichment and source snapshots, and computes their joint analysis identity.
+func SealFailureEvidenceWithContext(
+	core diagnostic.Evidence,
+	enrichment []EnrichmentItem,
+	sourceContext []SourceContext,
+) (FailureEvidence, error) {
 	if err := diagnostic.Verify(core); err != nil {
 		return FailureEvidence{}, fmt.Errorf("seal failure evidence: verify core evidence: %w", err)
 	}
 	value := FailureEvidence{
 		Kind: FailureEvidenceKind, SchemaVersion: FailureEvidenceSchemaVersion,
 		AnalysisEvidenceID: "sha256:" + strings.Repeat("0", sha256.Size*2),
-		Core:               core, Enrichment: slices.Clone(enrichment),
+		Core:               core, Enrichment: slices.Clone(enrichment), SourceContext: slices.Clone(sourceContext),
 	}
 	slices.SortFunc(value.Enrichment, func(left, right EnrichmentItem) int {
 		return strings.Compare(left.ID, right.ID)
 	})
 	if value.Enrichment == nil {
 		value.Enrichment = []EnrichmentItem{}
+	}
+	slices.SortFunc(value.SourceContext, func(left, right SourceContext) int {
+		return strings.Compare(left.ID, right.ID)
+	})
+	if value.SourceContext == nil {
+		value.SourceContext = []SourceContext{}
 	}
 	if err := validateFailureEvidence(value, true); err != nil {
 		return FailureEvidence{}, err
@@ -135,7 +200,7 @@ func EncodeFailureEvidence(destination io.Writer, value FailureEvidence) error {
 	return nil
 }
 
-//nolint:cyclop // Wrapper validation cross-checks identity, source ranges, collector provenance, and bounds.
+//nolint:cyclop,gocognit // Wrapper validation cross-checks identity, source ranges, collector provenance, and bounds.
 func validateFailureEvidence(value FailureEvidence, placeholder bool) error {
 	if value.Kind != FailureEvidenceKind || value.SchemaVersion != FailureEvidenceSchemaVersion {
 		return errors.New("validate failure evidence: unsupported kind or schema version")
@@ -166,8 +231,74 @@ func validateFailureEvidence(value FailureEvidence, placeholder bool) error {
 	if err != nil || len(encoded) > maximumEnrichmentBytes {
 		return errors.New("validate failure evidence: enrichment exceeds its encoded limit")
 	}
+	if value.SourceContext == nil || len(value.SourceContext) > maximumSourceContexts {
+		return errors.New("validate failure evidence: invalid source context collection")
+	}
+	prior = ""
+	var sourceBytes uint64
+	for _, source := range value.SourceContext {
+		if source.ID <= prior || !validSourceContext(source) {
+			return fmt.Errorf("validate failure evidence: invalid source context %q", source.ID)
+		}
+		if sourceBytes > maximumSourceBytes-source.ContentBytes {
+			return errors.New("validate failure evidence: source context exceeds its content limit")
+		}
+		sourceBytes += source.ContentBytes
+		prior = source.ID
+	}
 
 	return nil
+}
+
+func validSourceContext(source SourceContext) bool {
+	return validSourceIdentity(source) && validSourceBounds(source) && validSourcePayload(source) &&
+		validSourceSelection(source)
+}
+
+func validSourceIdentity(source SourceContext) bool {
+	return strings.HasPrefix(source.ID, "context:source:") &&
+		validIdentifierText(source.ID, maximumCollectorText) && source.Role == "source.context" &&
+		filepath.IsAbs(source.Path) && filepath.Clean(source.Path) == source.Path &&
+		validIdentifierText(source.Language, maximumCollectorText) &&
+		validIdentifierText(source.MediaType, maximumCollectorText) &&
+		validIdentifierText(source.AnchorReason, maximumCollectorText) &&
+		!source.CapturedAt.IsZero() && source.CapturedAt.Location() == time.UTC &&
+		validDescriptor(source.Collector) && source.Quality == diagnostic.QualityPointInTime &&
+		source.Disclosure == DisclosureSourceContent
+}
+
+func validSourceBounds(source SourceContext) bool {
+	return source.StartLine != 0 && source.EndLine >= source.StartLine && source.TotalLines >= source.EndLine &&
+		source.ByteStart < source.ByteEnd && source.ByteEnd <= source.FileBytes &&
+		source.ContentBytes == uint64(len(source.Data)) && source.ContentBytes == source.ByteEnd-source.ByteStart &&
+		source.FileBytes != 0 && source.FileBytes <= maximumSourceBytes && source.ContentBytes <= maximumSourceBytes
+}
+
+func validSourcePayload(source SourceContext) bool {
+	return utf8.Valid(source.Data) && !strings.ContainsRune(string(source.Data), '\x00') &&
+		validDigest(source.Digest) && validDigest(source.ContentDigest) &&
+		contentDigest(source.Data) == source.ContentDigest
+}
+
+func validSourceSelection(source SourceContext) bool {
+	switch source.Mode {
+	case SourceContextLimited:
+		return source.AnchorLine >= source.StartLine && source.AnchorLine <= source.EndLine &&
+			(source.AnchorReason == "explicit_line" || source.AnchorReason == "runtime_log" ||
+				source.AnchorReason == "file_start")
+	case SourceContextFull:
+		return source.AnchorLine == 0 && source.AnchorReason == "full_file" && source.StartLine == 1 &&
+			source.EndLine == source.TotalLines && source.ByteStart == 0 && source.ByteEnd == source.FileBytes &&
+			source.ContentBytes == source.FileBytes && source.ContentDigest == source.Digest
+	default:
+		return false
+	}
+}
+
+func contentDigest(data []byte) string {
+	digest := sha256.Sum256(data)
+
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func validEnrichmentItem(item EnrichmentItem, artifacts map[string]diagnostic.Artifact) bool {
@@ -196,9 +327,11 @@ func failureEvidenceDigest(value FailureEvidence) (string, error) {
 		SchemaVersion  int              `json:"schema_version"`
 		CoreEvidenceID string           `json:"core_evidence_id"`
 		Enrichment     []EnrichmentItem `json:"enrichment"`
+		SourceContext  []SourceContext  `json:"source_context"`
 	}{
 		Kind: value.Kind, SchemaVersion: value.SchemaVersion,
 		CoreEvidenceID: value.Core.EvidenceID, Enrichment: value.Enrichment,
+		SourceContext: value.SourceContext,
 	}
 	encoded, err := json.Marshal(projection)
 	if err != nil {

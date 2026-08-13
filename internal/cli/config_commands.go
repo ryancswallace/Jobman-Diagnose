@@ -140,9 +140,16 @@ func runProfilesCommand(arguments []string, stdout, stderr io.Writer) error {
 		if name == configuration.Defaults.Profile {
 			marker = "*"
 		}
+		source := "none"
+		if profile.SourceContext != nil {
+			source = profile.SourceContext.Mode
+			if profile.SourceContext.Mode == diagnosisconfig.SourceContextModeLimited {
+				source = fmt.Sprintf("limited:%d-lines-each-side", profile.SourceContext.LinesBeforeAndAfter)
+			}
+		}
 		if _, err := fmt.Fprintf(
-			stdout, "%s %s\tprovider=%s\tlocality=%s\tmodel=%s\tdisclosure=%s\n",
-			marker, name, profile.Provider, profile.Locality, profile.Model, strings.Join(classes, ","),
+			stdout, "%s %s\tprovider=%s\tlocality=%s\tmodel=%s\tsource=%s\tdisclosure=%s\n",
+			marker, name, profile.Provider, profile.Locality, profile.Model, source, strings.Join(classes, ","),
 		); err != nil {
 			return err
 		}

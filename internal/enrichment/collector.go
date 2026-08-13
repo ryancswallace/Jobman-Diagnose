@@ -29,6 +29,7 @@ const (
 	CodeGoPanic            = "enrichment.traceback.go_panic"
 	CodeJVMException       = "enrichment.traceback.jvm"
 	CodeCompilerDiagnostic = "enrichment.compiler.diagnostic"
+	CodeCausalMessage      = "enrichment.diagnostic.causal_message"
 )
 
 type byteRange struct {
@@ -99,6 +100,12 @@ func structuredRanges(data []byte) []byteRange {
 			break
 		}
 	}
+	for _, selected := range causalMessages(data, lines) {
+		result = append(result, selected)
+		if len(result) == 12 {
+			break
+		}
+	}
 	slices.SortFunc(result, func(left, right byteRange) int {
 		if left.start != right.start {
 			return left.start - right.start
@@ -106,6 +113,40 @@ func structuredRanges(data []byte) []byteRange {
 
 		return strings.Compare(left.code, right.code)
 	})
+
+	return result
+}
+
+func causalMessages(data []byte, lines []lineRange) []byteRange {
+	signals := [][]byte{
+		[]byte("address already in use"), []byte("cannot find module"), []byte("certificate signed by unknown authority"),
+		[]byte("certificate verify failed"), []byte("command not found"), []byte("connection refused"),
+		[]byte("context deadline exceeded"), []byte("deadlock detected"), []byte("duplicate key"),
+		[]byte("missing setting"), []byte("no space left on device"), []byte("no such host"),
+		[]byte("parameter not set"), []byte("permission denied"), []byte("read-only file system"),
+		[]byte("service unavailable"), []byte("too many open files"), []byte("too many requests"),
+		[]byte("undefined reference"),
+	}
+	result := make([]byteRange, 0, 4)
+	for _, line := range lines {
+		value := bytes.ToLower(bytes.TrimSpace(data[line.start:line.end]))
+		matched := false
+		for _, signal := range signals {
+			if bytes.Contains(value, signal) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+		result = append(result, byteRange{
+			start: line.start, end: line.end, code: CodeCausalMessage, format: "causal_message",
+		})
+		if len(result) == 4 {
+			break
+		}
+	}
 
 	return result
 }

@@ -259,3 +259,22 @@ func TestItemDetailCoversSafeDisplayAllowlist(t *testing.T) {
 		}
 	}
 }
+
+func TestSourceContextDetailLabelsCurrentSelection(t *testing.T) {
+	t.Parallel()
+
+	limited := sourceContextDetail(diagnosis.SourceContext{
+		Path: "/srv/app/worker.py", Mode: diagnosis.SourceContextLimited,
+		StartLine: 20, EndLine: 60, AnchorLine: 40,
+	})
+	if !strings.Contains(limited, "worker.py") || !strings.Contains(limited, "lines 20-60 around line 40") ||
+		!strings.Contains(limited, "may differ from the code that ran") {
+		t.Fatalf("limited source detail = %q", limited)
+	}
+	full := sourceContextDetail(diagnosis.SourceContext{
+		Path: "/srv/app/main.go", Mode: diagnosis.SourceContextFull, TotalLines: 80,
+	})
+	if !strings.Contains(full, "full file, lines 1-80") {
+		t.Fatalf("full source detail = %q", full)
+	}
+}

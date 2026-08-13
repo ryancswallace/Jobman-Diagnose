@@ -58,11 +58,11 @@ func TestBundleIsDeterministicPrivateAndComplete(t *testing.T) {
 	files := readArchive(t, first.Bytes())
 	want := []string{
 		"jobman-diagnosis-support/INVENTORY.txt",
+		"jobman-diagnosis-support/analysis-context.json",
 		"jobman-diagnosis-support/build.json",
 		"jobman-diagnosis-support/capabilities.json",
 		"jobman-diagnosis-support/diagnosis.json",
 		"jobman-diagnosis-support/disclosure.json",
-		"jobman-diagnosis-support/enrichment.json",
 		"jobman-diagnosis-support/evidence.json",
 		"jobman-diagnosis-support/manifest.json",
 	}

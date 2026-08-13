@@ -4,6 +4,7 @@ package presentation
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -11,7 +12,11 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 )
 
-const humanOutputWidth = 100
+const (
+	humanOutputWidth  = 100
+	minimumHumanWidth = 40
+	maximumHumanWidth = 240
+)
 
 const (
 	defaultFindingLimit     = 2
@@ -25,6 +30,9 @@ const (
 type HumanOptions struct {
 	Details bool
 	Color   bool
+	// Width overrides the default wrapping width for tests and embedding
+	// callers. Zero selects the stable 100-column CLI default.
+	Width int
 }
 
 // Human writes a readable, evidence-aware report for an interactive user.
@@ -45,12 +53,19 @@ func HumanWithOptions(
 	if destination == nil {
 		return fmt.Errorf("write diagnosis: nil destination")
 	}
+	width := options.Width
+	if width == 0 {
+		width = humanOutputWidth
+	}
+	if width < minimumHumanWidth || width > maximumHumanWidth {
+		return fmt.Errorf("write diagnosis: width must be between %d and %d columns", minimumHumanWidth, maximumHumanWidth)
+	}
 	view, err := newReportView(report, evidence)
 	if err != nil {
 		return fmt.Errorf("write diagnosis: %w", err)
 	}
 	renderer := humanRenderer{
-		view: view, width: humanOutputWidth, details: options.Details,
+		view: view, width: width, details: options.Details,
 		style: newHumanStyle(options.Color),
 	}
 	renderer.render()
@@ -142,8 +157,12 @@ func (renderer *humanRenderer) renderFinding(finding diagnosis.Finding, label st
 	renderer.findingDetail(confidenceLabel, confidenceValue)
 	rootCause, failurePath, structuredCause := generatedCauseDetails(finding)
 	if structuredCause {
-		renderer.findingDetail("Root cause", rootCause)
-		renderer.findingDetail("Failure path", failurePath)
+		if !equivalentText(rootCause, finding.Summary) {
+			renderer.findingDetail("Root cause", rootCause)
+		}
+		if !equivalentText(failurePath, finding.Summary) && !equivalentText(failurePath, rootCause) {
+			renderer.findingDetail("Failure path", failurePath)
+		}
 	} else if !equivalentText(finding.Explanation, finding.Summary) {
 		renderer.findingDetail("Why", finding.Explanation)
 	}
@@ -313,9 +332,22 @@ func (renderer *humanRenderer) renderAIDisclosure() {
 			"  • ", "    ",
 			"Generated conclusions are advisory; Jobman's observed facts and retry policy remain authoritative.",
 		)
+		renderer.renderSourceDisclosure()
 		return
 	}
 	renderer.paragraph("  • ", "    ", "No generated hypothesis was accepted; this is the complete deterministic diagnosis.")
+	renderer.renderSourceDisclosure()
+}
+
+func (renderer *humanRenderer) renderSourceDisclosure() {
+	for _, source := range renderer.view.evidence.SourceContext {
+		if !slices.Contains(renderer.view.report.Disclosure.ArtifactIDs, source.ID) {
+			continue
+		}
+		renderer.paragraph(
+			"  • ", "    ", "Source disclosure: "+sourceContextDetail(source)+".",
+		)
+	}
 }
 
 func (renderer *humanRenderer) renderTechnicalDetails() {
