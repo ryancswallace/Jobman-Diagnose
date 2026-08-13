@@ -5,9 +5,12 @@
 
 set -u
 
-script_directory=$(CDPATH= cd -P "$(dirname "$0")" && pwd) || exit 1
+script_directory=$(CDPATH='' cd -P "$(dirname "$0")" && pwd) || exit 1
+repository_directory=$(CDPATH='' cd -P "$script_directory/../.." && pwd) || exit 1
 jobman_command=${JOBMAN:-jobman}
+diagnose_command=${JOBMAN_DIAGNOSE:-"$repository_directory/bin/jobman-diagnose"}
 python_command=${PYTHON:-python3}
+source_mode=${JOBMAN_AI_SOURCE:-}
 
 usage() {
     cat <<'EOF'
@@ -18,8 +21,13 @@ Run every numbered Python failure fixture through Jobman, then display
 arguments are base filenames such as 03_invalid_json.py.
 
 Environment:
-  JOBMAN  Jobman executable path or command name (default: jobman)
-  PYTHON  Python 3.11+ executable path or command name (default: python3)
+  JOBMAN           Jobman executable path or command name (default: jobman)
+  JOBMAN_DIAGNOSE  Companion executable path or command name
+                   (default: this checkout's bin/jobman-diagnose)
+  PYTHON           Python 3.11+ executable path or command name (default: python3)
+  JOBMAN_AI_SOURCE Optional source disclosure mode: limited or full
+
+Run `make build` from the repository root before using the default companion.
 EOF
 }
 
@@ -30,10 +38,37 @@ case ${1-} in
         ;;
 esac
 
+case $source_mode in
+    '' | limited | full) ;;
+    *)
+        printf 'error: JOBMAN_AI_SOURCE must be limited, full, or empty\n' >&2
+        exit 2
+        ;;
+esac
+
 if ! command -v "$jobman_command" >/dev/null 2>&1; then
     printf 'error: Jobman executable not found: %s\n' "$jobman_command" >&2
     exit 1
 fi
+jobman_path=$(command -v "$jobman_command")
+if ! diagnose_path=$(command -v "$diagnose_command"); then
+    printf 'error: Jobman Diagnose executable not found: %s\n' "$diagnose_command" >&2
+    if [ -z "${JOBMAN_DIAGNOSE+x}" ]; then
+        printf 'hint: run make build from %s\n' "$repository_directory" >&2
+    fi
+    exit 1
+fi
+diagnose_directory=$(CDPATH='' cd -P "$(dirname "$diagnose_path")" && pwd) || exit 1
+diagnose_path="$diagnose_directory/$(basename "$diagnose_path")"
+if [ "$(basename "$diagnose_path")" != "jobman-diagnose" ]; then
+    printf 'error: JOBMAN_DIAGNOSE must resolve to an executable named jobman-diagnose: %s\n' \
+        "$diagnose_path" >&2
+    exit 1
+fi
+# Jobman discovers extension commands by their jobman-<name> executable name.
+# Put the explicitly selected build ahead of any installed companion.
+PATH="$diagnose_directory${PATH:+:$PATH}"
+export PATH
 if ! command -v "$python_command" >/dev/null 2>&1; then
     printf 'error: Python executable not found: %s\n' "$python_command" >&2
     exit 1
@@ -42,10 +77,13 @@ if ! "$python_command" -c 'import sys; raise SystemExit(sys.version_info < (3, 1
     printf 'error: Python 3.11 or newer is required\n' >&2
     exit 1
 fi
-if ! "$jobman_command" diagnose --help >/dev/null 2>&1; then
-    printf 'error: jobman diagnose is not installed or discoverable\n' >&2
+if ! "$jobman_path" diagnose --help >/dev/null 2>&1; then
+    printf 'error: Jobman could not dispatch the selected companion: %s\n' "$diagnose_path" >&2
     exit 1
 fi
+
+printf 'Jobman:          %s\n' "$jobman_path"
+printf 'Jobman Diagnose: %s\n' "$diagnose_path"
 
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/jobman-python-failures.XXXXXX") || {
     printf 'error: could not create a temporary directory\n' >&2
@@ -94,7 +132,7 @@ for fixture_argument do
     : >"$run_stdout"
     : >"$run_stderr"
     if [ "$fixture" = "15_hangs_until_timeout.py" ]; then
-        "$jobman_command" run \
+        "$jobman_path" run \
             --name "$job_name" \
             --run-timeout 2s \
             --stop-grace 1s \
@@ -103,7 +141,7 @@ for fixture_argument do
             >"$run_stdout" 2>"$run_stderr"
         run_status=$?
     else
-        "$jobman_command" run \
+        "$jobman_path" run \
             --name "$job_name" \
             --wait \
             -- "$python_command" "$script_path" \
@@ -133,9 +171,18 @@ for fixture_argument do
     else
         printf 'Outcome: expected failure (jobman run status %s)\n' "$run_status"
     fi
-    printf '\nDiagnosis: jobman diagnose --ai-logs %s\n\n' "$job_id"
-
-    if ! "$jobman_command" diagnose --ai-logs "$job_id"; then
+    if [ -n "$source_mode" ]; then
+        printf '\nDiagnosis: jobman diagnose --ai-logs --ai-source %s --source-file %s %s\n\n' \
+            "$source_mode" "$script_path" "$job_id"
+        "$jobman_path" diagnose --ai-logs --ai-source "$source_mode" \
+            --source-file "$script_path" "$job_id"
+        diagnose_status=$?
+    else
+        printf '\nDiagnosis: jobman diagnose --ai-logs %s\n\n' "$job_id"
+        "$jobman_path" diagnose --ai-logs "$job_id"
+        diagnose_status=$?
+    fi
+    if [ "$diagnose_status" -ne 0 ]; then
         printf 'error: diagnosis failed for %s\n' "$job_id" >&2
         issues=$((issues + 1))
     fi

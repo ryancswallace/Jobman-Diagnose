@@ -23,9 +23,12 @@ contains the target-specific failure. Generated conclusions remain advisory.
 
 The included POSIX shell runner submits each fixture, waits for its expected
 failure, extracts the newly created canonical job ID, and displays
-`jobman diagnose --ai-logs` before continuing to the next case:
+`jobman diagnose --ai-logs` before continuing to the next case. It prepends the
+checkout's `bin/` directory while it runs, so Jobman's extension dispatch uses
+the companion produced by `make build` instead of an installed release:
 
 ```console
+make -C ../.. build
 ./run_with_jobman.sh
 ```
 
@@ -35,10 +38,18 @@ Run only selected cases by passing their base filenames:
 ./run_with_jobman.sh 03_invalid_json.py 12_async_exception_group.py
 ```
 
-Set `JOBMAN` or `PYTHON` to select alternate executable paths. The runner gives
-the hanging case a two-second Jobman run timeout and treats target failures as
-expected; configuration, submission, or diagnosis failures make the runner
-exit nonzero after it has attempted the remaining cases.
+Set `JOBMAN`, `JOBMAN_DIAGNOSE`, or `PYTHON` to select alternate executable
+paths. `JOBMAN_DIAGNOSE` must resolve to an executable named
+`jobman-diagnose`, matching Jobman's extension protocol. The runner prints both
+selected binary paths before submitting jobs. It gives the hanging case a
+two-second Jobman run timeout and treats target failures as expected;
+configuration, submission, or diagnosis failures make the runner exit nonzero
+after it has attempted the remaining cases.
+
+Set `JOBMAN_AI_SOURCE=limited` to add a line-centered snapshot of each Python
+fixture to its AI request, or `JOBMAN_AI_SOURCE=full` to add the complete
+fixture. The runner supplies `--source-file` explicitly. The selected profile
+must allow `source_content`; source text is unredacted and point-in-time.
 
 ## Cases
 
@@ -92,8 +103,11 @@ For useful comparisons, diagnose each completed job three ways:
 jobman diagnose JOB
 jobman diagnose --ai JOB
 jobman diagnose --ai-logs JOB
+jobman diagnose --ai-logs --ai-source limited JOB
 ```
 
 The first shows deterministic evidence only. The second tests inference from
 metadata, command, path, environment-name, and system context. The third adds
-the bounded redacted log tail and should produce the most specific hypothesis.
+the bounded redacted log tail. The fourth adds current source around the
+traceback location and should help distinguish the implementation path from
+the runtime symptom.
