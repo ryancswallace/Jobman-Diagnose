@@ -53,6 +53,11 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
   prefers the freshly built companion and skips unavailable optional
   toolchains explicitly.
 
+### Fixed
+
+- Made persisted source-context and generation-request paths validate
+  consistently when evidence is moved between POSIX and Windows systems.
+
 ### Security
 
 - Kept current source text outside core execution truth: it is unredacted,

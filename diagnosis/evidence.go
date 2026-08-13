@@ -7,13 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/ryancswallace/jobman/diagnostic"
+
+	"github.com/ryancswallace/jobman-diagnose/internal/portablepath"
 )
 
 const (
@@ -258,7 +259,7 @@ func validSourceContext(source SourceContext) bool {
 func validSourceIdentity(source SourceContext) bool {
 	return strings.HasPrefix(source.ID, "context:source:") &&
 		validIdentifierText(source.ID, maximumCollectorText) && source.Role == "source.context" &&
-		filepath.IsAbs(source.Path) && filepath.Clean(source.Path) == source.Path &&
+		portablepath.IsCleanAbsolute(source.Path) &&
 		validIdentifierText(source.Language, maximumCollectorText) &&
 		validIdentifierText(source.MediaType, maximumCollectorText) &&
 		validIdentifierText(source.AnchorReason, maximumCollectorText) &&

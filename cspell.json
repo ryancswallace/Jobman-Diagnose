@@ -107,6 +107,7 @@
     "openaicompat",
     "ossf",
     "pids",
+    "portablepath",
     "procps",
     "providerhttp",
     "qwen",

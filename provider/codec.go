@@ -13,12 +13,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/ryancswallace/jobman-diagnose/internal/portablepath"
 )
 
 const (
@@ -565,8 +566,8 @@ func validProjectedSource(artifact ProjectedArtifact) bool {
 
 func validProjectedSourceIdentity(artifact ProjectedArtifact) bool {
 	return artifact.Role == "source.context" && artifact.Run == 0 && artifact.Stream == "" &&
-		artifact.Encoding == "utf-8" && !artifact.Truncated && filepath.IsAbs(artifact.Path) &&
-		filepath.Clean(artifact.Path) == artifact.Path && validText(artifact.Path, 4096) &&
+		artifact.Encoding == "utf-8" && !artifact.Truncated && portablepath.IsCleanAbsolute(artifact.Path) &&
+		validText(artifact.Path, 4096) &&
 		validText(artifact.Language, 160) && validText(artifact.MediaType, 160) &&
 		artifact.CapturedAt != nil && !artifact.CapturedAt.IsZero() && artifact.Quality == "point_in_time"
 }
