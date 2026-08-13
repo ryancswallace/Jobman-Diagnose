@@ -205,6 +205,102 @@ func TestCollectRejectsInvalidOptionsAndCancellation(t *testing.T) {
 	}
 }
 
+func TestCollectRejectsUnavailableAndOutOfRangeSources(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	valid := filepath.Join(directory, "main.go")
+	writeSource(t, valid, "package main\n")
+	evidence := sourceEvidence(t, directory, diagnostic.Command{
+		Executable: "go", Arguments: []string{"run", "main.go"},
+	}, nil)
+	options := Options{Mode: diagnosis.SourceContextLimited, MaximumBytes: 4096}
+
+	withoutCommand, err := testevidence.Failed("nonzero_exit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertCollectError(t, withoutCommand, options, "target command is unavailable")
+
+	noSource := sourceEvidence(t, directory, diagnostic.Command{
+		Executable: "python3", Arguments: []string{"--version"},
+	}, nil)
+	assertCollectError(t, noSource, options, "no source file could be inferred")
+
+	withoutWorkingDirectory := removeEvidenceCode(t, evidence, diagnostic.CodeTargetWorkingDirectory)
+	assertCollectError(t, withoutWorkingDirectory, options, "target working directory is unavailable")
+
+	unsupported := options
+	unsupported.File = filepath.Join(directory, "README.txt")
+	assertCollectError(t, evidence, unsupported, "supported source-file extension")
+
+	missing := options
+	missing.File = filepath.Join(directory, "missing.go")
+	assertCollectError(t, evidence, missing, "inspect")
+
+	emptyPath := filepath.Join(directory, "empty.go")
+	if err := os.WriteFile(emptyPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	empty := options
+	empty.File = emptyPath
+	assertCollectError(t, evidence, empty, "must contain between 1")
+
+	directoryPath := filepath.Join(directory, "directory.go")
+	if err := os.Mkdir(directoryPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	directorySource := options
+	directorySource.File = directoryPath
+	assertCollectError(t, evidence, directorySource, "regular, non-symlink")
+
+	outOfRange := options
+	outOfRange.File = valid
+	outOfRange.Line = 2
+	assertCollectError(t, evidence, outOfRange, "is outside")
+}
+
+func TestSourcePathAndStableOpenHelpers(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	sourcePath := filepath.Join(directory, "source", "main.go")
+	otherPath := filepath.Join(directory, "other", "main.go")
+	if sameSourcePath(sourcePath, otherPath) {
+		t.Fatal("sameSourcePath() matched different absolute paths")
+	}
+	if line, found := inferSourceLine(sourcePath, []diagnostic.Artifact{
+		{Disclosure: diagnostic.DisclosureCommand, Data: []byte("main.go:8")},
+		{Disclosure: diagnostic.DisclosureLogContent, Data: []byte("at main (main.go:12)")},
+	}); !found || line != 12 {
+		t.Fatalf("inferSourceLine() = %d, %t", line, found)
+	}
+	candidates := sourceCandidates(diagnostic.Command{
+		Executable: "python3",
+		Arguments:  []string{"worker.py", "worker.py", "two words.go", "--flag"},
+	})
+	if len(candidates) != 1 || candidates[0] != "worker.py" {
+		t.Fatalf("sourceCandidates() = %#v", candidates)
+	}
+
+	first := filepath.Join(directory, "first.go")
+	second := filepath.Join(directory, "second.go")
+	writeSource(t, first, "package first\n")
+	writeSource(t, second, "package second\n")
+	firstInfo, err := os.Lstat(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openStableSource(filepath.Join(directory, "missing.go"), firstInfo); err == nil ||
+		!strings.Contains(err.Error(), "open") {
+		t.Fatalf("openStableSource(missing) error = %v", err)
+	}
+	if _, err := openStableSource(second, firstInfo); err == nil ||
+		!strings.Contains(err.Error(), "identity changed") {
+		t.Fatalf("openStableSource(identity change) error = %v", err)
+	}
+}
+
 func sourceEvidence(
 	t *testing.T,
 	workingDirectory string,
@@ -242,6 +338,36 @@ func sourceEvidence(
 	}
 
 	return sealed
+}
+
+func removeEvidenceCode(t *testing.T, evidence diagnostic.Evidence, code string) diagnostic.Evidence {
+	t.Helper()
+	items := make([]diagnostic.Item, 0, len(evidence.Items))
+	for _, item := range evidence.Items {
+		if item.Code != code {
+			items = append(items, item)
+		}
+	}
+	evidence.Items = items
+	evidence.EvidenceID = ""
+	sealed, err := diagnostic.Seal(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return sealed
+}
+
+func assertCollectError(
+	t *testing.T,
+	evidence diagnostic.Evidence,
+	options Options,
+	want string,
+) {
+	t.Helper()
+	if _, err := Collect(t.Context(), evidence, options); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("Collect() error = %v, want substring %q", err, want)
+	}
 }
 
 func writeSource(t *testing.T, path, content string) {

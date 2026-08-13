@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 	"github.com/ryancswallace/jobman-diagnose/internal/config"
 	"github.com/ryancswallace/jobman-diagnose/internal/evaluation"
+	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
 func TestParseEvaluationOptions(t *testing.T) {
@@ -378,6 +380,159 @@ profiles:
 			}
 		})
 	}
+}
+
+func TestRunLiveEvaluationWithCommandBridgeCapture(t *testing.T) {
+	t.Parallel()
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	configuration := filepath.Join(root, "diagnosis.yml")
+	contents := fmt.Sprintf(`schema_version: 2
+defaults:
+  profile: test
+profiles:
+  test:
+    provider: command
+    locality: local
+    command:
+      executable: %q
+      arguments: ["-test.run=^TestEvaluateCommandBridgeHelper$"]
+    model: test-model
+    require_json_schema: true
+    timeout: 10s
+    maximum_input_bytes: 262144
+    maximum_output_bytes: 32768
+    disclosure:
+      metadata:
+        maximum_items: 256
+        maximum_bytes: 131072
+`, executable)
+	if writeErr := os.WriteFile(configuration, []byte(contents), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	corpus := filepath.Join("..", "..", "testdata", "evaluation", "manifest.json")
+	output := filepath.Join(root, "evaluation.json")
+	capture := filepath.Join(root, "proposals.json")
+	if runErr := run([]string{
+		"--corpus", corpus, "--cases", "ambiguous_worker_stop", "--live",
+		"--diagnosis-config", configuration, "--allow-fallback",
+		"--output", output, "--capture-proposals", capture,
+	}, &bytes.Buffer{}, &bytes.Buffer{}); runErr != nil {
+		t.Fatal(runErr)
+	}
+	encoded, err := os.ReadFile(capture) // #nosec G304 -- capture is in the test's private temporary directory.
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document proposalCaptureDocument
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Records) != 1 || !document.Records[0].ProposalAccepted ||
+		document.Records[0].CaseName != "ambiguous_worker_stop" || document.Records[0].Iteration != 1 {
+		t.Fatalf("capture document = %#v", document)
+	}
+}
+
+func TestEvaluateCommandBridgeHelper(_ *testing.T) {
+	if os.Getenv("JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL") != "3" {
+		return
+	}
+	request, err := provider.DecodeRequest(os.Stdin, 262144)
+	if err != nil {
+		os.Exit(20)
+	}
+	proposal := provider.Proposal{
+		Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion,
+		RequestID: request.RequestID, Hypotheses: []provider.Hypothesis{},
+		RecommendedActions: []string{}, MissingEvidence: []provider.MissingEvidence{},
+	}
+	if err := json.NewEncoder(os.Stdout).Encode(proposal); err != nil {
+		os.Exit(21)
+	}
+	os.Exit(0)
+}
+
+func TestNewLiveDiagnosticianRoutesApprovedLogs(t *testing.T) {
+	t.Parallel()
+
+	profile := liveTestProfile()
+	generator := &stubGenerator{profile: profile}
+	diagnostician, err := newLiveDiagnostician(
+		errorDiagnostician{err: errors.New("base")}, generator, "test", profile,
+		[]string{"metadata", "log_content"}, false,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := diagnostician.(capabilityRoutedDiagnostician); !ok {
+		t.Fatalf("diagnostician type = %T", diagnostician)
+	}
+	if _, err := newLiveDiagnostician(nil, generator, "test", profile, []string{"metadata"}, false); err == nil {
+		t.Fatal("newLiveDiagnostician(nil base) error = nil")
+	}
+}
+
+func TestCaptureGeneratorRecordsProviderFailures(t *testing.T) {
+	t.Parallel()
+
+	request := provider.Request{RequestID: "request", AnalysisEvidenceID: "evidence"}
+	tests := []struct {
+		name string
+		err  error
+		code string
+	}{
+		{name: "classified", err: provider.NewFailure(provider.FailureRequestTimeout, errors.New("timeout")), code: "request_timeout"},
+		{name: "unclassified", err: errors.New("failure"), code: "unclassified"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			capture := &captureGenerator{Generator: &stubGenerator{err: test.err}}
+			if _, err := capture.Generate(t.Context(), request); !errors.Is(err, test.err) {
+				t.Fatalf("Generate() error = %v", err)
+			}
+			if len(capture.records) != 1 || capture.records[0].FailureCode != test.code ||
+				capture.records[0].RequestID != request.RequestID ||
+				capture.records[0].AnalysisEvidenceID != request.AnalysisEvidenceID {
+				t.Fatalf("capture records = %#v", capture.records)
+			}
+		})
+	}
+}
+
+func liveTestProfile() config.Profile {
+	return config.Profile{
+		Provider: "command", Locality: provider.LocalityLocal, Model: "test-model",
+		Timeout: "2s", MaximumInputBytes: 262144, MaximumOutputBytes: 32768,
+		Disclosure: map[string]config.ClassLimits{
+			"metadata":    {MaximumItems: 256, MaximumBytes: 131072},
+			"log_content": {MaximumArtifacts: 2, MaximumBytes: 65536},
+		},
+	}
+}
+
+type stubGenerator struct {
+	profile  config.Profile
+	response provider.Response
+	err      error
+}
+
+func (*stubGenerator) Name() string { return "command" }
+
+func (generator *stubGenerator) Capabilities() provider.Capabilities {
+	return provider.Capabilities{
+		NativeJSONSchema: true, MaximumInputBytes: generator.profile.MaximumInputBytes,
+		MaximumOutputBytes: generator.profile.MaximumOutputBytes, Locality: generator.profile.Locality,
+	}
+}
+
+func (generator *stubGenerator) Generate(context.Context, provider.Request) (provider.Response, error) {
+	return generator.response, generator.err
 }
 
 type errorWriter struct{}
