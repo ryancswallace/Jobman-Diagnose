@@ -199,15 +199,16 @@ func TestRequiredInstructionsDescribeRelationalRules(t *testing.T) {
 	instructions := strings.Join(RequiredInstructions(), "\n")
 	for _, expected := range []string{
 		"never cite the same evidence as both supporting and contradicting",
-		"application_configuration means a rejected",
+		"application_configuration for rejected",
 		"unknown_target_error is a last resort",
 		"smallest directly relevant evidence set",
-		"explanation should add the causal path",
+		"root_cause names the deepest supported cause",
 		"Return at most one hypothesis",
-		"complete_at_exit reports consumption",
+		"complete_at_exit resource observation reports consumption",
 		"Never describe a traceback, sanitized byte range",
 		"deterministic candidates as confirmed framing",
 		"source text alone cannot establish a failure cause",
+		"every material exception branch, validation item, cause and effect",
 	} {
 		if !strings.Contains(instructions, expected) {
 			t.Fatalf("request instructions omit %q", expected)

@@ -186,6 +186,8 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 			{ID: "readonly", Content: "write /etc/jobman/generated.conf: read-only file system"},
 			{ID: "database", Content: "duplicate key violates unique constraint customers_email_key"},
 			{ID: "deadline", Content: "  File \"/srv/request_timeout.py\", line 17\nGET https://inventory.internal/snapshot: context deadline exceeded"},
+			{ID: "service", Content: "HTTP 503 Service Unavailable from https://inventory.internal/v1/reserve"},
+			{ID: "timeout", Content: "TimeoutError: inventory service did not respond within 750 ms"},
 		},
 	}}
 	tests := []struct {
@@ -220,6 +222,11 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 		{name: "deadline retains URL path", code: "generated.dependency_unavailable", ref: "deadline", text: "inventory.internal/snapshot: context deadline exceeded", want: true},
 		{name: "deadline omits URL path", code: "generated.dependency_unavailable", ref: "deadline", text: "context deadline exceeded", want: false},
 		{name: "stack filename is not endpoint", code: "generated.dependency_unavailable", ref: "deadline", text: "request_timeout.py: context deadline exceeded", want: false},
+		{name: "http 503 is an external service response", code: "generated.external_service_failure", ref: "service", text: "HTTP 503 Service Unavailable from inventory.internal/v1/reserve", want: true},
+		{name: "http 503 is not a reachability failure", code: "generated.dependency_unavailable", ref: "service", text: "HTTP 503 Service Unavailable from inventory.internal/v1/reserve", want: false},
+		{name: "http 503 is not inherently transient", code: "generated.transient_infrastructure", ref: "service", text: "HTTP 503 Service Unavailable from inventory.internal/v1/reserve", want: false},
+		{name: "spaced timeout error retains compact exception signal", code: "generated.dependency_unavailable", ref: "timeout", text: "inventory timeout error after 750 ms", want: true},
+		{name: "timeout signal omitted", code: "generated.dependency_unavailable", ref: "timeout", text: "inventory delayed for 750 ms", want: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -229,6 +236,23 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 				t.Fatalf("hypothesisCauseSupported(%q, %q) = %t, want %t", test.code, test.ref, got, test.want)
 			}
 		})
+	}
+}
+
+func TestDirectCauseSignalMakesExplicitHTTPServerFailureTaxonomyExclusive(t *testing.T) {
+	t.Parallel()
+
+	projection := Projection{Artifacts: []ProjectedArtifact{{
+		ID: "stderr", Disclosure: "log_content",
+		Content: "checkout failed: HTTP 503 Service Unavailable from https://inventory.internal/v1/reserve",
+	}}}
+	if !DirectCauseSignalSupported("generated.external_service_failure", projection) {
+		t.Fatal("HTTP 503 did not authorize external_service_failure")
+	}
+	for _, code := range []string{"generated.dependency_unavailable", "generated.transient_infrastructure"} {
+		if DirectCauseSignalSupported(code, projection) {
+			t.Fatalf("HTTP 503 also authorized %s", code)
+		}
 	}
 }
 
