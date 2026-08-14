@@ -7,7 +7,7 @@ when their corresponding local toolchains are available and are otherwise
 reported as skipped.
 
 This executable lab declares 11 programs and is intentionally smaller than the
-60-case normalized evaluation corpus. The observed count can be lower when an
+72-case normalized evaluation corpus. The observed count can be lower when an
 optional Node.js, C, JVM, or Rust toolchain is unavailable or its setup step is
 skipped. Use `devel/evaluate` for the full corpus; it does not execute these
 programs during the evaluation run.

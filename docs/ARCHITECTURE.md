@@ -20,7 +20,7 @@ core client -> verification -> exact-range enrichment -> deterministic engine
                                   explicit --ai/--profile activation
                                                    |
                                                    v
-                           disclosure projection -> sealed request schema 4
+                           disclosure projection -> sealed request schema 5
                                                    |
                                                    v
                              one StructuredGenerator call (optional)
@@ -95,11 +95,14 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    and approves metadata plus bounded command argument vectors, filesystem
    context, environment variable names/roles, and point-in-time
    state-filesystem/cgroup constraints. `--ai-logs` or
-   `--share log_content` additionally requests
-   and approves a bounded live tail. Effective invocation approvals, including
-   any profile source default, are intersected with the profile disclosure
-   allowlist; `local_only` evidence is never projected on its own. Exact-range
-   structure derived from a disclosed log is projected only
+   `--share log_content` additionally requests and approves bounded live log
+   context. Unless `--log-bytes` is explicit, the companion asks core for up to
+   1 MiB of local search material, ranks exact causal and structured ranges,
+   and projects continuous context windows within the profile ceiling.
+   Effective invocation approvals, including any profile source default, are
+   intersected with the profile disclosure allowlist; `local_only` evidence is
+   never projected on its own. Exact-range structure derived from a disclosed
+   log is projected only
    with that source artifact and accounted separately. Log
    content also requires Jobman's `configured_value_redaction_v1` capability.
    Profile `source_context` or `--ai-source limited|full` separately approves
@@ -107,9 +110,15 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    default. Inference must resolve exactly one direct-command source path, and
    `--source-file` supplies an explicit override. Source context is unredacted,
    point-in-time data and never independently authorizes a generated cause.
-3. The projection is rejected, not silently truncated, if a class or total
-   request exceeds its configured ceiling. Deterministic findings supported by
-   excluded evidence are omitted from the request as well.
+   Before projection, current source is compared with runtime source locations;
+   detectable path, line-range, or traceback-line mismatches produce a
+   controlled warning and are withheld. A compatible location remains
+   point-in-time context rather than execution attestation.
+3. Log projection selects provenance-carrying causal windows within its class
+   ceiling and uses terminal context only when no exact diagnostic range is
+   available. Other classes and the total request are rejected rather than
+   silently truncated when they exceed a configured ceiling. Deterministic
+   findings supported by excluded evidence are omitted from the request.
 4. The companion seals a `jobman.diagnosis_generation_request` value containing
    typed data, an exact manifest, controlled hypothesis codes, candidates and
    actions, fixed untrusted-data instructions, and a derived request-specific

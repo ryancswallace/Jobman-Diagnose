@@ -41,5 +41,9 @@ reproducible. The manifest hashes every member other than itself.
 The writer never includes provider credentials, environment values, a Jobman
 database, raw state files, or the store fingerprint key. The selected evidence
 may include commands, arguments, paths, bounded logs, or unredacted source text
-when the invocation explicitly collected them. Review `evidence.json` and
-`analysis-context.json` before sending an archive outside your security boundary.
+when the invocation explicitly collected them. Explicit AI log sharing may
+retain up to 1 MiB of local search material in `evidence.json` even though only
+the smaller profile-bounded causal windows are sent to the provider. An
+explicit `--log-bytes` reduces that collection bound. Review `evidence.json`
+and `analysis-context.json` before sending an archive outside your security
+boundary.

@@ -58,13 +58,13 @@ func TestCheckContractVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read configuration fixture: %v", err)
 	}
-	content = bytes.Replace(content, []byte("schema-4 JSON"), []byte("schema-3 JSON"), 1)
+	content = bytes.Replace(content, []byte("schema-5 JSON"), []byte("schema-4 JSON"), 1)
 	// #nosec G703 -- the test path is a fixed name beneath t.TempDir().
 	if writeErr := os.WriteFile(configurationPath, content, 0o600); writeErr != nil {
 		t.Fatalf("write stale configuration fixture: %v", writeErr)
 	}
 	problems, err = checkContractVersions(root)
-	if err != nil || len(problems) != 1 || !strings.Contains(problems[0], "schema-4 JSON") {
+	if err != nil || len(problems) != 1 || !strings.Contains(problems[0], "schema-5 JSON") {
 		t.Fatalf("checkContractVersions(stale) = %v, %v", problems, err)
 	}
 }

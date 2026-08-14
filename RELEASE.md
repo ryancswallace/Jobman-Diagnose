@@ -147,19 +147,19 @@ from the same release. For v0.2.0 on Apple silicon, for example:
 ```console
 gh release download v0.2.0 \
   --repo ryancswallace/Jobman-Diagnose \
-  --pattern 'jobman-diagnose_0.1.0_darwin_arm64.tar.gz' \
-  --pattern 'jobman-diagnose_0.1.0_checksums.txt' \
-  --pattern 'jobman-diagnose_0.1.0_checksums.txt.sigstore.json'
+  --pattern 'jobman-diagnose_0.2.0_darwin_arm64.tar.gz' \
+  --pattern 'jobman-diagnose_0.2.0_checksums.txt' \
+  --pattern 'jobman-diagnose_0.2.0_checksums.txt.sigstore.json'
 cosign verify-blob \
-  --bundle jobman-diagnose_0.1.0_checksums.txt.sigstore.json \
+  --bundle jobman-diagnose_0.2.0_checksums.txt.sigstore.json \
   --certificate-identity \
     'https://github.com/ryancswallace/Jobman-Diagnose/.github/workflows/release.yml@refs/tags/v0.2.0' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  jobman-diagnose_0.1.0_checksums.txt
-grep '  jobman-diagnose_0.1.0_darwin_arm64.tar.gz$' \
-  jobman-diagnose_0.1.0_checksums.txt | shasum -a 256 -c -
+  jobman-diagnose_0.2.0_checksums.txt
+grep '  jobman-diagnose_0.2.0_darwin_arm64.tar.gz$' \
+  jobman-diagnose_0.2.0_checksums.txt | shasum -a 256 -c -
 gh attestation verify \
-  jobman-diagnose_0.1.0_darwin_arm64.tar.gz \
+  jobman-diagnose_0.2.0_darwin_arm64.tar.gz \
   --repo ryancswallace/Jobman-Diagnose
 ```
 

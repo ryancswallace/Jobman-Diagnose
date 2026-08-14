@@ -25,6 +25,20 @@ selected file, effective nonsecret settings, and available profiles. An
 explicit `--diagnosis-config` or `JOBMAN_DIAGNOSE_CONFIG` takes precedence over
 the per-user default.
 
+Then test the selected provider and model through the complete structured
+generation contract:
+
+```console
+jobman diagnose doctor
+jobman diagnose doctor --profile local-vllm
+```
+
+This sends a fixed synthetic probe—not job evidence—and verifies credential
+resolution, adapter capabilities, connectivity, the configured model name,
+strict JSON Schema output, response provenance, proposal semantics, citations,
+and recognition of a direct causal signal. It returns nonzero if any readiness
+check fails. Use `--json` for automation.
+
 For a provider call that may take time, use durable progress messages:
 
 ```console
@@ -41,7 +55,8 @@ request can still fail because of an unsupported JSON Schema feature, model
 name mismatch, context limit, timeout, malformed structured output, or a
 proposal that violates Jobman Diagnose's semantic invariants.
 
-Run with `--require-model` to make optional augmentation failure fatal and read
+Run `jobman diagnose doctor --profile NAME` first. If it passes, use
+`--require-model` to make an incident-specific augmentation failure fatal and read
 the stable provider failure classification. Check the provider's server log for
 the corresponding request, then confirm the configured endpoint, model,
 timeout, input/output limits, and structured-output support. Provider response
@@ -82,7 +97,9 @@ without the newer `--system` flag; upgrade core to collect that additional
 context.
 
 Log bytes require explicit intent because they can contain secrets that no
-automatic redactor recognizes:
+automatic redactor recognizes. With `--ai-logs`, the companion searches a
+larger bounded local tail and projects causal context within the profile limit;
+use `--log-bytes` to set a smaller explicit search bound:
 
 ```console
 jobman diagnose --ai-logs --log-bytes 64KiB JOB
@@ -91,6 +108,14 @@ jobman diagnose --ai-logs --log-bytes 64KiB JOB
 Inspect the report's disclosure section to see exactly which evidence classes,
 items, and bytes were projected. Review the [security model](SECURITY_MODEL.md)
 before sending evidence outside your security boundary.
+
+If the report contains `source_context_mismatch`, the selected current file did
+not agree with a source location recorded in target output: its file differed,
+the recorded line was outside the current file, or a Python traceback included
+a different source line. The companion deliberately withheld that source from
+the provider. Diagnose from runtime evidence, or rerun with the checkout and
+source file that correspond to the failed job. A missing warning is not proof
+that the checkout executed; matching context remains point-in-time evidence.
 
 ## Collect safe support information
 

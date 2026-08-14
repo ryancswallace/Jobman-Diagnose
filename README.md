@@ -63,7 +63,7 @@ docs/screencaps/tape/diagnose.tape, then replace this comment with:
 | --- | --- |
 | Diagnose locally | `jobman diagnose JOB` |
 | Add AI hypotheses | `jobman diagnose --ai JOB` |
-| Share a bounded redacted log tail with AI | `jobman diagnose --ai-logs JOB` |
+| Share intelligently selected redacted causal log context with AI | `jobman diagnose --ai-logs JOB` |
 | Add source near the failing line | `jobman diagnose --ai-logs --ai-source limited JOB` |
 | Add one complete source file | `jobman diagnose --ai-logs --ai-source full JOB` |
 | Include local system constraints | `jobman diagnose --system JOB` |
@@ -72,6 +72,7 @@ docs/screencaps/tape/diagnose.tape, then replace this comment with:
 | Export or replay evidence | `jobman-diagnose --export-evidence FILE JOB`, `jobman-diagnose --from-evidence FILE` |
 | Create a private support archive | `jobman diagnose --support-bundle FILE JOB` |
 | Inspect AI configuration | `jobman diagnose config show`, `jobman diagnose profiles` |
+| Test a configured provider/model | `jobman diagnose doctor --profile NAME` |
 
 Install both binaries on `PATH`; Jobman's external-command protocol provides
 the natural `jobman diagnose` form. Direct invocation also works:
@@ -113,6 +114,7 @@ jobman diagnose --ai-logs JOB
 jobman diagnose --ai-logs --ai-source limited JOB
 jobman diagnose config paths
 jobman diagnose config validate
+jobman diagnose doctor
 ```
 
 Use `--profile NAME` to select another configured model. Supported provider
@@ -133,6 +135,17 @@ opt-in: enable it persistently for a profile with `source_context`, or override
 that profile for one run with `--ai-source none|limited|full`. Source sharing
 always requires a profile that allows `source_content`.
 
+When log sharing is explicit, Jobman Diagnose ranks exact causal and structured
+diagnostic ranges across the collected streams and sends continuous context
+windows within the profile ceiling. With no recognized range it uses bounded
+terminal output. An implicit live search may examine up to Jobman's 1 MiB
+diagnostic limit locally; `--log-bytes` supplies a smaller explicit bound.
+
+Before relying on a profile, `jobman diagnose doctor --profile NAME` sends a
+fixed synthetic causal probe through the configured provider/model and checks
+strict schema support, provenance, citations, semantic validation, and causal
+recognition. It sends no job evidence or logs and returns nonzero on failure.
+
 Limited mode sends the profile's configured number of lines before and after
 an explicit `--source-line`, a matching location inferred from the selected runtime log,
 or line 1 as a visible fallback; an explicit CLI limited mode retains the
@@ -143,6 +156,11 @@ supported source path; use `--source-file PATH` otherwise. Source text is not
 redacted and may contain secrets. It is a point-in-time snapshot of the current
 file, not proof of the code executed by the recorded run, so pair it with
 `--ai-logs` for grounded diagnosis.
+When target output records a source path and line, Jobman Diagnose compares
+that location with the selected current file. A different file, an out-of-range
+runtime line, or a differing Python traceback source line produces a
+`source_context_mismatch` warning and the current source is withheld from the
+provider. A compatible location is still only consistent, not revision proof.
 
 Provider responses are untrusted proposals. Jobman-Diagnose validates their
 schema, taxonomy, citations, contradictions, actions, and request identity;

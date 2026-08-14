@@ -3,11 +3,21 @@
 <!-- cspell:ignore quantizations -->
 
 The checked-in schema-4 corpus under `testdata/evaluation/` measures diagnostic
-quality independently from exact prose. Its 60 nonsecret cases
+quality independently from exact prose. Its 72 nonsecret cases
 combine immutable Jobman compatibility evidence with reproducibly generated
 Python, shell, Go, Node.js, C/native, JVM, and Rust failures. The corpus also
 contains ambiguous, truncated, and prompt-injection controls where the correct
 model behavior is to abstain.
+
+Twelve release-oriented cases add long and noisy output, timestamps, ANSI
+color, interleaved and simultaneous messages, nested JVM and Node.js failures,
+Rust backtraces, build dependency failures, and container messages that do not
+contain enough evidence to claim OOM or an application cause. A stale-source
+case requires the recorded runtime diagnostic to remain execution truth when
+the explicitly shared current source represents another revision.
+Live generated runs project the long and noisy cases through schema-5 causal
+context selection, so buried exact diagnostics are evaluated under the same
+profile byte ceiling used in production.
 
 Every case defines deterministic finding, action, retry, and confidence
 expectations. Generated behavior uses one of three dispositions:
@@ -71,6 +81,7 @@ go run ./devel/evaluate \
   --profile local-vllm \
   --share metadata,log_content \
   --repeat 3 \
+  --promotion-policy testdata/evaluation/promotion-policy.json \
   --output evaluation-local-vllm.json
 ```
 
@@ -83,7 +94,7 @@ that capability are automatically evaluated with metadata only.
 When the selected profile has `source_context.mode: limited` or `full`, live
 evaluation automatically approves `source_content` and applies that mode and
 the configured symmetric radius to every `context.source` case. The current
-corpus runs all 60 cases and attaches checked-in source to 28 of them; the
+corpus runs all 72 cases and attaches checked-in source to 29 of them; the
 remaining evidence-only cases still run without source. No additional
 `--share` class or source flag is required. Each result records
 `source_context_used`, and the summary reports the number of source-enabled
@@ -115,7 +126,7 @@ committed.
 
 ## Metrics and promotion criteria
 
-Evaluation-result schema 4 records both core and companion analysis-evidence
+Evaluation-result schema 6 records both core and companion analysis-evidence
 IDs and keeps correctness, safety, usefulness, and
 stability separate:
 
@@ -125,15 +136,21 @@ stability separate:
 - useful-diagnosis rate for `required` cases;
 - expected-entity preservation and causal-relation completeness;
 - abstention accuracy for `must_abstain` cases;
-- forbidden-claim rate and citation economy; and
-- generated consistency across repeated executions; and
-- the number of executions that received checked-in source context.
+- forbidden-claim rate and citation economy;
+- generated consistency across repeated executions;
+- the number of executions that received checked-in source context; and
+- per-case and aggregate detection of stale or mismatched source context.
 
 Every conditional metric includes its denominator. A metric with no applicable
 cases is reported as `n/a` in the compact summary rather than as a misleading
 zero. Generated consistency compares the accepted/abstained disposition and
 generated code against the first iteration; it does not demand identical
 wording.
+
+When source context is enabled, the `context.stale_source` control must emit
+`source_context_mismatch`, and no mismatched source artifact may appear in the
+provider disclosure recorded by the report. Evidence-only evaluation leaves
+this conditional control inactive.
 
 Case-level semantic expectations require details that distinguish or make the
 diagnosis actionable, not every incidental log operand. They accept bounded
@@ -150,6 +167,38 @@ economically, abstain on controls, and remain stable under repetition. Compare
 candidate models and quantizations against the same corpus commit and record
 the model identifier, runtime version, profile limits, and evaluation JSON with
 release-candidate evidence.
+
+The checked-in `testdata/evaluation/promotion-policy.json` makes that release
+decision executable. It rejects filtered or deterministic runs and currently
+requires at least:
+
+- all 72 unique cases repeated three times;
+- 216 provider-invoked executions and 144 cross-run consistency comparisons;
+- 87 source-context executions, so every mapped source case is exercised;
+- the checked-in minimum case counts for network, language, container, noisy,
+  interleaved, long-output, and real-world-style tags;
+- perfect deterministic primary, citation, action, retry, stability, and
+  abstention metrics; zero provider fallback, unsupported claims, and
+  forbidden claims; and
+- 95% useful diagnoses and causal completeness, 98% taxonomy and entity
+  preservation, 98% citation economy, 95% proposal acceptance, and 95%
+  repeated generated consistency, each over a minimum denominator.
+
+Run the release gate with:
+
+```console
+make evaluate-release \
+  EVALUATION_DIAGNOSIS_CONFIG="$PWD/diagnosis.yml" \
+  EVALUATION_PROFILE=local-vllm \
+  EVALUATION_OUTPUT=evaluation-release.json
+```
+
+The selected profile must enable bounded source context to meet the policy.
+The command deliberately does not allow provider fallback. The result embeds a
+versioned `promotion` assessment and is written before a failed assessment
+returns nonzero, preserving evidence for review. Policy mode cannot be combined
+with `--cases` or `--tags`; focused runs remain useful for iteration but cannot
+authorize a release.
 
 Strict JSON Schema establishes shape and bounded authority. The host's
 evidence-grounding checks and this corpus establish diagnostic usefulness.

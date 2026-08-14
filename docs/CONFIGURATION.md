@@ -15,6 +15,28 @@ point-in-time state-filesystem and Linux cgroup-v2 context in the `metadata`
 class. AI never activates merely because a
 configuration or credential exists.
 
+## Provider/model doctor
+
+After validating a configuration, exercise the actual selected provider and
+model contract without collecting a job:
+
+```console
+jobman diagnose doctor
+jobman diagnose doctor --profile local-vllm
+jobman diagnose doctor --diagnosis-config /absolute/path/diagnosis.yml --json
+```
+
+The doctor resolves the referenced credential, constructs the configured
+adapter, verifies declared JSON Schema/locality/byte-limit capabilities, and
+sends one fixed synthetic connection-refusal request through the real model.
+It then applies the same request identity, response provenance, proposal
+schema, citation, evidence-support, and causal-specificity validation used by
+diagnosis. A failed check returns a nonzero status. The doctor may consume
+provider capacity, but it sends no Jobman evidence, logs, source, configuration
+secrets, configured endpoint, or credential in its request data or result. The
+result identifies the selected profile, provider, locality, and model. JSON
+output is `jobman.diagnosis_provider_doctor` schema 1.
+
 ## Human output detail
 
 The default human report is an answer-first summary. In mixed mode it presents
@@ -153,10 +175,12 @@ optional `log_content` and `source_content` require `maximum_artifacts` and
         maximum_bytes: 262144
 ```
 
-These are hard ceilings, not truncation requests. If the approved evidence
-exceeds a profile limit, the provider is not invoked and the command reports a
-policy error. Reduce core collection (`--run`, `--log-bytes`, or omit
-`--all-runs`) or deliberately revise the profile.
+These are hard disclosure ceilings. Metadata and source context still fail
+closed if their selected values cannot fit. Log content is different: Jobman
+Diagnose ranks exact causal and structured ranges across the collected streams
+and projects continuous context windows that fit `log_content.maximum_bytes`
+and `maximum_artifacts`. When no such range exists it projects bounded terminal
+output. It never sends bytes outside the ceiling.
 
 The AI activation flag and profile are intersected. A disclosure allowance
 alone never sends a class. `--ai` and `--profile` approve metadata plus bounded
@@ -173,22 +197,23 @@ values. Schema 2 supports `metadata`, `command`, `path`, `environment_name`,
 `log_content`, and `source_content`. For a live job,
 `--share log_content` automatically changes the default log collection mode to
 `tail`; an explicit `--logs metadata` or `--logs none` conflicts. `--ai-logs`
-combines AI activation, execution-context approval, tail collection, and
+combines AI activation, execution-context approval, bounded tail search, and
 log-content approval. `local_only` and `sensitive` classes are never eligible.
 In particular, failure fingerprints and same-fingerprint
 history are excluded even for local models.
 
-When an approved log contains a recognized traceback, panic stack, JVM chain,
-or compiler diagnostic, the request also includes the companion collector's
-code and exact source byte range. This attributed enrichment adds no bytes from
-outside the already approved artifact and is accounted separately in the
-disclosure manifest. It is a navigation hint, not a diagnosis: the model is
-explicitly required to analyze the attributed artifact content and may not use
-the collector, traceback structure, or byte range as the root cause.
+For a live invocation with implicitly sized log collection, explicit log
+sharing searches up to Jobman's 1 MiB diagnostic-log ceiling locally before
+selecting the provider context. An explicit `--log-bytes` remains authoritative
+and can reduce that search. Saved evidence is never recollected. The request
+records the selected source byte and line range, anchor reason, source and
+selected-content digests, and truncation state. Recognized traceback, panic,
+JVM, compiler, and causal enrichment is rebased into the selected context and
+accounted separately. It is a navigation hint, not a diagnosis.
 
-Use `--log-bytes` to reduce or enlarge the bounded tail. Log content is never a
-persistent configuration default; each invocation must use `--ai-logs` or
-`--share log_content`.
+Use `--log-bytes` to reduce or enlarge the bounded local search. Log content is
+never a persistent configuration default; each invocation must use
+`--ai-logs` or `--share log_content`.
 
 ## Source-code context
 
@@ -268,9 +293,17 @@ redact, or attest to it. The snapshot can differ from the code that ran and can
 contain credentials, tokens, private algorithms, prompt-injection text, or
 other sensitive data. Review the file before opting in, especially before
 enabling a persistent default on a remote profile. Pair source with
-`--ai-logs`: source context can explain a cited
-runtime signal, but host validation never lets source text alone establish a
-generated failure cause.
+`--ai-logs`: source context can explain a cited runtime signal, but host
+validation never lets source text alone establish a generated failure cause.
+
+Before provider projection, the companion compares the selected file with
+source paths and lines recorded in target logs. It classifies a different file,
+a runtime line beyond the current file, or a differing Python traceback source
+line as a mismatch, emits `source_context_mismatch`, and withholds that source
+artifact. A matching path and valid line are only consistent with the runtime
+record; they do not attest to an executed revision. With no comparable runtime
+location, the point-in-time source remains unverified and retains the existing
+source trust warning.
 
 ## Inspection commands
 
@@ -424,7 +457,7 @@ profiles:
         maximum_bytes: 131072
 ```
 
-The child receives one `jobman.diagnosis_generation_request` schema-4 JSON
+The child receives one `jobman.diagnosis_generation_request` schema-5 JSON
 value on standard input and must write one raw
 `jobman.diagnosis_proposal` schema-2 JSON value to standard output. Its
 environment is minimal and does not inherit ambient variables. The bridge sets

@@ -39,6 +39,11 @@ and `mixed` when validated generated hypotheses are appended. `generated` is a
 reserved schema value for a future engine that still preserves deterministic
 safety policy; the current implementation never emits it.
 
+When current source can be shown to disagree with a source location in target
+output, `warnings` contains `source_context_mismatch` and the source artifact is
+excluded from optional-provider disclosure. Compatible or absent runtime
+locations never make current source execution truth.
+
 ## Human presentation
 
 The human renderer validates the report against the same sealed failure
@@ -119,7 +124,7 @@ When invocation is attempted, the manifest records locality (`local` or
 classes, exact item, artifact, and enrichment IDs, counts, artifact and
 enrichment bytes, encoded request
 bytes, and projected redaction-notice count. The generation request protocol
-version is 4 and the current proposal protocol version is 2. The decoder
+version is 5 and the current proposal protocol version is 2. The decoder
 retains schema-1 proposal provenance in historical reports. These values
 describe the request that may have reached the provider even if the provider
 failed or its proposal was rejected.

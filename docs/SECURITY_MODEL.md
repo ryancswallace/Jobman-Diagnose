@@ -93,9 +93,14 @@ requires all of the following:
   `source_content` profile allowance. `--ai-source none` suppresses the profile
   default for one invocation.
 
-For live evidence, log-content approval automatically requests a bounded tail;
-an explicit conflicting log mode is rejected. Log content additionally
-requires the sealed core capability `configured_value_redaction_v1`.
+For live evidence, log-content approval automatically requests bounded log
+search material; an explicit conflicting log mode is rejected. Unless the user
+sets `--log-bytes`, the local search is capped at Jobman's 1 MiB diagnostic
+limit. The companion ranks already-redacted exact diagnostic ranges and sends
+only continuous causal windows within the selected profile's disclosure
+ceiling, falling back to terminal context when no range exists. Log content
+additionally requires the sealed core capability
+`configured_value_redaction_v1`.
 That capability proves a value-aware configured redaction rule was active; it
 does not prove that arbitrary output contains no secrets. Review evidence
 before authorizing disclosure.
@@ -111,11 +116,28 @@ review it before disclosure. Host validation requires a direct runtime log
 signal and citation even when source text is also cited; source strings or
 comments cannot independently authorize a generated cause.
 
+The companion also compares current source against source locations already
+recorded in target logs. A path mismatch, a runtime line beyond the current
+file, or a differing Python traceback source line causes the source artifact to
+be withheld and a controlled `source_context_mismatch` warning to be sealed in
+the report. A compatible location does not prove revision identity, and no
+runtime location leaves source explicitly unverified rather than silently
+attested.
+
 A profile source default is a persistent disclosure choice, not persistent AI
 activation. It is consulted only after an AI flag or profile selection activates
 generation. Because source is unredacted, users should reserve enabled defaults
 for profiles whose locality and trust boundary are appropriate, and use
 `jobman diagnose profiles` to audit the effective default mode and radius.
+
+`jobman diagnose doctor` is an explicit provider operation but not a diagnosis
+operation. It resolves the selected credential and sends one fixed synthetic
+connection-refusal generation request. It reads no Jobman state or evidence
+and includes no user log, source, command, path, environment name,
+configuration secrets, configured endpoint, or credential in the request data
+or doctor result. The result identifies the selected profile, provider,
+locality, and model. Provider response bodies remain untrusted and are never
+copied into a failure message.
 
 System context is collector-host, point-in-time metadata rather than a durable
 per-run measurement. Linux cgroup event counters may include other processes
@@ -124,9 +146,12 @@ independently establish an out-of-memory diagnosis.
 
 Projection uses exact item, artifact, and attributed-enrichment IDs and byte
 ceilings. Enrichment can be projected only alongside its explicitly approved
-source log and cannot cite outside that sanitized artifact. Projection fails
-before invocation rather than silently truncating an over-limit request. The final
-report records the attempted projection, profile, locality, model, request
+source log and cannot cite outside that sanitized artifact. Schema-5 log
+contexts record their exact selection reason, source line and byte bounds,
+source and content digests, capture quality, and truncation state; enrichment
+ranges are rebased into the continuous selected context. Non-log classes fail
+before invocation rather than silently truncating an over-limit request. The
+final report records the attempted projection, profile, locality, model, request
 digest, exact IDs, counts, bytes, and whether generated content was accepted.
 An attempted request is treated as disclosed even when the adapter later
 fails.
@@ -150,7 +175,7 @@ operation; a cited endpoint remains evidence rather than an action.
 Deterministic findings remain primary and deterministic retry advice is never
 replaced.
 
-Generation-request schema 4 derives a response schema from the sealed request
+Generation-request schema 5 derives a response schema from the sealed request
 and may include bounded traceback, exception-group, compiler, panic, or causal
 diagnostic lines deterministically selected from an already disclosed
 enrichment byte range. Those lines remain untrusted data.

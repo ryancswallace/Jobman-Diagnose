@@ -1,12 +1,12 @@
-# Structured-generation protocol 4
+# Structured-generation protocol 5
 
-The provider boundary consists of a schema-4 generation request and a schema-2
+The provider boundary consists of a schema-5 generation request and a schema-2
 proposal. It is a proposal protocol, not a chat, agent, tool, or remote Jobman
 API.
 
 ## Request
 
-`jobman.diagnosis_generation_request` schema 4 contains:
+`jobman.diagnosis_generation_request` schema 5 contains:
 
 - a SHA-256 `request_id` over normalized semantic content;
 - the sealed companion analysis-evidence ID, which commits to core evidence,
@@ -44,13 +44,19 @@ cause and both can distract smaller models. The deterministic engine still
 retains and analyzes the complete evidence bundle. Metadata may include bounded
 point-in-time filesystem and cgroup constraints; cumulative cgroup event
 counters do not claim per-run attribution. Direct command values preserve executable and ordered
-argument boundaries. Environment items contain names and roles only. A log
-artifact is bounded post-redaction UTF-8 data with its
-source digest, byte accounting, and truncation state. It is data, never part of
-the system instruction string. When log content is approved, deterministic
+argument boundaries. Environment items contain names and roles only. When log
+content is approved, the companion ranks exact causal and structured
+diagnostic ranges across the selected runs and streams, then projects bounded
+continuous context around the strongest ranges. If no diagnostic range is
+available, it uses bounded terminal output. A projected log context records its
+selection and anchor reason, line and byte bounds within the sealed core
+artifact, source and selected-content digests, capture quality, byte accounting,
+and combined source/context truncation state. It is post-redaction UTF-8 data,
+never part of the system instruction string. Deterministic
 traceback, panic, JVM, compiler, and causal-message enrichment may accompany it
-with collector provenance, exact source byte ranges, and bounded diagnostic
-lines deterministically selected from those already disclosed ranges.
+with collector provenance, byte ranges rebased into the projected context, and
+bounded diagnostic lines deterministically selected from those already
+disclosed ranges.
 Traceback selection retains the terminal line of every visible exception-group
 branch and every visible traceback in a cause chain. Diagnostic-line selection
 also retains outer exceptions and operations, multi-field validation details,
@@ -78,6 +84,11 @@ attest to the bytes executed by the recorded run. Fixed instructions require
 the model to cite both runtime evidence and source context when source text
 materially supports a cause. The host excludes source artifacts from direct
 cause authorization, so source alone cannot enable a generated hypothesis.
+Before building the projection, the host compares source against locations in
+the sealed target logs. Detectable file, line-range, or Python traceback-line
+mismatches are not projected; the deterministic report carries a controlled
+`source_context_mismatch` warning instead. A compatible location does not
+upgrade the artifact beyond `point_in_time` quality.
 
 Request decoding is bounded and rejects unknown fields, duplicate keys,
 trailing values, excessive nesting, unsorted or duplicate IDs, manifest
