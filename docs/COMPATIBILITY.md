@@ -1,24 +1,25 @@
 # Compatibility
 
-Status: Jobman Diagnose v0.5.0 compatibility matrix
+Status: Jobman Diagnose v0.6.0 compatibility matrix
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
-| Jobman Diagnose release | v0.5.0 |
+| Jobman Diagnose release | v0.6.0 |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schema 1 |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
 | Jobman extension environment | Protocol 1 |
 | Diagnosis report | Schema 1 |
-| Deterministic engine | Version 1.2.0 |
+| Deterministic engine | Version 1.4.0 |
 | Diagnosis configuration | YAML schema 2 |
-| Generation request | `jobman.diagnosis_generation_request` schema 4 |
+| Generation request | `jobman.diagnosis_generation_request` schema 5 |
 | Generated proposal | `jobman.diagnosis_proposal` schema 2; report decoding retains recorded schema 1 provenance |
+| Provider/model doctor result | `jobman.diagnosis_provider_doctor` schema 1 |
 | Support bundle | `jobman.diagnosis_support_bundle` schema 2 |
-| Evaluation corpus/result | Corpus schema 4; result schema 4 |
+| Evaluation corpus/result | Corpus schema 4; result schema 6 |
 | Provider adapters | Command protocol 3, strict OpenAI-compatible Chat Completions, local Ollama `/api/chat` |
 
 The companion rejects a newer required evidence schema with an actionable
@@ -44,7 +45,7 @@ never assumed complete when core reports that older failures were not indexed.
 Provider compatibility is narrower than accepting arbitrary JSON. Every
 selected generator must claim native JSON Schema enforcement and satisfy the
 profile's byte limits and locality before invocation. The host then validates
-the response again against the exact schema-4 request. The response schema
+the response again against the exact schema-5 request. The response schema
 binds the exact request ID and request-specific code, category, citation,
 finding, and action catalogs before generation; relational validation remains
 authoritative after decoding. There is no fallback to JSON mode, a different
@@ -52,7 +53,7 @@ endpoint, a different provider, or a remote service.
 OpenAI-compatible servers must implement the configured Chat Completions
 strict `json_schema` request and response shape. Ollama profiles must implement
 local `/api/chat` structured output. Command bridges must implement the raw
-generation-request-schema-4/proposal-schema-2 stdin/stdout protocol documented
+generation-request-schema-5/proposal-schema-2 stdin/stdout protocol documented
 in [`GENERATION_PROTOCOL.md`](GENERATION_PROTOCOL.md).
 
 Copied core fixtures under `testdata/jobman-v1/` record their Jobman v1.4.0

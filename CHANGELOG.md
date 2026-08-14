@@ -5,6 +5,80 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-13
+
+### Added
+
+- Added `jobman diagnose doctor` with human and schema-1 JSON output to resolve
+  a selected credential, validate adapter capabilities, and exercise the real
+  provider/model through a fixed evidence-free structured causal probe.
+
+- Expanded the release corpus from 60 to 72 cases with sanitized
+  real-world-style timestamped, ANSI-colored, long, noisy, interleaved,
+  multi-cause, JVM, Go, Node.js, Rust, shell, build, and container-control
+  incidents, plus a stale-source disagreement control and 29 total source
+  mappings.
+- Added a checked-in live-evaluation promotion policy and `make
+  evaluate-release` gate requiring the complete representative corpus, three
+  repetitions, source-context coverage, provider invocation and consistency
+  denominators, zero fallback and unsupported claims, and explicit quality
+  floors. Evaluation-result schema 6 embeds the policy assessment plus
+  per-case and aggregate stale-source detection.
+
+### Changed
+
+- Replaced whole-tail provider projection with deterministic causal-context
+  selection that ranks exact enrichment across runs and streams, selects
+  continuous bounded windows with byte/line/digest provenance, rebases
+  enrichment ranges, and falls back to terminal output only when needed.
+- Expanded implicitly sized live log collection to a 1 MiB local search bound
+  when log disclosure is explicit; `--log-bytes` remains authoritative and
+  provider disclosure stays within the profile ceiling.
+- Upgraded generation requests to schema 5 for provenance-carrying log-context
+  selections and selected-content integrity validation.
+- Compared current source context with source locations in target output,
+  reported detectable file, line-range, and Python traceback-line mismatches,
+  and withheld mismatched source from provider projection. Matching locations
+  remain point-in-time context rather than executed-revision attestation.
+
+- Classified exact enriched diagnostic lines into controlled address,
+  authentication, configuration, connection, data, database, deadline,
+  dependency, DNS, resource, linker, migration, filesystem, rate-limit,
+  service, storage, and TLS subtypes.
+- Promoted those subtypes above a generic nonzero exit as specific
+  deterministic `target.*` diagnoses, with class-specific read-only
+  inspection actions and persistent-versus-transient retry advice. When logs
+  contain several recognized signals, the final diagnostic line is primary
+  and earlier signals remain secondary findings.
+- Accepted application-configuration taxonomy for explicit missing environment
+  values, stopped requiring an incidental retry delay in the HTTP 429 case,
+  and stopped requiring a Rust stack-frame operation after the rejected record
+  and invalid value already make the diagnosis actionable.
+
+### Fixed
+
+- Fixed generated network grounding for timestamped and source-annotated log
+  lines by checking every plausible endpoint, excluding timestamp fragments
+  and source filenames, and removing trailing diagnostic punctuation before
+  comparing the model's retained endpoint.
+- Corrected the release policy's citation-economy denominator so the threshold
+  is attainable by the corpus's 165 repeated required-cause executions.
+- Corrected source-context promotion thresholds to cover all 29 mapped cases
+  across three repetitions and fixed mismatched versions in the published
+  artifact verification example.
+
+### Security
+
+- Updated the pinned Go toolchain from 1.26.5 to 1.26.6 to incorporate fixes
+  for four reachable standard-library vulnerabilities reported by
+  `govulncheck`.
+- Prevented detectably stale or mismatched current source from entering model
+  context while preserving a controlled report warning for operator review.
+- Kept specific target-log diagnoses explicitly framed as target-reported
+  conditions rather than independently confirmed host, network, database, or
+  filesystem facts; ambiguous kill and crash-loop messages continue to
+  abstain from invented causes.
+
 ## [0.5.0] - 2026-08-13
 
 ### Changed
@@ -292,7 +366,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.4.0
 [0.3.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.3.0
