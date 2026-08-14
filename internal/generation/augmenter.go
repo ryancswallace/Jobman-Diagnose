@@ -48,16 +48,29 @@ func NewAugmenter(
 	if base == nil || generator == nil || strings.TrimSpace(profileName) == "" {
 		return nil, errors.New("construct generated diagnosis: base, generator, and profile are required")
 	}
-	capabilities := generator.Capabilities()
-	if !capabilities.NativeJSONSchema || capabilities.MaximumInputBytes < profile.MaximumInputBytes ||
-		capabilities.MaximumOutputBytes < profile.MaximumOutputBytes || capabilities.Locality != profile.Locality {
-		return nil, errors.New("construct generated diagnosis: generator capabilities do not satisfy the profile")
+	if err := ValidateGenerator(profile, generator); err != nil {
+		return nil, fmt.Errorf("construct generated diagnosis: %w", err)
 	}
 
 	return &Augmenter{
 		base: base, generator: generator, profileName: profileName, profile: profile,
 		approved: slices.Clone(approved), required: required, progress: progress,
 	}, nil
+}
+
+// ValidateGenerator verifies the adapter semantics required by a selected
+// profile without contacting its provider.
+func ValidateGenerator(profile config.Profile, generator Generator) error {
+	if generator == nil {
+		return errors.New("generator is required")
+	}
+	capabilities := generator.Capabilities()
+	if !capabilities.NativeJSONSchema || capabilities.MaximumInputBytes < profile.MaximumInputBytes ||
+		capabilities.MaximumOutputBytes < profile.MaximumOutputBytes || capabilities.Locality != profile.Locality {
+		return errors.New("generator capabilities do not satisfy the profile")
+	}
+
+	return nil
 }
 
 // Diagnose produces the deterministic report first, then optionally appends

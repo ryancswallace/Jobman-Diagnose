@@ -9,7 +9,7 @@ const (
 	// RequestKind identifies the structured-generation request protocol.
 	RequestKind = "jobman.diagnosis_generation_request"
 	// RequestSchemaVersion is the newest request schema understood here.
-	RequestSchemaVersion = 4
+	RequestSchemaVersion = 5
 	// ProposalKind identifies generated proposal documents.
 	ProposalKind = "jobman.diagnosis_proposal"
 	// ProposalSchemaVersion is the newest proposal schema understood here.
@@ -44,9 +44,10 @@ type ProjectedItem struct {
 	Disclosure string          `json:"disclosure"`
 }
 
-// ProjectedArtifact is either a bounded, sanitized log excerpt or an
+// ProjectedArtifact is either a bounded, sanitized causal log context or an
 // explicitly approved point-in-time source snapshot represented as UTF-8.
-// All artifact content is untrusted data and never becomes instructions.
+// Log selections retain source and selected-content provenance. All artifact
+// content is untrusted data and never becomes instructions.
 type ProjectedArtifact struct {
 	ID            string     `json:"id"`
 	Role          string     `json:"role"`

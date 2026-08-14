@@ -93,7 +93,7 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	t.Parallel()
 
 	request := validRequest(t)
-	if RequestSchemaVersion != 4 {
+	if RequestSchemaVersion != 5 {
 		t.Fatalf("request schema constant = %d", RequestSchemaVersion)
 	}
 	if request.SchemaVersion != RequestSchemaVersion {
@@ -166,12 +166,9 @@ func TestEncodedRequestKeepsTrustedInstructionsAfterUntrustedArtifacts(t *testin
 	base := validRequest(t)
 	base.RequestID = ""
 	base.ResponseSchema = nil
-	base.Projection.Artifacts = []ProjectedArtifact{{
-		ID: "artifact:stderr", Role: "target_stderr", Run: 1, Stream: "stderr",
-		Content: "untrusted-artifact-marker", Encoding: "utf-8-lossy",
-		Digest: "sha256:" + strings.Repeat("c", 64), SelectedBytes: 25, ContentBytes: 25,
-		Disclosure: "log_content",
-	}}
+	base.Projection.Artifacts = []ProjectedArtifact{
+		projectedLogFixture("artifact:stderr", "target_stderr", "untrusted-artifact-marker"),
+	}
 	base.Manifest.Classes = []string{"log_content", "metadata"}
 	base.Manifest.ArtifactIDs = []string{"artifact:stderr"}
 	base.Manifest.ArtifactCount = 1
@@ -190,6 +187,28 @@ func TestEncodedRequestKeepsTrustedInstructionsAfterUntrustedArtifacts(t *testin
 	instructionIndex := strings.LastIndex(value, "Do not propose commands")
 	if schemaIndex < 0 || artifactIndex <= schemaIndex || instructionIndex <= artifactIndex {
 		t.Fatalf("request attention order is schema=%d artifact=%d instructions=%d", schemaIndex, artifactIndex, instructionIndex)
+	}
+}
+
+func TestSealedRequestRejectsUnmarkedPartialLogSelection(t *testing.T) {
+	t.Parallel()
+
+	base := validRequest(t)
+	base.RequestID = ""
+	base.ResponseSchema = nil
+	artifact := projectedLogFixture("artifact:stderr", "target_stderr", "terminal output")
+	artifact.Selection = "causal_context"
+	artifact.AnchorReason = "causal_diagnostic"
+	artifact.ByteStart = 4
+	artifact.ByteEnd += 4
+	artifact.FileBytes += 8
+	base.Projection.Artifacts = []ProjectedArtifact{artifact}
+	base.Manifest.Classes = []string{"log_content", "metadata"}
+	base.Manifest.ArtifactIDs = []string{artifact.ID}
+	base.Manifest.ArtifactCount = 1
+	base.Manifest.ArtifactBytes = artifact.ContentBytes
+	if _, err := SealRequest(base); err == nil {
+		t.Fatal("SealRequest(partial untruncated log) error = nil")
 	}
 }
 
@@ -264,11 +283,7 @@ func TestProposalMayCiteRuntimeLogAndSupplementalSource(t *testing.T) {
 	base.RequestID = ""
 	base.ResponseSchema = nil
 	logContent := "ZeroDivisionError: float division by zero"
-	logArtifact := ProjectedArtifact{
-		ID: "artifact:stderr", Role: "target.log_tail", Run: 1, Stream: "stderr",
-		Content: logContent, Encoding: "utf-8-lossy", Digest: "sha256:" + strings.Repeat("d", 64),
-		SelectedBytes: uint64(len(logContent)), ContentBytes: uint64(len(logContent)), Disclosure: "log_content",
-	}
+	logArtifact := projectedLogFixture("artifact:stderr", "target.log_tail", logContent)
 	sourceArtifact := projectedSourceFixture()
 	base.Projection.Artifacts = []ProjectedArtifact{logArtifact, sourceArtifact}
 	base.Manifest.Classes = []string{"metadata", "log_content", "source_content"}
@@ -480,11 +495,9 @@ func TestSealedRequestSchemaIncludesArtifactAuthority(t *testing.T) {
 	base := validRequest(t)
 	base.RequestID = ""
 	base.ResponseSchema = nil
-	base.Projection.Artifacts = []ProjectedArtifact{{
-		ID: "artifact:stderr", Role: "target_stderr", Run: 1, Stream: "stderr", Content: "x",
-		Encoding: "utf-8-lossy", Digest: "sha256:" + strings.Repeat("c", 64),
-		SelectedBytes: 1, ContentBytes: 1, Disclosure: "log_content",
-	}}
+	base.Projection.Artifacts = []ProjectedArtifact{
+		projectedLogFixture("artifact:stderr", "target_stderr", "x"),
+	}
 	base.Manifest.Classes = []string{"log_content", "metadata"}
 	base.Manifest.ArtifactIDs = []string{"artifact:stderr"}
 	base.Manifest.ArtifactCount = 1
@@ -565,4 +578,22 @@ func validRequest(t *testing.T) Request {
 	}
 
 	return request
+}
+
+func projectedLogFixture(id, role, content string) ProjectedArtifact {
+	capturedAt := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+	// #nosec G115 -- a nonnegative string byte count always fits uint64.
+	lines := uint64(strings.Count(content, "\n"))
+	if !strings.HasSuffix(content, "\n") {
+		lines++
+	}
+	digest := contentDigest([]byte(content))
+
+	return ProjectedArtifact{
+		ID: id, Role: role, Run: 1, Stream: "stderr", Selection: "tail",
+		AnchorLine: lines, AnchorReason: "terminal_output", StartLine: 1, EndLine: lines, TotalLines: lines,
+		ByteEnd: uint64(len(content)), FileBytes: uint64(len(content)), Content: content, Encoding: "utf-8-lossy",
+		Digest: digest, ContentDigest: digest, CapturedAt: &capturedAt, Quality: "observed",
+		SelectedBytes: uint64(len(content)), ContentBytes: uint64(len(content)), Disclosure: "log_content",
+	}
 }

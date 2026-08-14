@@ -248,11 +248,7 @@ func TestRequestNormalizationInitializesProtocolCollections(t *testing.T) {
 func TestVerifyRequestRejectsDuplicateProjectionAuthority(t *testing.T) {
 	t.Parallel()
 
-	artifact := ProjectedArtifact{
-		ID: "artifact", Role: "target_stderr", Run: 1, Stream: "stderr", Content: "x",
-		Encoding: "utf-8-lossy", Digest: "sha256:" + strings.Repeat("c", 64),
-		SelectedBytes: 1, ContentBytes: 1, Disclosure: "log_content",
-	}
+	artifact := projectedLogFixture("artifact", "target_stderr", "x")
 	tests := []struct {
 		name string
 		want string
@@ -268,15 +264,6 @@ func TestVerifyRequestRejectsDuplicateProjectionAuthority(t *testing.T) {
 			value.Manifest.Classes = []string{"log_content", "metadata"}
 			value.Manifest.ArtifactIDs = []string{current.ID}
 			value.Manifest.ArtifactCount = 1
-		}},
-		{name: "artifact byte overflow", want: "byte count overflow", edit: func(value *Request) {
-			first, second := artifact, artifact
-			first.ID, first.ContentBytes = "artifact:one", ^uint64(0)
-			second.ID, second.ContentBytes = "artifact:two", 1
-			value.Projection.Artifacts = []ProjectedArtifact{first, second}
-			value.Manifest.Classes = []string{"log_content", "metadata"}
-			value.Manifest.ArtifactIDs = []string{first.ID, second.ID}
-			value.Manifest.ArtifactCount = 2
 		}},
 		{name: "duplicate enrichment ID", want: "duplicate projected ID", edit: func(value *Request) {
 			value.Projection.Artifacts = []ProjectedArtifact{artifact}

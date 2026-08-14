@@ -188,6 +188,11 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 			{ID: "deadline", Content: "  File \"/srv/request_timeout.py\", line 17\nGET https://inventory.internal/snapshot: context deadline exceeded"},
 			{ID: "service", Content: "HTTP 503 Service Unavailable from https://inventory.internal/v1/reserve"},
 			{ID: "timeout", Content: "TimeoutError: inventory service did not respond within 750 ms"},
+			{ID: "go-wrapped", Content: "2026-08-12T04:18:31.778Z level=error component=reconciler msg=\"flush checkpoint\" error=\"store batch: dial tcp 10.24.7.19:5432: connect: connection refused\" attempt=4"},
+			{ID: "source-deadline", Content: "2026-08-12T04:44:02Z worker.go:8 synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded"},
+			{ID: "node-refusal", Content: "AggregateError [ECONNREFUSED]: connect ECONNREFUSED 10.24.8.11:6379"},
+			{ID: "maven-dependency", Content: "Could not resolve dependencies: Could not find artifact com.example:pricing-rules:jar:7.3.0"},
+			{ID: "shell-parameter", Content: "deploy.sh: 12: APP_REGION: parameter not set"},
 		},
 	}}
 	tests := []struct {
@@ -227,6 +232,11 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 		{name: "http 503 is not inherently transient", code: "generated.transient_infrastructure", ref: "service", text: "HTTP 503 Service Unavailable from inventory.internal/v1/reserve", want: false},
 		{name: "spaced timeout error retains compact exception signal", code: "generated.dependency_unavailable", ref: "timeout", text: "inventory timeout error after 750 ms", want: true},
 		{name: "timeout signal omitted", code: "generated.dependency_unavailable", ref: "timeout", text: "inventory delayed for 750 ms", want: false},
+		{name: "structured Go refusal", code: "generated.dependency_unavailable", ref: "go-wrapped", text: "dial tcp 10.24.7.19:5432: connect: connection refused", want: true},
+		{name: "source filename before endpoint", code: "generated.dependency_unavailable", ref: "source-deadline", text: "inventory.internal/snapshot: context deadline exceeded", want: true},
+		{name: "Node refusal spelling", code: "generated.dependency_unavailable", ref: "node-refusal", text: "ECONNREFUSED at 10.24.8.11:6379", want: true},
+		{name: "Maven missing artifact", code: "generated.dependency_missing", ref: "maven-dependency", text: "Could not find artifact com.example:pricing-rules:jar:7.3.0", want: true},
+		{name: "shell parameter is configuration", code: "generated.application_configuration", ref: "shell-parameter", text: "APP_REGION parameter not set", want: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -253,6 +263,44 @@ func TestDirectCauseSignalMakesExplicitHTTPServerFailureTaxonomyExclusive(t *tes
 		if DirectCauseSignalSupported(code, projection) {
 			t.Fatalf("HTTP 503 also authorized %s", code)
 		}
+	}
+}
+
+func TestHypothesisCauseSupportedIgnoresCurrentSourceWithoutRuntimeSignal(t *testing.T) {
+	t.Parallel()
+
+	request := Request{Projection: Projection{Artifacts: []ProjectedArtifact{
+		{
+			ID: "runtime", Disclosure: "log_content",
+			Content: "2026-08-12T04:44:02Z worker.go:8 synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded",
+		},
+		{
+			ID: "source", Disclosure: "source_content",
+			Content: "// The current revision no longer performs the network request reported by the older evaluated run.\nreturn nil",
+		},
+	}}}
+	hypothesis := Hypothesis{
+		Code:               "generated.dependency_unavailable",
+		Summary:            "context deadline exceeded when making a GET request to https://inventory.internal/snapshot",
+		RootCause:          "context deadline exceeded when making a GET request to https://inventory.internal/snapshot",
+		Explanation:        "The target failed to synchronize inventory due to a context deadline exceeded error when making a GET request to https://inventory.internal/snapshot.",
+		SupportingEvidence: []string{"runtime", "source"},
+	}
+	evidenceText := citedEvidenceText(hypothesis.SupportingEvidence, request.Projection)
+	generatedText := strings.ToLower(strings.Join(
+		[]string{hypothesis.Summary, hypothesis.RootCause, hypothesis.Explanation}, "\n",
+	))
+	if !causeCodeSupportedByText(hypothesis.Code, evidenceText) {
+		t.Fatal("causeCodeSupportedByText() rejected the deadline")
+	}
+	if !retainsNetworkEndpoints(generatedText, evidenceText) {
+		t.Fatal("retainsNetworkEndpoints() rejected the retained runtime endpoint")
+	}
+	if !retainsPresentSignal(generatedText, evidenceText, "context deadline exceeded") {
+		t.Fatal("retainsPresentSignal() rejected the retained deadline")
+	}
+	if !hypothesisCauseSupported(hypothesis, request) {
+		t.Fatalf("hypothesisCauseSupported() rejected runtime-grounded deadline with stale source")
 	}
 }
 

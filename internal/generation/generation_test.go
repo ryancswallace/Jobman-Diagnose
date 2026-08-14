@@ -226,6 +226,68 @@ func TestPrepareProjectsExplicitSourceAlongsideRuntimeEvidence(t *testing.T) {
 	}
 }
 
+func TestPrepareWithholdsMismatchedSourceContext(t *testing.T) {
+	t.Parallel()
+
+	core, err := testevidence.Failed(
+		"nonzero_exit",
+		[]byte("2026-08-11T12:00:00Z worker.go:8 synchronize failed: context deadline exceeded\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	core.Source.Capabilities = append(core.Source.Capabilities, "configured_value_redaction_v1")
+	core.EvidenceID = ""
+	core, err = diagnostic.Seal(core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("package worker\n\nfunc run() error {\n\treturn nil\n}\n\nfunc stop() {}\n")
+	digest := sha256.Sum256(data)
+	digestText := "sha256:" + fmt.Sprintf("%x", digest[:])
+	source := diagnosis.SourceContext{
+		ID: "context:source:001", Role: "source.context", Path: "/checkout/stale_source.go",
+		Language: "go", MediaType: "text/x-go", Mode: diagnosis.SourceContextFull,
+		AnchorReason: "full_file", StartLine: 1, EndLine: 7, TotalLines: 7,
+		ByteEnd: uint64(len(data)), FileBytes: uint64(len(data)), ContentBytes: uint64(len(data)), Data: data,
+		Digest: digestText, ContentDigest: digestText,
+		CapturedAt: time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC),
+		Collector:  diagnosis.AnalyzerDescriptor{Name: "test.source", Version: "1"},
+		Quality:    diagnostic.QualityPointInTime, Disclosure: diagnosis.DisclosureSourceContent,
+	}
+	failureEvidence, err := diagnosis.SealFailureEvidenceWithContext(
+		core, nil, []diagnosis.SourceContext{source},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := deterministic(t).Diagnose(t.Context(), failureEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasWarning(report, "source_context_mismatch") {
+		t.Fatalf("warnings = %#v", report.Warnings)
+	}
+	profile := testProfile(t, true)
+	profile.Disclosure[string(diagnosis.DisclosureSourceContent)] = config.ClassLimits{
+		MaximumArtifacts: 1, MaximumBytes: 64 * 1024,
+	}
+	prepared, err := Prepare(
+		failureEvidence, report, "test", profile,
+		[]string{"metadata", "log_content", string(diagnosis.DisclosureSourceContent)},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(prepared.Request.Manifest.Classes, string(diagnosis.DisclosureSourceContent)) ||
+		slices.Contains(prepared.Request.Manifest.ArtifactIDs, source.ID) ||
+		slices.ContainsFunc(prepared.Request.Projection.Artifacts, func(artifact provider.ProjectedArtifact) bool {
+			return artifact.ID == source.ID
+		}) {
+		t.Fatalf("mismatched source was projected: %#v", prepared.Request)
+	}
+}
+
 func TestSourceContextWarningRequiresActualDisclosure(t *testing.T) {
 	t.Parallel()
 
@@ -348,8 +410,21 @@ func TestCausalMessageDiagnosticLinesPreserveCompleteOperation(t *testing.T) {
 	t.Parallel()
 
 	line := "synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded"
-	if got := selectDiagnosticLines("causal_message", []string{line}); !slices.Equal(got, []string{line}) {
-		t.Fatalf("causal-message diagnostic lines = %#v", got)
+	formats := []string{
+		"causal_message", "address_in_use", "authentication_denied", "configuration_missing",
+		"connection_refused", "data_validation", "database_deadlock", "database_unique_violation",
+		"deadline_exceeded", "dependency_missing", "dns_resolution_failed", "file_descriptor_exhausted",
+		"linker_undefined_reference", "migration_rejected", "migration_required", "missing_file",
+		"nested_command_missing", "permission_denied", "rate_limited", "read_only_filesystem",
+		"service_unavailable", "storage_exhausted", "tls_verification_failed",
+	}
+	for _, format := range formats {
+		if got := selectDiagnosticLines(format, []string{line}); !slices.Equal(got, []string{line}) {
+			t.Errorf("%s diagnostic lines = %#v", format, got)
+		}
+	}
+	if got := selectDiagnosticLines("future_format", []string{line}); len(got) != 0 {
+		t.Fatalf("unknown diagnostic lines = %#v", got)
 	}
 }
 

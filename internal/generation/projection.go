@@ -13,6 +13,7 @@ import (
 
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 	"github.com/ryancswallace/jobman-diagnose/internal/config"
+	"github.com/ryancswallace/jobman-diagnose/internal/sourcecontext"
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
@@ -217,48 +218,36 @@ func projectEvidence(
 			)
 		}
 		limits := profile.Disclosure[string(diagnostic.DisclosureLogContent)]
-		var contentBytes uint64
+		contexts := selectLogContexts(evidence.Artifacts, failureEvidence.Enrichment, limits)
+		eligibleArtifacts := 0
 		for _, artifact := range evidence.Artifacts {
-			if artifact.Disclosure != diagnostic.DisclosureLogContent {
-				continue
+			if artifact.Disclosure == diagnostic.DisclosureLogContent && len(artifact.Data) != 0 {
+				eligibleArtifacts++
 			}
-			if uint64(len(projection.Artifacts)+1) > limits.MaximumArtifacts ||
-				artifact.ContentBytes > limits.MaximumBytes || contentBytes > limits.MaximumBytes-artifact.ContentBytes {
-				return provider.Projection{}, provider.ProjectionManifest{}, errors.New(
-					"prepare generated diagnosis: log_content exceeds the selected profile disclosure limit",
-				)
-			}
-			contentBytes += artifact.ContentBytes
-			projection.Artifacts = append(projection.Artifacts, provider.ProjectedArtifact{
-				ID: artifact.ID, Role: artifact.Role, Run: artifact.Run, Stream: artifact.Stream,
-				Content: strings.ToValidUTF8(string(artifact.Data), "�"), Encoding: "utf-8-lossy",
-				Digest: artifact.Digest, Truncated: artifact.Truncated, SelectedBytes: artifact.SelectedBytes,
-				ContentBytes: artifact.ContentBytes, Disclosure: string(artifact.Disclosure),
-			})
-			manifest.ArtifactIDs = append(manifest.ArtifactIDs, artifact.ID)
 		}
-		if len(projection.Artifacts) != 0 {
-			manifest.Classes = append(manifest.Classes, string(diagnostic.DisclosureLogContent))
-			manifest.ArtifactBytes += contentBytes
-			for _, item := range failureEvidence.Enrichment {
-				if !slices.Contains(manifest.ArtifactIDs, item.SourceArtifactID) {
-					continue
-				}
-				projected := provider.ProjectedEnrichment{
-					ID: item.ID, Code: item.Code, Format: item.Format,
-					SourceArtifactID: item.SourceArtifactID, ByteStart: item.ByteStart, ByteEnd: item.ByteEnd,
-					Collector: item.Collector.Name, CollectorVersion: item.Collector.Version,
-					Quality: string(item.Quality), Disclosure: string(diagnostic.DisclosureLogContent),
-					DiagnosticLines: projectedDiagnosticLines(evidence.Artifacts, item),
-				}
+		if eligibleArtifacts != 0 && len(contexts) == 0 {
+			return provider.Projection{}, provider.ProjectionManifest{}, errors.New(
+				"prepare generated diagnosis: log_content exceeds the selected profile disclosure limit; no useful causal context fits",
+			)
+		}
+		var contentBytes uint64
+		for _, context := range contexts {
+			projection.Artifacts = append(projection.Artifacts, context.artifact)
+			manifest.ArtifactIDs = append(manifest.ArtifactIDs, context.artifact.ID)
+			contentBytes += context.artifact.ContentBytes
+			for _, projected := range context.enrichment {
 				size, err := encodedSize(projected)
 				if err != nil {
 					return provider.Projection{}, provider.ProjectionManifest{}, err
 				}
 				projection.Enrichment = append(projection.Enrichment, projected)
-				manifest.EnrichmentIDs = append(manifest.EnrichmentIDs, item.ID)
+				manifest.EnrichmentIDs = append(manifest.EnrichmentIDs, projected.ID)
 				manifest.EnrichmentBytes += size
 			}
+		}
+		if len(contexts) != 0 {
+			manifest.Classes = append(manifest.Classes, string(diagnostic.DisclosureLogContent))
+			manifest.ArtifactBytes += contentBytes
 		}
 	}
 	if slices.Contains(approved, string(diagnosis.DisclosureSourceContent)) &&
@@ -272,6 +261,9 @@ func projectEvidence(
 		var sourceCount, contentBytes uint64
 		for _, source := range failureEvidence.SourceContext {
 			if source.Disclosure != diagnosis.DisclosureSourceContent {
+				continue
+			}
+			if assessment := sourcecontext.Assess(evidence.Artifacts, source); assessment.Status == sourcecontext.AssessmentMismatch {
 				continue
 			}
 			if sourceCount+1 > limits.MaximumArtifacts || source.ContentBytes > limits.MaximumBytes ||
@@ -350,10 +342,25 @@ func selectDiagnosticLines(format string, lines []string) []string {
 		return firstDiagnosticLine(lines, func(line string) bool { return strings.Contains(strings.ToLower(line), ": error:") })
 	case "python_syntax":
 		return pythonSyntaxDiagnosticLines(lines)
-	case "causal_message":
-		return firstDiagnosticLine(lines, func(line string) bool { return strings.TrimSpace(line) != "" })
 	default:
+		if causalDiagnosticFormat(format) {
+			return firstDiagnosticLine(lines, func(line string) bool { return strings.TrimSpace(line) != "" })
+		}
 		return []string{}
+	}
+}
+
+func causalDiagnosticFormat(format string) bool {
+	switch format {
+	case "causal_message", "address_in_use", "authentication_denied", "configuration_missing",
+		"connection_refused", "data_validation", "database_deadlock", "database_unique_violation",
+		"deadline_exceeded", "dependency_missing", "dns_resolution_failed", "file_descriptor_exhausted",
+		"linker_undefined_reference", "migration_rejected", "migration_required", "missing_file",
+		"nested_command_missing", "permission_denied", "rate_limited", "read_only_filesystem",
+		"service_unavailable", "storage_exhausted", "tls_verification_failed":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -490,10 +497,9 @@ func projectDeterministic(report diagnosis.Report, manifest provider.ProjectionM
 	available = append(available, manifest.EnrichmentIDs...)
 	result := make([]provider.DeterministicCandidate, 0, len(report.Findings))
 	for _, finding := range report.Findings {
-		// Target-log signatures confirm that a recognizable structure exists but
-		// intentionally stop short of root-cause analysis. Sending their generic
-		// prose to a small model encourages paraphrase instead of inspection of
-		// the already projected artifact content and enrichment range.
+		// Target-log findings are already derived from untrusted output. Sending
+		// their controlled prose to a small model encourages paraphrase instead of
+		// independent inspection of the projected artifact and enrichment range.
 		if strings.HasPrefix(finding.Code, "target.") {
 			continue
 		}

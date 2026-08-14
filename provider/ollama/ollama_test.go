@@ -2,11 +2,14 @@ package ollama
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
@@ -107,12 +110,7 @@ func ollamaRequest(t *testing.T) provider.Request {
 		Projection: provider.Projection{Items: []provider.ProjectedItem{{
 			ID: "ev:run:1:message", Code: "jobman.run.diagnostic", Value: value,
 			Quality: "observed", Disclosure: "metadata",
-		}}, Artifacts: []provider.ProjectedArtifact{{
-			ID: "artifact:run:1:stderr", Role: "target_stderr", Run: 1, Stream: "stderr",
-			Content: artifactContent, Encoding: "utf-8-lossy", Digest: "sha256:" + strings.Repeat("d", 64),
-			SelectedBytes: uint64(len(artifactContent)), ContentBytes: uint64(len(artifactContent)),
-			Disclosure: "log_content",
-		}}},
+		}}, Artifacts: []provider.ProjectedArtifact{ollamaProjectedLog(artifactContent)}},
 		Manifest: provider.ProjectionManifest{
 			Classes: []string{"log_content", "metadata"}, ItemIDs: []string{"ev:run:1:message"},
 			ArtifactIDs: []string{"artifact:run:1:stderr"}, ItemCount: 1, ArtifactCount: 1,
@@ -132,4 +130,19 @@ func ollamaRequest(t *testing.T) provider.Request {
 	}
 
 	return request
+}
+
+func ollamaProjectedLog(content string) provider.ProjectedArtifact {
+	digest := sha256.Sum256([]byte(content))
+	digestText := fmt.Sprintf("sha256:%x", digest[:])
+	capturedAt := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
+
+	return provider.ProjectedArtifact{
+		ID: "artifact:run:1:stderr", Role: "target_stderr", Run: 1, Stream: "stderr",
+		Selection: "tail", AnchorLine: 1, AnchorReason: "terminal_output", StartLine: 1, EndLine: 1,
+		TotalLines: 1, ByteEnd: uint64(len(content)), FileBytes: uint64(len(content)),
+		Content: content, Encoding: "utf-8-lossy", Digest: digestText, ContentDigest: digestText,
+		CapturedAt: &capturedAt, Quality: "observed", SelectedBytes: uint64(len(content)),
+		ContentBytes: uint64(len(content)), Disclosure: "log_content",
+	}
 }

@@ -358,7 +358,7 @@ func validateVersions(versions Versions) error {
 	if versions.CompanionVersion == "" || versions.EngineVersion == "" ||
 		versions.JobmanVersion == "" || versions.EvidenceSchemaVersion < 1 ||
 		versions.ReportSchemaVersion != SchemaVersion || versions.GenerationRequestSchemaVersion < 0 ||
-		versions.GenerationRequestSchemaVersion > 4 || versions.ProposalSchemaVersion < 0 ||
+		versions.GenerationRequestSchemaVersion > 5 || versions.ProposalSchemaVersion < 0 ||
 		versions.ProposalSchemaVersion > 2 || !validGenerationProtocolVersions(
 		versions.GenerationRequestSchemaVersion,
 		versions.ProposalSchemaVersion,
@@ -373,7 +373,7 @@ func validGenerationProtocolVersions(requestVersion, proposalVersion int) bool {
 	return requestVersion == 0 && proposalVersion == 0 ||
 		requestVersion == 1 && proposalVersion == 1 ||
 		requestVersion == 2 && (proposalVersion == 1 || proposalVersion == 2) ||
-		(requestVersion == 3 || requestVersion == 4) && proposalVersion == 2
+		(requestVersion == 3 || requestVersion == 4 || requestVersion == 5) && proposalVersion == 2
 }
 
 func validateReportContents(report Report) error {

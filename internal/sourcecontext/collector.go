@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -359,23 +358,10 @@ func sourceLineStarts(data []byte) []uint64 {
 }
 
 func inferSourceLine(sourcePath string, artifacts []diagnostic.Artifact) (uint64, bool) {
-	patterns := []*regexp.Regexp{pythonLocation, pathLocation, frameLocation}
 	var selected uint64
-	for _, artifact := range artifacts {
-		if artifact.Disclosure != diagnostic.DisclosureLogContent {
-			continue
-		}
-		text := strings.ToValidUTF8(string(artifact.Data), "")
-		for _, pattern := range patterns {
-			for _, match := range pattern.FindAllStringSubmatch(text, -1) {
-				if len(match) != 3 || !sameSourcePath(sourcePath, match[1]) {
-					continue
-				}
-				line, err := strconv.ParseUint(match[2], 10, 64)
-				if err == nil && line != 0 {
-					selected = line
-				}
-			}
+	for _, location := range sourceLocations(artifacts) {
+		if sameSourcePath(sourcePath, location.path) {
+			selected = location.line
 		}
 	}
 
