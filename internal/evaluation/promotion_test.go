@@ -1,6 +1,8 @@
 package evaluation
 
 import (
+	"bytes"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,6 +76,190 @@ func TestLoadPromotionPolicyRejectsUnknownAndInvalidFields(t *testing.T) {
 	}
 	if err := policy.Validate(); err == nil || !strings.Contains(err.Error(), "unknown metric") {
 		t.Fatalf("Validate(unknown metric) error = %v", err)
+	}
+}
+
+func TestLoadPromotionPolicyRejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if _, err := LoadPromotionPolicy(filepath.Join(root, "missing.json")); err == nil || !strings.Contains(err.Error(), "load evaluation promotion policy") {
+		t.Fatalf("LoadPromotionPolicy(missing) error = %v", err)
+	}
+
+	oversized := filepath.Join(root, "oversized.json")
+	if err := os.WriteFile(oversized, bytes.Repeat([]byte{' '}, maximumPromotionPolicyBytes+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPromotionPolicy(oversized); err == nil || !strings.Contains(err.Error(), "exceeds its byte limit") {
+		t.Fatalf("LoadPromotionPolicy(oversized) error = %v", err)
+	}
+
+	trailing := filepath.Join(root, "trailing.json")
+	if err := os.WriteFile(trailing, []byte(`{} {}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPromotionPolicy(trailing); err == nil || !strings.Contains(err.Error(), "trailing JSON value") {
+		t.Fatalf("LoadPromotionPolicy(trailing) error = %v", err)
+	}
+
+	invalid := filepath.Join(root, "invalid.json")
+	if err := os.WriteFile(invalid, []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadPromotionPolicy(invalid); err == nil || !strings.Contains(err.Error(), "unsupported kind or schema version") {
+		t.Fatalf("LoadPromotionPolicy(invalid) error = %v", err)
+	}
+}
+
+func TestPromotionPolicyValidateRejectsInvalidContracts(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		mutate    func(*PromotionPolicy)
+		wantError string
+	}{
+		{
+			name: "schema",
+			mutate: func(policy *PromotionPolicy) {
+				policy.SchemaVersion++
+			},
+			wantError: "unsupported kind or schema version",
+		},
+		{
+			name: "workload",
+			mutate: func(policy *PromotionPolicy) {
+				policy.MinimumRepeats = 1
+			},
+			wantError: "invalid minimum workload",
+		},
+		{
+			name: "empty tags",
+			mutate: func(policy *PromotionPolicy) {
+				policy.RequiredTagCases = nil
+			},
+			wantError: "must not be empty",
+		},
+		{
+			name: "invalid tag",
+			mutate: func(policy *PromotionPolicy) {
+				policy.RequiredTagCases = map[string]int{"Invalid Tag": 1}
+			},
+			wantError: "invalid required tag threshold",
+		},
+		{
+			name: "missing metric bound",
+			mutate: func(policy *PromotionPolicy) {
+				policy.Metrics = map[string]MetricThreshold{"citation_validity": {}}
+			},
+			wantError: "has no bound",
+		},
+		{
+			name: "negative denominator",
+			mutate: func(policy *PromotionPolicy) {
+				minimum := 0.9
+				policy.Metrics = map[string]MetricThreshold{
+					"citation_validity": {Minimum: &minimum, MinimumDenominator: -1},
+				}
+			},
+			wantError: "invalid minimum denominator",
+		},
+		{
+			name: "non-finite bound",
+			mutate: func(policy *PromotionPolicy) {
+				minimum := math.NaN()
+				policy.Metrics = map[string]MetricThreshold{"citation_validity": {Minimum: &minimum}}
+			},
+			wantError: "bound outside [0,1]",
+		},
+		{
+			name: "inverted bounds",
+			mutate: func(policy *PromotionPolicy) {
+				minimum, maximum := 0.9, 0.8
+				policy.Metrics = map[string]MetricThreshold{
+					"citation_validity": {Minimum: &minimum, Maximum: &maximum},
+				}
+			},
+			wantError: "inverted bounds",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			policy := validPromotionPolicy()
+			test.mutate(&policy)
+			if err := policy.Validate(); err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("Validate() error = %v, want containing %q", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestAssessPromotionReportsEveryViolationClass(t *testing.T) {
+	t.Parallel()
+
+	policy := validPromotionPolicy()
+	minimum, maximum := 0.9, 0.0
+	policy.Metrics = map[string]MetricThreshold{
+		"primary_code_precision": {Minimum: &minimum},
+		"provider_fallback_rate": {Maximum: &maximum},
+		"useful_diagnosis_rate": {
+			Minimum:            &minimum,
+			MinimumDenominator: 3,
+		},
+	}
+	summary := Summary{
+		Mode: "deterministic", UniqueCases: 1, Repeats: 2, Cases: 2,
+		Results: []Result{{Name: "only-case", Tags: []string{"context.source"}}},
+		Metrics: Metrics{
+			ProviderInvokedCases: 1, ConsistencyComparisons: 1, SourceContextCases: 1,
+			PrimaryCodePrecision: 0.8, ProviderFallbackRate: 0.5,
+			UsefulDiagnosisRate: 0.8, RequiredCauseCases: 1,
+		},
+	}
+	assessment := AssessPromotion(policy, summary)
+	if assessment.Passed {
+		t.Fatalf("AssessPromotion() passed with violations: %#v", assessment)
+	}
+	for _, want := range []string{
+		"requires a live evaluation",
+		"unique cases 1 is below 2",
+		"repeats 2 is below 3",
+		"provider-invoked cases 1 is below 2",
+		"consistency comparisons 1 is below 2",
+		"source-context cases 1 is below 2",
+		"tag context.source has 1 unique cases, below 2",
+		"metric primary_code_precision 0.800000 is below 0.900000",
+		"metric provider_fallback_rate 0.500000 exceeds 0.000000",
+		"metric useful_diagnosis_rate denominator 1 is below 3",
+	} {
+		if !containsPromotionViolation(assessment.Violations, want) {
+			t.Errorf("AssessPromotion() violations %q do not contain %q", assessment.Violations, want)
+		}
+	}
+
+	invalid := validPromotionPolicy()
+	invalid.Kind = "invalid"
+	assessment = AssessPromotion(invalid, Summary{})
+	if assessment.Passed || !containsPromotionViolation(assessment.Violations, "invalid policy") {
+		t.Fatalf("AssessPromotion(invalid) = %#v", assessment)
+	}
+}
+
+func validPromotionPolicy() PromotionPolicy {
+	minimum := 0.9
+
+	return PromotionPolicy{
+		Kind: PromotionPolicyKind, SchemaVersion: PromotionPolicySchemaVersion,
+		MinimumUniqueCases: 2, MinimumRepeats: 3, MinimumProviderInvokedCases: 2,
+		MinimumConsistencyChecks: 2, MinimumSourceContextCases: 2,
+		RequiredTagCases: map[string]int{"context.source": 2},
+		Metrics: map[string]MetricThreshold{
+			"citation_validity": {Minimum: &minimum},
+		},
 	}
 }
 
