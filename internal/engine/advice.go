@@ -17,6 +17,7 @@ const (
 	coreSystemUnavailableOmission  = "system_context_unavailable"
 )
 
+//nolint:cyclop // The controlled finding-to-action catalog stays explicit and auditable.
 func actionsFor(primary candidate, view evidenceView) []diagnosis.Action {
 	support := slices.Clone(primary.finding.SupportingEvidence)
 	action := func(id, code string, kind diagnosis.ActionKind, summary, description string, confirmation bool) diagnosis.Action {
@@ -69,6 +70,44 @@ func actionsFor(primary candidate, view evidenceView) []diagnosis.Action {
 		return []diagnosis.Action{showJob(action("action:001:inspect-permissions", "inspect_permissions", diagnosis.ActionInspect,
 			"Inspect the denied operation and permissions",
 			"Check ownership, mode, mount policy, and execution restrictions for the target operation without broadening permissions unnecessarily.", false))}
+	case "target.read_only_filesystem_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-filesystem-policy", "inspect_filesystem_policy", diagnosis.ActionInspect,
+			"Inspect the reported read-only path and filesystem policy",
+			"Confirm the intended writable location, mount mode, and container or host storage policy before changing the target.", false))}
+	case "target.storage_exhausted_message", "target.file_descriptor_exhausted_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-resource-limit", "inspect_resource_limit", diagnosis.ActionInspect,
+			"Inspect the reported resource limit and affected operation",
+			"Review the complete local error and the relevant storage or file-descriptor budget before reclaiming capacity or changing limits.", false))}
+	case "target.address_in_use_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-listener", "inspect_listener_collision", diagnosis.ActionInspect,
+			"Inspect the reported listener collision",
+			"Verify the configured listen address and intended process ownership before stopping a process or selecting another address.", false))}
+	case "target.authentication_denied_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-authentication", "inspect_authentication", diagnosis.ActionInspect,
+			"Inspect the rejected request and authentication configuration",
+			"Verify credential selection, expiry, scope, and remote authorization without printing or copying secret values.", false))}
+	case "target.configuration_missing_message", "target.migration_rejected_message", "target.migration_required_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-configuration", "inspect_target_configuration", diagnosis.ActionInspect,
+			"Inspect the rejected target configuration or migration state",
+			"Use the complete local diagnostic to identify the required setting or migration boundary before making an explicit change.", false))}
+	case "target.dependency_missing_message", "target.missing_file_message", "target.shell_command_not_found",
+		"target.linker_error_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-dependency", "inspect_target_dependency", diagnosis.ActionInspect,
+			"Inspect the missing target dependency",
+			"Confirm the exact module, artifact, file, nested command, or linker input and the target's execution environment before installing or changing it.", false))}
+	case "target.connection_refused_message", "target.deadline_exceeded_message", "target.dns_resolution_message",
+		"target.service_unavailable_message", "target.rate_limited_message", "target.tls_verification_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-dependency-connection", "inspect_dependency_connection", diagnosis.ActionInspect,
+			"Inspect the reported dependency connection failure",
+			"Verify the intended endpoint, dependency health, name resolution, trust policy, and retry guidance that apply to the cited local diagnostic.", false))}
+	case "target.database_deadlock_message", "target.database_unique_violation_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-database-failure", "inspect_database_failure", diagnosis.ActionInspect,
+			"Inspect the reported database failure",
+			"Review the complete local database diagnostic, transaction boundary, and relevant constraint before changing data or retry behavior.", false))}
+	case "target.data_validation_message":
+		return []diagnosis.Action{showStderr(action("action:001:inspect-rejected-data", "inspect_rejected_data", diagnosis.ActionInspect,
+			"Inspect the rejected input and validation boundary",
+			"Use the complete local diagnostic to identify the input record, parser, or validation rule before correcting data or code.", false))}
 	case "core.timeout":
 		return []diagnosis.Action{
 			showEvidence(action("action:001:inspect-timeout", "inspect_timeout_boundary", diagnosis.ActionInspect,
@@ -114,9 +153,18 @@ func retryFor(primary candidate, view evidenceView) diagnosis.RetryAdvice {
 	case "core.executable_not_found", "core.working_directory_missing", "core.permission_denied",
 		"core.timeout", "core.nonzero_exit", "core.start_failed", "core.target_failure",
 		"target.python_exception", "target.storage_exhausted_message", "target.shell_command_not_found",
-		"target.permission_message":
+		"target.permission_message", "target.address_in_use_message", "target.authentication_denied_message",
+		"target.configuration_missing_message", "target.data_validation_message",
+		"target.database_unique_violation_message", "target.dependency_missing_message",
+		"target.file_descriptor_exhausted_message", "target.linker_error_message",
+		"target.migration_rejected_message", "target.migration_required_message", "target.missing_file_message",
+		"target.read_only_filesystem_message", "target.tls_verification_message":
 		verdict, score = diagnosis.RetryAfterChange, 92
 		rationale = "The cited condition is expected to persist until the command, environment, resources, or policy changes."
+	case "target.connection_refused_message", "target.deadline_exceeded_message", "target.database_deadlock_message",
+		"target.dns_resolution_message", "target.rate_limited_message", "target.service_unavailable_message":
+		verdict, score = diagnosis.RetryAfterDelay, 78
+		rationale = "The target reported a condition that can be transient, but the evidence does not establish that it has cleared; inspect it and respect any existing backoff before retrying."
 	case "core.user_cancellation":
 		verdict, score = diagnosis.RetryNotApplicable, 98
 		rationale = "Cancellation was an explicit lifecycle decision, so retry depends on renewed user intent rather than transient recovery."

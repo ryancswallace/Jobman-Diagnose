@@ -14,6 +14,8 @@ import (
 	"github.com/ryancswallace/jobman/diagnostic"
 
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
+	"github.com/ryancswallace/jobman-diagnose/internal/enrichment"
+	"github.com/ryancswallace/jobman-diagnose/internal/sourcecontext"
 )
 
 const deterministicAnalyzer = "builtin.rules/1"
@@ -65,6 +67,7 @@ func (engine *Engine) Diagnose(ctx context.Context, evidence diagnosis.FailureEv
 	actions := actionsFor(primary, view)
 	retry := retryFor(primary, view)
 	missing, warnings := limitations(view, primary)
+	warnings = append(warnings, sourceContextWarnings(evidence)...)
 	references := referencedEvidence(findings, actions, retry)
 	citations, err := buildCitations(view, references)
 	if err != nil {
@@ -99,6 +102,19 @@ func (engine *Engine) Diagnose(ctx context.Context, evidence diagnosis.FailureEv
 	}
 
 	return sealed, nil
+}
+
+func sourceContextWarnings(evidence diagnosis.FailureEvidence) []diagnosis.Warning {
+	for _, source := range evidence.SourceContext {
+		assessment := sourcecontext.Assess(evidence.Core.Artifacts, source)
+		if assessment.Status == sourcecontext.AssessmentMismatch {
+			return []diagnosis.Warning{{
+				Code: "source_context_mismatch", Message: sourcecontext.MismatchMessage(assessment),
+			}}
+		}
+	}
+
+	return []diagnosis.Warning{}
 }
 
 func analyzerDescriptors(evidence diagnosis.FailureEvidence) []diagnosis.AnalyzerDescriptor {
@@ -377,28 +393,179 @@ func artifactCandidates(ctx context.Context, view evidenceView) []candidate {
 
 func enrichmentCandidates(view evidenceView) []candidate {
 	result := make([]candidate, 0, len(view.enrichment))
+	latestDiagnostic := make(map[string]uint64)
+	for _, item := range view.failure.Enrichment {
+		if item.Code == enrichment.CodeCausalMessage && item.ByteStart >= latestDiagnostic[item.SourceArtifactID] {
+			latestDiagnostic[item.SourceArtifactID] = item.ByteStart
+		}
+	}
 	for _, item := range view.failure.Enrichment {
 		switch item.Code {
-		case "enrichment.traceback.python":
+		case enrichment.CodePythonTraceback:
 			result = append(result, heuristicCandidate(76, "target.python_exception", "application",
 				"A Python exception traceback is present",
 				"The bounded target log contains a structurally delimited Python traceback. Its exact sanitized byte range is attributed as companion enrichment.", item.ID))
-		case "enrichment.traceback.go_panic":
+		case enrichment.CodeGoPanic:
 			result = append(result, heuristicCandidate(75, "target.go_panic", "application",
 				"A Go panic stack is present",
 				"The bounded target log contains a structurally delimited Go panic and stack range.", item.ID))
-		case "enrichment.traceback.jvm":
+		case enrichment.CodeJVMException:
 			result = append(result, heuristicCandidate(73, "target.jvm_exception", "application",
 				"A JVM exception chain is present",
 				"The bounded target log contains a structurally delimited JVM exception or caused-by chain.", item.ID))
-		case "enrichment.compiler.diagnostic":
+		case enrichment.CodeCompilerDiagnostic:
 			result = append(result, heuristicCandidate(70, "target.compiler_error", "application",
 				"A compiler error diagnostic is present",
 				"The bounded target log contains a conventional file/line/column compiler error record.", item.ID))
+		case enrichment.CodeCausalMessage:
+			format := diagnosticFormat(item, view)
+			rule, ok := targetDiagnosticRules[format]
+			if !ok {
+				continue
+			}
+			priority := 84
+			if latestDiagnostic[item.SourceArtifactID] == item.ByteStart {
+				priority = 86
+			}
+			result = append(result, heuristicCandidate(
+				priority, rule.code, rule.category, rule.summary, rule.explanation, item.ID,
+			))
 		}
 	}
 
 	return result
+}
+
+type targetDiagnosticRule struct {
+	code        string
+	category    string
+	summary     string
+	explanation string
+}
+
+var targetDiagnosticRules = map[string]targetDiagnosticRule{
+	"address_in_use": {
+		code: "target.address_in_use_message", category: "network",
+		summary:     "The target reported that a listen address was already in use",
+		explanation: "An exact bounded target-log range contains an address-in-use signature. Jobman did not independently inspect host listeners.",
+	},
+	"authentication_denied": {
+		code: "target.authentication_denied_message", category: "access",
+		summary:     "The target reported that a remote request was unauthorized",
+		explanation: "An exact bounded target-log range contains an unauthorized-response signature. Jobman did not independently validate credentials or remote policy.",
+	},
+	"configuration_missing": {
+		code: "target.configuration_missing_message", category: "configuration",
+		summary:     "The target reported a missing required configuration value",
+		explanation: "An exact bounded target-log range contains a missing-configuration signature. Jobman did not independently inspect the target's configuration source.",
+	},
+	"connection_refused": {
+		code: "target.connection_refused_message", category: "network",
+		summary:     "The target reported a refused connection",
+		explanation: "An exact bounded target-log range contains a connection-refused signature. Jobman did not independently verify the destination or network layer.",
+	},
+	"data_validation": {
+		code: "target.data_validation_message", category: "data",
+		summary:     "The target reported that input data was rejected",
+		explanation: "An exact bounded target-log range contains a parse or validation signature. Jobman did not independently validate the input or application rule.",
+	},
+	"database_deadlock": {
+		code: "target.database_deadlock_message", category: "database",
+		summary:     "The target reported a database deadlock",
+		explanation: "An exact bounded target-log range contains a database-deadlock signature. Jobman did not independently inspect database locks or transaction state.",
+	},
+	"database_unique_violation": {
+		code: "target.database_unique_violation_message", category: "data",
+		summary:     "The target reported a database uniqueness violation",
+		explanation: "An exact bounded target-log range contains a duplicate-key signature. Jobman did not independently inspect the database record or constraint.",
+	},
+	"deadline_exceeded": {
+		code: "target.deadline_exceeded_message", category: "network",
+		summary:     "The target reported that an operation exceeded its deadline",
+		explanation: "An exact bounded target-log range contains a deadline or timeout signature. Jobman did not independently determine which dependency or workload caused the delay.",
+	},
+	"dependency_missing": {
+		code: "target.dependency_missing_message", category: "dependency",
+		summary:     "The target reported a missing runtime or build dependency",
+		explanation: "An exact bounded target-log range contains a missing module, artifact, or shared-library signature. Jobman did not independently inspect installed dependencies.",
+	},
+	"dns_resolution_failed": {
+		code: "target.dns_resolution_message", category: "network",
+		summary:     "The target reported a DNS resolution failure",
+		explanation: "An exact bounded target-log range contains a name-resolution signature. Jobman did not independently query DNS or verify the reported host.",
+	},
+	"file_descriptor_exhausted": {
+		code: "target.file_descriptor_exhausted_message", category: "resource",
+		summary:     "The target reported exhausted file descriptors",
+		explanation: "An exact bounded target-log range contains a file-descriptor-exhaustion signature. Jobman did not independently inspect process or host limits.",
+	},
+	"linker_undefined_reference": {
+		code: "target.linker_error_message", category: "dependency",
+		summary:     "The target's linker reported an undefined reference",
+		explanation: "An exact bounded target-log range contains an undefined-reference signature. Jobman did not independently inspect object files or linker inputs.",
+	},
+	"migration_rejected": {
+		code: "target.migration_rejected_message", category: "configuration",
+		summary:     "The target reported that its database migration state was rejected",
+		explanation: "An exact bounded target-log range contains a migration-rejection signature. Jobman did not independently inspect the database schema version.",
+	},
+	"migration_required": {
+		code: "target.migration_required_message", category: "configuration",
+		summary:     "The target reported that database migrations are required",
+		explanation: "An exact bounded target-log range contains a migration-required signature. Jobman did not independently inspect or modify the database schema.",
+	},
+	"missing_file": {
+		code: "target.missing_file_message", category: "dependency",
+		summary:     "The target reported a missing file or executable",
+		explanation: "An exact bounded target-log range contains a file-not-found signature. Jobman did not independently resolve the referenced target path.",
+	},
+	"nested_command_missing": {
+		code: "target.shell_command_not_found", category: "dependency",
+		summary:     "A shell reported a missing nested command",
+		explanation: "An exact bounded target-log range contains a shell command-not-found signature. Jobman did not independently resolve this command inside the target.",
+	},
+	"permission_denied": {
+		code: "target.permission_message", category: "access",
+		summary:     "The target reported a permission denial",
+		explanation: "An exact bounded target-log range contains a permission-denied signature. Jobman did not independently inspect the affected target operation or access policy.",
+	},
+	"rate_limited": {
+		code: "target.rate_limited_message", category: "network",
+		summary:     "The target reported that a remote service rate-limited a request",
+		explanation: "An exact bounded target-log range contains a too-many-requests signature. Jobman did not independently verify the remote service or retry window.",
+	},
+	"read_only_filesystem": {
+		code: "target.read_only_filesystem_message", category: "access",
+		summary:     "The target reported a read-only filesystem",
+		explanation: "An exact bounded target-log range contains a read-only-filesystem signature. Jobman did not independently inspect the mount or storage policy.",
+	},
+	"service_unavailable": {
+		code: "target.service_unavailable_message", category: "network",
+		summary:     "The target reported that a remote service was unavailable",
+		explanation: "An exact bounded target-log range contains a service-unavailable signature. Jobman did not independently verify the service or its health.",
+	},
+	"storage_exhausted": {
+		code: "target.storage_exhausted_message", category: "resource",
+		summary:     "The target reported exhausted storage",
+		explanation: "An exact bounded target-log range contains a storage-exhaustion signature. Jobman did not independently confirm filesystem capacity.",
+	},
+	"tls_verification_failed": {
+		code: "target.tls_verification_message", category: "network",
+		summary:     "The target reported a TLS certificate verification failure",
+		explanation: "An exact bounded target-log range contains a certificate-verification signature. Jobman did not independently inspect the certificate chain or trust store.",
+	},
+}
+
+func diagnosticFormat(item diagnosis.EnrichmentItem, view evidenceView) string {
+	if item.Format != "causal_message" {
+		return item.Format
+	}
+	artifact, ok := view.artifacts[item.SourceArtifactID]
+	if !ok || item.ByteEnd > uint64(len(artifact.Data)) || item.ByteStart >= item.ByteEnd {
+		return ""
+	}
+
+	return enrichment.ClassifyDiagnostic(artifact.Data[item.ByteStart:item.ByteEnd])
 }
 
 func heuristicCandidate(priority int, code, category, summary, explanation, artifactID string) candidate {

@@ -12,8 +12,8 @@ const (
 	Kind = "jobman.diagnosis_report"
 	// SchemaVersion is the newest report schema understood by this package.
 	SchemaVersion = 1
-	// EngineVersion identifies the initial deterministic engine semantics.
-	EngineVersion = "1.2.0"
+	// EngineVersion identifies the current deterministic engine semantics.
+	EngineVersion = "1.4.0"
 )
 
 // Diagnostician turns sealed core evidence plus attributed companion context

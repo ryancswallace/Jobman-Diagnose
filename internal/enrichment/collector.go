@@ -3,7 +3,7 @@
 // command.
 package enrichment
 
-// cspell:ignore parseint
+// cspell:ignore connectionrefusederror parseint permissionerror timeouterror
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 
 const (
 	collectorName    = "builtin.log-structure"
-	collectorVersion = "1.0.0"
+	collectorVersion = "1.1.0"
 	maximumItems     = 32
 	maximumRange     = 64 * 1024
 	maximumLines     = 256
@@ -44,6 +44,48 @@ type byteRange struct {
 type lineRange struct {
 	start int
 	end   int
+}
+
+type diagnosticSignal struct {
+	format string
+	needle []byte
+}
+
+var diagnosticSignals = []diagnosticSignal{
+	{format: "address_in_use", needle: []byte("address already in use")},
+	{format: "dependency_missing", needle: []byte("cannot find module")},
+	{format: "dependency_missing", needle: []byte("no module named")},
+	{format: "dependency_missing", needle: []byte("could not resolve dependencies")},
+	{format: "dependency_missing", needle: []byte("could not find artifact")},
+	{format: "dependency_missing", needle: []byte("cannot open shared object file")},
+	{format: "tls_verification_failed", needle: []byte("certificate signed by unknown authority")},
+	{format: "tls_verification_failed", needle: []byte("certificate verify failed")},
+	{format: "nested_command_missing", needle: []byte("command not found")},
+	{format: "connection_refused", needle: []byte("connection refused")},
+	{format: "connection_refused", needle: []byte("connectionrefusederror")},
+	{format: "connection_refused", needle: []byte("econnrefused")},
+	{format: "deadline_exceeded", needle: []byte("context deadline exceeded")},
+	{format: "deadline_exceeded", needle: []byte("timeouterror")},
+	{format: "database_deadlock", needle: []byte("deadlock detected")},
+	{format: "database_unique_violation", needle: []byte("duplicate key")},
+	{format: "data_validation", needle: []byte("invalid decimal")},
+	{format: "data_validation", needle: []byte("parseint")},
+	{format: "migration_rejected", needle: []byte("migration rejected")},
+	{format: "configuration_missing", needle: []byte("missing setting")},
+	{format: "configuration_missing", needle: []byte("parameter not set")},
+	{format: "configuration_missing", needle: []byte("required environment variable")},
+	{format: "storage_exhausted", needle: []byte("no space left on device")},
+	{format: "dns_resolution_failed", needle: []byte("no such host")},
+	{format: "missing_file", needle: []byte("no such file or directory")},
+	{format: "permission_denied", needle: []byte("permission denied")},
+	{format: "permission_denied", needle: []byte("permissionerror")},
+	{format: "read_only_filesystem", needle: []byte("read-only file system")},
+	{format: "service_unavailable", needle: []byte("service unavailable")},
+	{format: "file_descriptor_exhausted", needle: []byte("too many open files")},
+	{format: "rate_limited", needle: []byte("too many requests")},
+	{format: "linker_undefined_reference", needle: []byte("undefined reference")},
+	{format: "migration_required", needle: []byte("apply migrations")},
+	{format: "authentication_denied", needle: []byte("unauthorized")},
 }
 
 // Collect verifies core evidence and returns a sealed companion wrapper with
@@ -119,31 +161,14 @@ func structuredRanges(data []byte) []byteRange {
 }
 
 func causalMessages(data []byte, lines []lineRange) []byteRange {
-	signals := [][]byte{
-		[]byte("address already in use"), []byte("cannot find module"), []byte("certificate signed by unknown authority"),
-		[]byte("certificate verify failed"), []byte("command not found"), []byte("connection refused"),
-		[]byte("context deadline exceeded"), []byte("deadlock detected"), []byte("duplicate key"),
-		[]byte("invalid decimal"), []byte("migration rejected"), []byte("missing setting"),
-		[]byte("no space left on device"), []byte("no such host"), []byte("parseint"),
-		[]byte("parameter not set"), []byte("permission denied"), []byte("read-only file system"),
-		[]byte("service unavailable"), []byte("too many open files"), []byte("too many requests"),
-		[]byte("undefined reference"), []byte("apply migrations"),
-	}
 	result := make([]byteRange, 0, 4)
 	for _, line := range lines {
-		value := bytes.ToLower(bytes.TrimSpace(data[line.start:line.end]))
-		matched := false
-		for _, signal := range signals {
-			if bytes.Contains(value, signal) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
+		format := ClassifyDiagnostic(data[line.start:line.end])
+		if format == "" {
 			continue
 		}
 		result = append(result, byteRange{
-			start: line.start, end: line.end, code: CodeCausalMessage, format: "causal_message",
+			start: line.start, end: line.end, code: CodeCausalMessage, format: format,
 		})
 		if len(result) == 4 {
 			break
@@ -151,6 +176,19 @@ func causalMessages(data []byte, lines []lineRange) []byteRange {
 	}
 
 	return result
+}
+
+// ClassifyDiagnostic returns the controlled subtype for one untrusted target
+// line. The empty string means that no conservative signature matched.
+func ClassifyDiagnostic(value []byte) string {
+	lower := bytes.ToLower(bytes.TrimSpace(value))
+	for _, signal := range diagnosticSignals {
+		if bytes.Contains(lower, signal.needle) {
+			return signal.format
+		}
+	}
+
+	return ""
 }
 
 func splitLines(data []byte) []lineRange {

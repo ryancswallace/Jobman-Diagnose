@@ -88,8 +88,47 @@ func TestCollectAttributesBoundedCausalMessageLines(t *testing.T) {
 		t.Fatalf("causal-message enrichment missing: %#v", evidence.Enrichment)
 	}
 	item := evidence.Enrichment[index]
+	if item.Format != "deadline_exceeded" {
+		t.Fatalf("causal-message format = %q", item.Format)
+	}
 	if got := string(log[item.ByteStart:item.ByteEnd]); got != "synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded\n" {
 		t.Fatalf("causal-message range = %q", got)
+	}
+}
+
+func TestClassifyDiagnosticUsesControlledSpecificFormats(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"listen tcp: address already in use":               "address_in_use",
+		"HTTP 401 Unauthorized":                            "authentication_denied",
+		"required environment variable API_URL is missing": "configuration_missing",
+		"connect ECONNREFUSED 127.0.0.1:5432":              "connection_refused",
+		"invalid decimal amount 1.2O":                      "data_validation",
+		"ERROR: deadlock detected":                         "database_deadlock",
+		"duplicate key violates unique constraint":         "database_unique_violation",
+		"request: context deadline exceeded":               "deadline_exceeded",
+		"Could not find artifact example:rules:jar:1":      "dependency_missing",
+		"lookup inventory.internal: no such host":          "dns_resolution_failed",
+		"accept4: too many open files":                     "file_descriptor_exhausted",
+		"ld: undefined reference to symbol":                "linker_undefined_reference",
+		"apply migrations 009 through 011":                 "migration_required",
+		"open input.csv: no such file or directory":        "missing_file",
+		"helper: command not found":                        "nested_command_missing",
+		"open output.csv: permission denied":               "permission_denied",
+		"HTTP 429 Too Many Requests":                       "rate_limited",
+		"write config: read-only file system":              "read_only_filesystem",
+		"HTTP 503 Service Unavailable":                     "service_unavailable",
+		"write output: no space left on device":            "storage_exhausted",
+		"x509: certificate signed by unknown authority":    "tls_verification_failed",
+	}
+	for message, expected := range tests {
+		if actual := ClassifyDiagnostic([]byte(message)); actual != expected {
+			t.Errorf("ClassifyDiagnostic(%q) = %q, want %q", message, actual, expected)
+		}
+	}
+	if actual := ClassifyDiagnostic([]byte("worker stopped unexpectedly")); actual != "" {
+		t.Fatalf("ClassifyDiagnostic(ambiguous) = %q", actual)
 	}
 }
 
