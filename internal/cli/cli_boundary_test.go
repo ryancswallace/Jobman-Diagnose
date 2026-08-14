@@ -218,6 +218,41 @@ func TestNormalizeAIOptionsRespectsEvidenceBoundary(t *testing.T) {
 	}
 }
 
+func TestCausalContextSearchExpandsOnlyImplicitLiveLogLimit(t *testing.T) {
+	t.Parallel()
+
+	implicit := options{
+		ai: true, share: stringListValue{string(diagnostic.DisclosureLogContent)},
+		request: diagnostic.EvidenceRequest{Logs: diagnostic.LogsTail, LogBytes: 64 * 1024},
+	}
+	expandCausalContextSearch(&implicit)
+	if implicit.request.LogBytes != causalContextSearchBytes {
+		t.Fatalf("implicit search bytes = %d", implicit.request.LogBytes)
+	}
+	explicit := options{
+		ai: true, share: stringListValue{string(diagnostic.DisclosureLogContent)},
+		request:          diagnostic.EvidenceRequest{Logs: diagnostic.LogsTail, LogBytes: 8 * 1024},
+		logBytesExplicit: true,
+	}
+	expandCausalContextSearch(&explicit)
+	if explicit.request.LogBytes != 8*1024 {
+		t.Fatalf("explicit search bytes = %d", explicit.request.LogBytes)
+	}
+	saved := options{
+		ai: true, share: stringListValue{string(diagnostic.DisclosureLogContent)}, fromEvidence: "evidence.json",
+		request: diagnostic.EvidenceRequest{Logs: diagnostic.LogsTail, LogBytes: 64 * 1024},
+	}
+	expandCausalContextSearch(&saved)
+	if saved.request.LogBytes != 64*1024 {
+		t.Fatalf("saved evidence search bytes = %d", saved.request.LogBytes)
+	}
+	deterministic := options{request: diagnostic.EvidenceRequest{Logs: diagnostic.LogsTail, LogBytes: 64 * 1024}}
+	expandCausalContextSearch(&deterministic)
+	if deterministic.request.LogBytes != 64*1024 {
+		t.Fatalf("deterministic search bytes = %d", deterministic.request.LogBytes)
+	}
+}
+
 func TestParseAndInspectionUsageErrors(t *testing.T) {
 	t.Parallel()
 
@@ -280,6 +315,12 @@ func TestConfigAndProfilesCommandUsage(t *testing.T) {
 	}
 	if err := runProfilesCommand([]string{"--unknown"}, io.Discard, io.Discard); err == nil {
 		t.Fatal("profiles unknown flag error = nil")
+	}
+	if err := runDoctorCommandContext(t.Context(), []string{"profile"}, io.Discard, io.Discard); !errors.Is(err, errUsage) {
+		t.Fatalf("doctor positional error = %v", err)
+	}
+	if err := runDoctorCommandContext(t.Context(), []string{"--unknown"}, io.Discard, io.Discard); err == nil {
+		t.Fatal("doctor unknown flag error = nil")
 	}
 }
 

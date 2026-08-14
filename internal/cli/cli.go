@@ -32,6 +32,8 @@ import (
 
 var errUsage = errors.New("invalid command usage")
 
+const causalContextSearchBytes = 1024 * 1024
+
 // ExitCode maps companion errors to stable process statuses.
 func ExitCode(err error) int {
 	switch {
@@ -98,6 +100,8 @@ func runInspectionCommand(arguments []string, stdout, stderr io.Writer) (bool, e
 		return true, runConfigCommand(arguments[1:], stdout, stderr)
 	case "profiles":
 		return true, runProfilesCommand(arguments[1:], stdout, stderr)
+	case "doctor":
+		return true, runDoctorCommand(arguments[1:], stdout, stderr)
 	default:
 		return false, nil
 	}
@@ -221,6 +225,7 @@ func runDiagnosis(
 		}
 	}()
 	progress.Phase(progressCollecting)
+	expandCausalContextSearch(&parsed)
 	evidence, err := obtainEvidence(ctx, parsed, stdin)
 	if err != nil {
 		return err
@@ -336,33 +341,34 @@ func commandLineError(err error) error {
 }
 
 type options struct {
-	selector        string
-	fromEvidence    string
-	exportEvidence  string
-	output          string
-	jobman          string
-	stateDir        string
-	configPath      string
-	request         diagnostic.EvidenceRequest
-	jsonOutput      bool
-	details         bool
-	color           colorMode
-	version         bool
-	ai              bool
-	aiLogs          bool
-	aiSource        string
-	sourceFile      string
-	sourceLine      uint64
-	profile         string
-	requireModel    bool
-	deterministic   bool
-	progress        progressMode
-	diagnosisConfig string
-	supportBundle   string
-	bundleDryRun    bool
-	share           stringListValue
-	logsExplicit    bool
-	includeSystem   bool
+	selector         string
+	fromEvidence     string
+	exportEvidence   string
+	output           string
+	jobman           string
+	stateDir         string
+	configPath       string
+	request          diagnostic.EvidenceRequest
+	jsonOutput       bool
+	details          bool
+	color            colorMode
+	version          bool
+	ai               bool
+	aiLogs           bool
+	aiSource         string
+	sourceFile       string
+	sourceLine       uint64
+	profile          string
+	requireModel     bool
+	deterministic    bool
+	progress         progressMode
+	diagnosisConfig  string
+	supportBundle    string
+	bundleDryRun     bool
+	share            stringListValue
+	logsExplicit     bool
+	logBytesExplicit bool
+	includeSystem    bool
 }
 
 func (parsed options) aiEnabled() bool {
@@ -379,7 +385,7 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 	flags.SetOutput(stderr)
 	var usageWriteErr error
 	flags.Usage = func() {
-		_, usageWriteErr = fmt.Fprintln(stderr, "usage: jobman-diagnose [options] JOB\n       jobman-diagnose [options] --from-evidence PATH\n       jobman-diagnose config {paths|validate|show} [PATH]\n       jobman-diagnose profiles [--diagnosis-config PATH]")
+		_, usageWriteErr = fmt.Fprintln(stderr, "usage: jobman-diagnose [options] JOB\n       jobman-diagnose [options] --from-evidence PATH\n       jobman-diagnose config {paths|validate|show} [PATH]\n       jobman-diagnose profiles [--diagnosis-config PATH]\n       jobman-diagnose doctor [--diagnosis-config PATH] [--profile NAME] [--json]")
 		flags.PrintDefaults()
 	}
 	registerFlags(flags, &parsed)
@@ -407,8 +413,11 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 	}
 	parsed.request.Selector = parsed.selector
 	flags.Visit(func(value *flag.Flag) {
-		if value.Name == "logs" {
+		switch value.Name {
+		case "logs":
 			parsed.logsExplicit = true
+		case "log-bytes":
+			parsed.logBytesExplicit = true
 		}
 	})
 	if err := normalizeAIOptions(&parsed); err != nil {
@@ -419,6 +428,15 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 	}
 
 	return parsed, nil
+}
+
+func expandCausalContextSearch(parsed *options) {
+	if parsed == nil || parsed.fromEvidence != "" || parsed.request.Logs != diagnostic.LogsTail ||
+		parsed.logBytesExplicit || !parsed.aiEnabled() ||
+		!slices.Contains(parsed.share, string(diagnostic.DisclosureLogContent)) {
+		return
+	}
+	parsed.request.LogBytes = max(parsed.request.LogBytes, causalContextSearchBytes)
 }
 
 func registerFlags(flags *flag.FlagSet, parsed *options) {

@@ -239,6 +239,109 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
+func TestRunProviderDoctorExercisesConfiguredModel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		var payload struct {
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		decodeErr := json.NewDecoder(request.Body).Decode(&payload)
+		closeErr := request.Body.Close()
+		if decodeErr != nil || closeErr != nil || len(payload.Messages) < 2 {
+			http.Error(response, "invalid request", http.StatusBadRequest)
+			return
+		}
+		var generationRequest provider.Request
+		if err := json.Unmarshal([]byte(payload.Messages[len(payload.Messages)-1].Content), &generationRequest); err != nil {
+			http.Error(response, "invalid generation request", http.StatusBadRequest)
+			return
+		}
+		proposal, err := json.Marshal(provider.Proposal{
+			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion,
+			RequestID: generationRequest.RequestID,
+			Hypotheses: []provider.Hypothesis{{
+				Code: "generated.dependency_unavailable", Category: "network",
+				Summary:            "Inventory synchronization was refused by 127.0.0.1:65535",
+				RootCause:          "The synchronize inventory connection to 127.0.0.1:65535 failed with connection refused.",
+				Explanation:        "The connection refused signal prevents the inventory synchronization request from completing.",
+				SupportingEvidence: []string{"doctor:artifact:stderr"}, ContradictingEvidence: []string{},
+				ContradictsFindings: []string{},
+			}},
+			RecommendedActions: []string{}, MissingEvidence: []provider.MissingEvidence{},
+		})
+		if err != nil {
+			http.Error(response, "encode failure", http.StatusInternalServerError)
+			return
+		}
+		response.Header().Set("Content-Type", "application/json")
+		if encodeErr := json.NewEncoder(response).Encode(map[string]any{
+			"id": "doctor-test",
+			"choices": []any{map[string]any{
+				"index": 0, "finish_reason": "stop",
+				"message": map[string]any{"content": string(proposal), "refusal": ""},
+			}},
+			"usage": map[string]any{"prompt_tokens": 100, "completion_tokens": 40},
+		}); encodeErr != nil {
+			t.Errorf("encode doctor response: %v", encodeErr)
+		}
+	}))
+	defer server.Close()
+
+	configuration := writeDiagnosisConfig(t, server.URL+"/v1/chat/completions")
+	var stdout, stderr bytes.Buffer
+	if err := Run([]string{"doctor", "--diagnosis-config", configuration, "--json"}, nil, &stdout, &stderr); err != nil {
+		t.Fatalf("doctor error = %v, stderr = %s", err, stderr.String())
+	}
+	var report struct {
+		Kind  string `json:"kind"`
+		Ready bool   `json:"ready"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &report); err != nil ||
+		report.Kind != "jobman.diagnosis_provider_doctor" || !report.Ready {
+		t.Fatalf("doctor report/error = %s / %v", stdout.String(), err)
+	}
+}
+
+func TestRunProviderDoctorReturnsFailedReportWithoutResponseContent(t *testing.T) {
+	secret := "secret-looking provider response"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		http.Error(response, secret, http.StatusNotFound)
+	}))
+	defer server.Close()
+	configuration := writeDiagnosisConfig(t, server.URL+"/v1/chat/completions")
+	var stdout bytes.Buffer
+	err := Run([]string{"doctor", "--diagnosis-config", configuration, "--json"}, nil, &stdout, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "failed readiness check") ||
+		strings.Contains(err.Error(), secret) || strings.Contains(stdout.String(), secret) ||
+		!strings.Contains(stdout.String(), `"ready": false`) || !strings.Contains(stdout.String(), "http_status") {
+		t.Fatalf("doctor failure/report = %v / %s", err, stdout.String())
+	}
+}
+
+func TestRunProviderDoctorReportsCredentialSetupFailure(t *testing.T) {
+	t.Setenv("JOBMAN_DIAGNOSE_DOCTOR_TEST_CREDENTIAL", "")
+	configuration := writeDiagnosisConfig(t, "http://127.0.0.1:1/v1/chat/completions")
+	contents, err := os.ReadFile(configuration) // #nosec G304 -- test-owned path under t.TempDir.
+	if err != nil {
+		t.Fatal(err)
+	}
+	contents = bytes.Replace(contents, []byte("    model: test-model\n"), []byte(
+		"    model: test-model\n    credential:\n      environment: JOBMAN_DIAGNOSE_DOCTOR_TEST_CREDENTIAL\n",
+	), 1)
+	if writeErr := os.WriteFile(configuration, contents, 0o600); writeErr != nil { // #nosec G703 -- test-owned path under t.TempDir.
+		t.Fatal(writeErr)
+	}
+	var stdout bytes.Buffer
+	err = Run([]string{"doctor", "--diagnosis-config", configuration, "--json"}, nil, &stdout, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "failed readiness check") ||
+		!strings.Contains(stdout.String(), `"ready": false`) ||
+		!strings.Contains(stdout.String(), `"code": "credential_adapter"`) ||
+		strings.Contains(stdout.String(), "JOBMAN_DIAGNOSE_DOCTOR_TEST_CREDENTIAL") {
+		t.Fatalf("doctor setup failure/report = %v / %s", err, stdout.String())
+	}
+}
+
 func TestRunHelpIsSuccessful(t *testing.T) {
 	t.Parallel()
 
