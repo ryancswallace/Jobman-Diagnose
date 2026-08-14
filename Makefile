@@ -26,6 +26,9 @@ FUZZ_PACKAGE ?= ./diagnosis
 FUZZ_TARGET ?= FuzzDecodeReport
 FUZZ_TIME ?= 10s
 COVERAGE_MIN ?= 90
+EVALUATION_DIAGNOSIS_CONFIG ?=
+EVALUATION_PROFILE ?=
+EVALUATION_OUTPUT ?= evaluation-release.json
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || printf '%s' dev)
 COMMIT ?= $(shell commit_value=$$(git rev-parse --verify HEAD 2>/dev/null) && printf '%s' "$$commit_value" || printf '%s' unknown)
@@ -219,6 +222,19 @@ docs: docs-check spellcheck ## Validate authored documentation.
 .PHONY: evaluate
 evaluate: evaluation-fixtures-check ## Run the checked-in deterministic diagnosis quality corpus.
 	$(GO) run ./devel/evaluate --corpus testdata/evaluation/manifest.json --summary
+
+.PHONY: evaluate-release
+evaluate-release: evaluation-fixtures-check ## Run and enforce the repeated live release-evaluation policy.
+	@test -n "$(EVALUATION_DIAGNOSIS_CONFIG)" || { echo 'EVALUATION_DIAGNOSIS_CONFIG is required.' >&2; exit 2; }
+	@test -n "$(EVALUATION_PROFILE)" || { echo 'EVALUATION_PROFILE is required.' >&2; exit 2; }
+	$(GO) run ./devel/evaluate \
+		--live \
+		--diagnosis-config "$(EVALUATION_DIAGNOSIS_CONFIG)" \
+		--profile "$(EVALUATION_PROFILE)" \
+		--share metadata,log_content \
+		--repeat 3 \
+		--promotion-policy testdata/evaluation/promotion-policy.json \
+		--output "$(EVALUATION_OUTPUT)"
 
 .PHONY: gen-evaluation-fixtures
 gen-evaluation-fixtures: ## Regenerate synthetic nonsecret diagnostic evaluation evidence.

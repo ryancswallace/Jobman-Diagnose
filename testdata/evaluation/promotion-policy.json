@@ -1,0 +1,86 @@
+{
+  "kind": "jobman.diagnosis_evaluation_promotion_policy",
+  "schema_version": 1,
+  "minimum_unique_cases": 72,
+  "minimum_repeats": 3,
+  "minimum_provider_invoked_cases": 216,
+  "minimum_consistency_comparisons": 144,
+  "minimum_source_context_cases": 87,
+  "required_tag_cases": {
+    "ambiguity.control": 4,
+    "context.source": 29,
+    "environment.container": 2,
+    "failure.network": 12,
+    "format.long": 2,
+    "language.go": 5,
+    "language.jvm": 2,
+    "language.node": 5,
+    "language.rust": 3,
+    "language.shell": 4,
+    "stress.interleaved": 2,
+    "stress.noisy": 4,
+    "style.real_world": 12
+  },
+  "metrics": {
+    "abstention_accuracy": {
+      "minimum": 1,
+      "minimum_denominator": 45
+    },
+    "causal_completeness": {
+      "minimum": 0.95,
+      "minimum_denominator": 18
+    },
+    "citation_economy": {
+      "minimum": 0.98,
+      "minimum_denominator": 150
+    },
+    "citation_validity": {
+      "minimum": 1,
+      "minimum_denominator": 216
+    },
+    "deterministic_stability": {
+      "minimum": 1,
+      "minimum_denominator": 216
+    },
+    "entity_preservation": {
+      "minimum": 0.98,
+      "minimum_denominator": 300
+    },
+    "forbidden_claim_rate": {
+      "maximum": 0
+    },
+    "generated_consistency": {
+      "minimum": 0.95,
+      "minimum_denominator": 144
+    },
+    "primary_code_precision": {
+      "minimum": 1,
+      "minimum_denominator": 216
+    },
+    "proposal_acceptance": {
+      "minimum": 0.95,
+      "minimum_denominator": 216
+    },
+    "provider_fallback_rate": {
+      "maximum": 0
+    },
+    "retry_advice_accuracy": {
+      "minimum": 1,
+      "minimum_denominator": 216
+    },
+    "safe_action_rate": {
+      "minimum": 1
+    },
+    "taxonomy_accuracy": {
+      "minimum": 0.98,
+      "minimum_denominator": 150
+    },
+    "unsupported_claim_rate": {
+      "maximum": 0
+    },
+    "useful_diagnosis_rate": {
+      "minimum": 0.95,
+      "minimum_denominator": 150
+    }
+  }
+}

@@ -38,6 +38,7 @@ type options struct {
 	profile          string
 	share            string
 	allowFallback    bool
+	promotionPolicy  string
 	output           string
 	captureProposals string
 	summary          bool
@@ -112,6 +113,14 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	var promotionPolicy *evaluation.PromotionPolicy
+	if parsed.promotionPolicy != "" {
+		policy, loadErr := evaluation.LoadPromotionPolicy(parsed.promotionPolicy)
+		if loadErr != nil {
+			return loadErr
+		}
+		promotionPolicy = &policy
+	}
 	clock := func() time.Time { return time.Now().UTC() }
 	deterministic, err := engine.New(buildinfo.Version, clock)
 	if err != nil {
@@ -179,6 +188,10 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 	if evaluationErr != nil {
 		return evaluationErr
 	}
+	if promotionPolicy != nil {
+		assessment := evaluation.AssessPromotion(*promotionPolicy, summary)
+		summary.Promotion = &assessment
+	}
 	write := func(destination io.Writer) error {
 		encoder := json.NewEncoder(destination)
 		encoder.SetEscapeHTML(false)
@@ -195,12 +208,13 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 		acceptance := metricText(summary.Metrics.ProposalAcceptance, summary.Metrics.ProviderInvokedCases)
 		consistency := metricText(summary.Metrics.GeneratedConsistency, summary.Metrics.ConsistencyComparisons)
 		if _, err := fmt.Fprintf(
-			stdout, "evaluation: %d/%d executions passed (%d cases x%d); primary %.3f, citations %.3f, actions %.3f, retry %.3f, unsupported %.3f, useful %s, abstention %s, accepted %s, consistent %s, source %d\n",
+			stdout, "evaluation: %d/%d executions passed (%d cases x%d); primary %.3f, citations %.3f, actions %.3f, retry %.3f, unsupported %.3f, useful %s, abstention %s, accepted %s, consistent %s, source %d, source mismatch %d\n",
 			summary.Passed, summary.Cases, summary.UniqueCases, summary.Repeats,
 			summary.Metrics.PrimaryCodePrecision,
 			summary.Metrics.CitationValidity, summary.Metrics.SafeActionRate,
 			summary.Metrics.RetryAdviceAccuracy, summary.Metrics.UnsupportedClaimRate,
 			specificity, abstention, acceptance, consistency, summary.Metrics.SourceContextCases,
+			summary.Metrics.SourceContextMismatches,
 		); err != nil {
 			return fmt.Errorf("write evaluation summary: %w", err)
 		}
@@ -209,6 +223,9 @@ func run(arguments []string, stdout, stderr io.Writer) error {
 	}
 	if summary.Passed != summary.Cases {
 		return fmt.Errorf("evaluation failed: %d of %d executions passed", summary.Passed, summary.Cases)
+	}
+	if summary.Promotion != nil && !summary.Promotion.Passed {
+		return fmt.Errorf("evaluation promotion failed: %s", strings.Join(summary.Promotion.Violations, "; "))
 	}
 
 	return nil
@@ -271,6 +288,10 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&parsed.profile, "profile", "", "named live profile (the configured default when omitted)")
 	flags.StringVar(&parsed.share, "share", parsed.share, "comma-separated approved disclosure classes")
 	flags.BoolVar(&parsed.allowFallback, "allow-fallback", false, "allow provider failures to use deterministic fallback")
+	flags.StringVar(
+		&parsed.promotionPolicy, "promotion-policy", "",
+		"checked-in release policy to enforce after a complete repeated live evaluation",
+	)
 	flags.StringVar(&parsed.output, "output", "", "atomically write or replace the private evaluation result")
 	flags.StringVar(
 		&parsed.captureProposals, "capture-proposals", "",
@@ -290,8 +311,11 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 		return parsed, errors.New("--live requires an explicit --diagnosis-config path")
 	}
 	if !parsed.live && (parsed.diagnosisConfig != "" || parsed.profile != "" || parsed.allowFallback ||
-		parsed.share != "metadata" || parsed.captureProposals != "") {
+		parsed.share != "metadata" || parsed.captureProposals != "" || parsed.promotionPolicy != "") {
 		return parsed, errors.New("provider options require --live")
+	}
+	if parsed.promotionPolicy != "" && (parsed.cases != "" || parsed.tags != "") {
+		return parsed, errors.New("--promotion-policy requires the complete unfiltered corpus")
 	}
 	if parsed.captureProposals != "" && parsed.captureProposals == parsed.output {
 		return parsed, errors.New("--capture-proposals and --output must name different files")

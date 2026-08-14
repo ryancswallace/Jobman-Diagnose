@@ -30,7 +30,7 @@ const (
 	// SchemaVersion is the newest corpus schema supported by this package.
 	SchemaVersion = 4
 	// ResultSchemaVersion is the newest evaluation-result schema emitted by this package.
-	ResultSchemaVersion = 4
+	ResultSchemaVersion = 6
 
 	maximumCorpusBytes = 1024 * 1024
 	maximumCases       = 512
@@ -104,21 +104,22 @@ type ExpectedRelation struct {
 
 // Result records one case without copying evidence or generated prose.
 type Result struct {
-	Name               string   `json:"name"`
-	Iteration          int      `json:"iteration"`
-	Tags               []string `json:"tags"`
-	Passed             bool     `json:"passed"`
-	PrimaryCode        string   `json:"primary_code,omitempty"`
-	Retry              string   `json:"retry,omitempty"`
-	ExistingPolicy     string   `json:"existing_policy,omitempty"`
-	GeneratedCodes     []string `json:"generated_codes"`
-	EvidenceID         string   `json:"evidence_id,omitempty"`
-	AnalysisEvidenceID string   `json:"analysis_evidence_id,omitempty"`
-	SourceContextUsed  bool     `json:"source_context_used"`
-	ProviderInvoked    bool     `json:"provider_invoked"`
-	ProposalAccepted   bool     `json:"proposal_accepted"`
-	Violations         []string `json:"violations"`
-	ReportFingerprint  string   `json:"report_fingerprint,omitempty"`
+	Name                          string   `json:"name"`
+	Iteration                     int      `json:"iteration"`
+	Tags                          []string `json:"tags"`
+	Passed                        bool     `json:"passed"`
+	PrimaryCode                   string   `json:"primary_code,omitempty"`
+	Retry                         string   `json:"retry,omitempty"`
+	ExistingPolicy                string   `json:"existing_policy,omitempty"`
+	GeneratedCodes                []string `json:"generated_codes"`
+	EvidenceID                    string   `json:"evidence_id,omitempty"`
+	AnalysisEvidenceID            string   `json:"analysis_evidence_id,omitempty"`
+	SourceContextUsed             bool     `json:"source_context_used"`
+	SourceContextMismatchDetected bool     `json:"source_context_mismatch_detected"`
+	ProviderInvoked               bool     `json:"provider_invoked"`
+	ProposalAccepted              bool     `json:"proposal_accepted"`
+	Violations                    []string `json:"violations"`
+	ReportFingerprint             string   `json:"report_fingerprint,omitempty"`
 }
 
 // Metrics are intentionally separated so fluent model output cannot hide a
@@ -151,19 +152,21 @@ type Metrics struct {
 	GeneratedConsistency      float64 `json:"generated_consistency"`
 	ConsistencyComparisons    int     `json:"consistency_comparisons"`
 	SourceContextCases        int     `json:"source_context_cases"`
+	SourceContextMismatches   int     `json:"source_context_mismatches"`
 }
 
 // Summary is the versioned machine-readable evaluation result.
 type Summary struct {
-	Kind          string   `json:"kind"`
-	SchemaVersion int      `json:"schema_version"`
-	Mode          string   `json:"mode"`
-	UniqueCases   int      `json:"unique_cases"`
-	Repeats       int      `json:"repeats"`
-	Cases         int      `json:"cases"`
-	Passed        int      `json:"passed"`
-	Metrics       Metrics  `json:"metrics"`
-	Results       []Result `json:"results"`
+	Kind          string               `json:"kind"`
+	SchemaVersion int                  `json:"schema_version"`
+	Mode          string               `json:"mode"`
+	UniqueCases   int                  `json:"unique_cases"`
+	Repeats       int                  `json:"repeats"`
+	Cases         int                  `json:"cases"`
+	Passed        int                  `json:"passed"`
+	Metrics       Metrics              `json:"metrics"`
+	Results       []Result             `json:"results"`
+	Promotion     *PromotionAssessment `json:"promotion,omitempty"`
 }
 
 // RunOptions controls bounded repeated evaluation.
@@ -316,7 +319,7 @@ func RunWithOptions(
 	}
 	var primaryOK, citationsOK, retryOK, stable, fallback, generatedClaims, unsupportedClaims int
 	var safeActions, actions int
-	var sourceContextCases int
+	var sourceContextCases, sourceContextMismatches int
 	var totals generatedCounters
 	var consistencyMatches, consistencyComparisons int
 	for _, test := range corpus.Cases {
@@ -350,6 +353,9 @@ func RunWithOptions(
 			unsupportedClaims += counters.unsupportedClaims
 			if result.SourceContextUsed {
 				sourceContextCases++
+			}
+			if result.SourceContextMismatchDetected {
+				sourceContextMismatches++
 			}
 			totals.add(counters.generated)
 			if result.ProviderInvoked {
@@ -394,6 +400,7 @@ func RunWithOptions(
 		GeneratedConsistency:      ratio(consistencyMatches, consistencyComparisons),
 		ConsistencyComparisons:    consistencyComparisons,
 		SourceContextCases:        sourceContextCases,
+		SourceContextMismatches:   sourceContextMismatches,
 	}
 
 	return summary, nil
@@ -490,6 +497,7 @@ func runCase(
 	result.AnalysisEvidenceID = report.AnalysisEvidenceID
 	result.ProviderInvoked = report.Disclosure.ProviderInvoked
 	result.ProposalAccepted = report.Disclosure.GeneratedContentUsed || hasWarningCode(report, "generator_abstained")
+	result.SourceContextMismatchDetected = hasWarningCode(report, "source_context_mismatch")
 	result.Retry = string(report.Retry.Verdict)
 	result.ExistingPolicy = string(report.Retry.ExistingPolicy)
 	result.ReportFingerprint = report.Fingerprints.Report
@@ -497,6 +505,15 @@ func runCase(
 		result.Violations = append(result.Violations, "report citations or provenance are invalid")
 	} else {
 		counters.citationsOK = 1
+	}
+	if result.SourceContextUsed && slices.Contains(test.Tags, "context.stale_source") &&
+		!result.SourceContextMismatchDetected {
+		result.Violations = append(result.Violations, "stale source context was not detected")
+	}
+	if result.SourceContextMismatchDetected && slices.ContainsFunc(evidence.SourceContext, func(source diagnosis.SourceContext) bool {
+		return slices.Contains(report.Disclosure.ArtifactIDs, source.ID)
+	}) {
+		result.Violations = append(result.Violations, "mismatched source context was disclosed to the provider")
 	}
 	if slices.Contains(test.AcceptedPrimaryCodes, result.PrimaryCode) {
 		counters.primaryOK = 1

@@ -25,7 +25,7 @@ func TestGenerateEvaluationFixtures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 50 {
+	if len(entries) != 62 {
 		t.Fatalf("fixture count = %d", len(entries))
 	}
 	prior := ""
@@ -89,7 +89,7 @@ func TestEvaluationCorpusSourceMappingsResolve(t *testing.T) {
 			t.Fatalf("source case %q path %q: %v", test.Name, path, err)
 		}
 	}
-	if sourceCases != 28 {
+	if sourceCases != 29 {
 		t.Fatalf("source case count = %d", sourceCases)
 	}
 }

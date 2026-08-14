@@ -86,6 +86,63 @@
       }
     },
     {
+      "name": "build_maven_dependency",
+      "evidence": "evaluation/evidence/build-maven-dependency-v1.json",
+      "tags": [
+        "failure.dependency",
+        "format.build",
+        "language.jvm",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.dependency_missing_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.dependency_missing"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.dependency_missing_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_dependency"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "artifact",
+            "alternatives": [
+              "com.example.internal:pricing-rules",
+              "pricing-rules"
+            ]
+          },
+          {
+            "name": "version",
+            "alternatives": [
+              "7.3.0"
+            ]
+          },
+          {
+            "name": "resolution",
+            "alternatives": [
+              "could not find artifact",
+              "could not resolve"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "compiler_error",
       "evidence": "evaluation/evidence/compiler-error-v1.json",
       "tags": [
@@ -143,7 +200,7 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.connection_refused_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_unavailable"
@@ -154,13 +211,13 @@
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -183,20 +240,20 @@
       }
     },
     {
-      "name": "database_deadlock",
-      "evidence": "evaluation/evidence/database-deadlock-v1.json",
+      "name": "container_crash_loop_without_logs",
+      "evidence": "evaluation/evidence/container-crash-loop-v1.json",
       "tags": [
-        "failure.database",
-        "format.database",
+        "ambiguity.control",
+        "environment.container",
+        "format.orchestrator",
         "lifecycle.nonzero_exit",
-        "source.synthetic"
+        "source.synthetic",
+        "style.real_world"
       ],
       "accepted_primary_codes": [
         "core.nonzero_exit"
       ],
-      "allowed_generated_codes": [
-        "generated.transient_infrastructure"
-      ],
+      "allowed_generated_codes": [],
       "required_finding_codes": [
         "core.nonzero_exit"
       ],
@@ -209,6 +266,89 @@
       "expected_existing_policy": "unknown",
       "minimum_confidence": 82,
       "maximum_confidence": 82,
+      "generated_expectation": {
+        "disposition": "must_abstain",
+        "forbidden_claims": [
+          {
+            "name": "invented crash cause",
+            "alternatives": [
+              "out of memory",
+              "configuration error",
+              "application defect"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "container_killed_without_reason",
+      "evidence": "evaluation/evidence/container-killed-v1.json",
+      "tags": [
+        "ambiguity.control",
+        "environment.container",
+        "format.message",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "core.nonzero_exit"
+      ],
+      "allowed_generated_codes": [],
+      "required_finding_codes": [
+        "core.nonzero_exit"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_target_evidence"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 82,
+      "maximum_confidence": 82,
+      "generated_expectation": {
+        "disposition": "must_abstain",
+        "forbidden_claims": [
+          {
+            "name": "invented kill cause",
+            "alternatives": [
+              "out of memory",
+              "oom",
+              "memory limit"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "database_deadlock",
+      "evidence": "evaluation/evidence/database-deadlock-v1.json",
+      "tags": [
+        "failure.database",
+        "format.database",
+        "lifecycle.nonzero_exit",
+        "source.synthetic"
+      ],
+      "accepted_primary_codes": [
+        "target.database_deadlock_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.transient_infrastructure"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.database_deadlock_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_database_failure"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_delay",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -244,23 +384,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.database_unique_violation_message"
       ],
       "allowed_generated_codes": [
         "generated.data_validation"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.database_unique_violation_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_database_failure"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -296,23 +437,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.dns_resolution_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_unavailable"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.dns_resolution_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -372,23 +514,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.deadline_exceeded_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_unavailable"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.deadline_exceeded_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -469,23 +612,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.data_validation_message"
       ],
       "allowed_generated_codes": [
         "generated.data_validation"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.data_validation_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_rejected_data"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -524,23 +668,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.configuration_missing_message"
       ],
       "allowed_generated_codes": [
         "generated.application_configuration"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.configuration_missing_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_configuration"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -561,6 +706,64 @@
       }
     },
     {
+      "name": "go_wrapped_connection",
+      "evidence": "evaluation/evidence/go-wrapped-connection-v1.json",
+      "tags": [
+        "failure.network",
+        "format.timestamped",
+        "language.go",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.connection_refused_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.dependency_unavailable"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.connection_refused_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_dependency_connection"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_delay",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "refusal",
+            "alternatives": [
+              "connection refused",
+              "ECONNREFUSED"
+            ]
+          },
+          {
+            "name": "endpoint",
+            "alternatives": [
+              "10.24.7.19:5432",
+              "port 5432"
+            ]
+          },
+          {
+            "name": "operation",
+            "alternatives": [
+              "flush checkpoint",
+              "store batch"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "http_401",
       "evidence": "evaluation/evidence/http-401-v1.json",
       "tags": [
@@ -570,23 +773,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.authentication_denied_message"
       ],
       "allowed_generated_codes": [
         "generated.access_denied"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.authentication_denied_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_authentication"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -617,23 +821,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.rate_limited_message"
       ],
       "allowed_generated_codes": [
         "generated.transient_infrastructure"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.rate_limited_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -643,11 +848,69 @@
               "HTTP 429",
               "Too Many Requests"
             ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
+      "name": "jvm_database_cause_chain",
+      "evidence": "evaluation/evidence/jvm-database-cause-chain-v1.json",
+      "tags": [
+        "failure.database",
+        "format.exception_chain",
+        "language.jvm",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.database_deadlock_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.transient_infrastructure"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.database_deadlock_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_database_failure"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_delay",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "database cause",
+            "alternatives": [
+              "deadlock detected",
+              "deadlock"
+            ]
           },
           {
-            "name": "delay",
+            "name": "operation",
             "alternatives": [
-              "30 seconds"
+              "checkout update",
+              "checkout"
+            ]
+          }
+        ],
+        "required_relations": [
+          {
+            "name": "database deadlock caused checkout failure",
+            "causes": [
+              "deadlock detected",
+              "PSQLException"
+            ],
+            "effects": [
+              "checkout update failed",
+              "CannotAcquireLockException"
             ]
           }
         ],
@@ -744,6 +1007,122 @@
       }
     },
     {
+      "name": "long_noisy_storage",
+      "evidence": "evaluation/evidence/long-noisy-storage-v1.json",
+      "tags": [
+        "failure.filesystem",
+        "failure.resource",
+        "format.long",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "stress.noisy",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.storage_exhausted_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.resource_pressure"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.storage_exhausted_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_resource_limit"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "exhaustion",
+            "alternatives": [
+              "no space left",
+              "disk is full"
+            ]
+          },
+          {
+            "name": "path",
+            "alternatives": [
+              "/srv/checkpoints/partition-17.json",
+              "partition-17.json"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
+      "name": "multi_failure_terminal_dns",
+      "evidence": "evaluation/evidence/multi-failure-terminal-dns-v1.json",
+      "tags": [
+        "failure.network",
+        "format.timestamped",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "stress.interleaved",
+        "stress.noisy",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.dns_resolution_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.dependency_unavailable"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.dns_resolution_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_dependency_connection"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_delay",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "terminal cause",
+            "alternatives": [
+              "no such host",
+              "DNS"
+            ]
+          },
+          {
+            "name": "host",
+            "alternatives": [
+              "queue.service.internal"
+            ]
+          }
+        ],
+        "required_relations": [
+          {
+            "name": "DNS failure stopped startup",
+            "causes": [
+              "no such host",
+              "queue.service.internal"
+            ],
+            "effects": [
+              "startup failed",
+              "worker startup"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "native_linker_error",
       "evidence": "evaluation/evidence/native-linker-error-v1.json",
       "source": "examples/failure-labs/native/01_linker_error.c",
@@ -756,23 +1135,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.linker_error_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.linker_error_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -802,23 +1182,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.dependency_missing_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.dependency_missing_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -849,7 +1230,7 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.shell_command_not_found"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
@@ -862,15 +1243,15 @@
         "core.executable_not_found"
       ],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [
         "correct_executable"
       ],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -904,23 +1285,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.address_in_use_message"
       ],
       "allowed_generated_codes": [
         "generated.environment_mismatch"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.address_in_use_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_listener_collision"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -942,6 +1324,64 @@
       }
     },
     {
+      "name": "node_aggregate_connection",
+      "evidence": "evaluation/evidence/node-aggregate-connection-v1.json",
+      "tags": [
+        "failure.network",
+        "format.aggregate_error",
+        "language.node",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "stress.interleaved",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.connection_refused_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.dependency_unavailable"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.connection_refused_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_dependency_connection"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_delay",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "refusal",
+            "alternatives": [
+              "ECONNREFUSED",
+              "connection refused"
+            ]
+          },
+          {
+            "name": "endpoints",
+            "alternatives": [
+              "10.24.8.11:6379",
+              "10.24.8.12:6379"
+            ]
+          },
+          {
+            "name": "operation",
+            "alternatives": [
+              "inventory lookup"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "node_missing_module",
       "evidence": "evaluation/evidence/node-missing-module-v1.json",
       "source": "examples/failure-labs/node/01_missing_module.js",
@@ -953,23 +1393,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.dependency_missing_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.dependency_missing_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1000,23 +1441,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.service_unavailable_message"
       ],
       "allowed_generated_codes": [
         "generated.external_service_failure"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.service_unavailable_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1141,7 +1583,7 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.permission_message"
       ],
       "allowed_generated_codes": [
         "generated.access_denied"
@@ -1152,13 +1594,13 @@
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_permissions"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1364,23 +1806,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.deadline_exceeded_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_unavailable"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.deadline_exceeded_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1429,23 +1872,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.migration_required_message"
       ],
       "allowed_generated_codes": [
         "generated.application_configuration"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.migration_required_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_configuration"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1537,23 +1981,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.connection_refused_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_unavailable"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.connection_refused_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
-      "expected_retry": "after_change",
+      "expected_retry": "after_delay",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1650,23 +2095,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.dependency_missing_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.dependency_missing_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1700,23 +2146,25 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.configuration_missing_message"
       ],
       "allowed_generated_codes": [
+        "generated.application_configuration",
         "generated.environment_mismatch"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.configuration_missing_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_configuration"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1751,23 +2199,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.missing_file_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.missing_file_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1801,23 +2250,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.missing_file_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.missing_file_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1851,23 +2301,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.permission_message"
       ],
       "allowed_generated_codes": [
         "generated.access_denied"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.permission_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_permissions"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -1907,23 +2358,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.data_validation_message"
       ],
       "allowed_generated_codes": [
         "generated.data_validation"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.data_validation_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_rejected_data"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2254,23 +2706,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.read_only_filesystem_message"
       ],
       "allowed_generated_codes": [
         "generated.access_denied"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.read_only_filesystem_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_filesystem_policy"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2291,6 +2744,57 @@
       }
     },
     {
+      "name": "rust_backtrace_data_panic",
+      "evidence": "evaluation/evidence/rust-backtrace-panic-v1.json",
+      "tags": [
+        "failure.data",
+        "format.backtrace",
+        "format.long",
+        "language.rust",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.data_validation_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.data_validation"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.data_validation_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_rejected_data"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "invalid amount",
+            "alternatives": [
+              "1,204.5O",
+              "invalid decimal"
+            ]
+          },
+          {
+            "name": "record",
+            "alternatives": [
+              "partner-west:8841"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "rust_linker_error",
       "evidence": "evaluation/evidence/rust-linker-error-v1.json",
       "tags": [
@@ -2301,23 +2805,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.linker_error_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.linker_error_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2425,23 +2930,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.shell_command_not_found"
       ],
       "allowed_generated_codes": [
         "generated.dependency_missing"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.shell_command_not_found"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_dependency"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2449,6 +2955,64 @@
             "name": "command",
             "alternatives": [
               "report-converter"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
+      "name": "shell_trace_permission",
+      "evidence": "evaluation/evidence/shell-trace-permission-v1.json",
+      "tags": [
+        "failure.filesystem",
+        "format.shell_trace",
+        "language.shell",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "stress.noisy",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.permission_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.access_denied"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.permission_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_permissions"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "denial",
+            "alternatives": [
+              "permission denied"
+            ]
+          },
+          {
+            "name": "path",
+            "alternatives": [
+              "/srv/export/2026-08-12/summary.csv",
+              "summary.csv"
+            ]
+          },
+          {
+            "name": "operation",
+            "alternatives": [
+              "install",
+              "create regular file"
             ]
           }
         ],
@@ -2467,23 +3031,25 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.configuration_missing_message"
       ],
       "allowed_generated_codes": [
+        "generated.application_configuration",
         "generated.environment_mismatch"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.configuration_missing_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_target_configuration"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2532,6 +3098,60 @@
       }
     },
     {
+      "name": "source_log_disagreement",
+      "evidence": "evaluation/evidence/source-log-disagreement-v1.json",
+      "source": "examples/evaluation-context/stale_source.go",
+      "tags": [
+        "context.source",
+        "context.stale_source",
+        "failure.network",
+        "format.timestamped",
+        "language.go",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.deadline_exceeded_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.dependency_unavailable"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.deadline_exceeded_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_dependency_connection"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_delay",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "runtime cause",
+            "alternatives": [
+              "context deadline exceeded",
+              "deadline"
+            ]
+          },
+          {
+            "name": "endpoint",
+            "alternatives": [
+              "inventory.internal/snapshot",
+              "inventory.internal"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "start_failure",
       "evidence": "jobman-v1/start-failure-v1.json",
       "tags": [
@@ -2569,7 +3189,7 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.storage_exhausted_message"
       ],
       "allowed_generated_codes": [
         "generated.resource_pressure"
@@ -2580,13 +3200,13 @@
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_resource_limit"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2636,6 +3256,70 @@
       }
     },
     {
+      "name": "timestamped_ansi_terminal_tls",
+      "evidence": "evaluation/evidence/timestamped-ansi-tls-v1.json",
+      "tags": [
+        "failure.network",
+        "format.ansi",
+        "format.timestamped",
+        "lifecycle.nonzero_exit",
+        "source.synthetic",
+        "stress.noisy",
+        "style.real_world"
+      ],
+      "accepted_primary_codes": [
+        "target.tls_verification_message"
+      ],
+      "allowed_generated_codes": [
+        "generated.dependency_unavailable"
+      ],
+      "required_finding_codes": [
+        "core.nonzero_exit",
+        "target.tls_verification_message"
+      ],
+      "forbidden_finding_codes": [],
+      "required_action_codes": [
+        "inspect_dependency_connection"
+      ],
+      "forbidden_action_codes": [],
+      "expected_retry": "after_change",
+      "expected_existing_policy": "unknown",
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
+      "generated_expectation": {
+        "disposition": "required",
+        "required_facts": [
+          {
+            "name": "terminal cause",
+            "alternatives": [
+              "certificate signed by unknown authority",
+              "certificate verification"
+            ]
+          },
+          {
+            "name": "endpoint",
+            "alternatives": [
+              "telemetry.internal"
+            ]
+          }
+        ],
+        "required_relations": [
+          {
+            "name": "certificate failure stopped export",
+            "causes": [
+              "certificate signed by unknown authority",
+              "x509"
+            ],
+            "effects": [
+              "terminal",
+              "exporter"
+            ]
+          }
+        ],
+        "maximum_citations": 5
+      }
+    },
+    {
       "name": "tls_certificate",
       "evidence": "evaluation/evidence/tls-certificate-v1.json",
       "tags": [
@@ -2645,23 +3329,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.tls_verification_message"
       ],
       "allowed_generated_codes": [
         "generated.dependency_unavailable"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.tls_verification_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_dependency_connection"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [
@@ -2692,23 +3377,24 @@
         "source.synthetic"
       ],
       "accepted_primary_codes": [
-        "core.nonzero_exit"
+        "target.file_descriptor_exhausted_message"
       ],
       "allowed_generated_codes": [
         "generated.resource_pressure"
       ],
       "required_finding_codes": [
-        "core.nonzero_exit"
+        "core.nonzero_exit",
+        "target.file_descriptor_exhausted_message"
       ],
       "forbidden_finding_codes": [],
       "required_action_codes": [
-        "inspect_target_evidence"
+        "inspect_resource_limit"
       ],
       "forbidden_action_codes": [],
       "expected_retry": "after_change",
       "expected_existing_policy": "unknown",
-      "minimum_confidence": 82,
-      "maximum_confidence": 82,
+      "minimum_confidence": 86,
+      "maximum_confidence": 86,
       "generated_expectation": {
         "disposition": "required",
         "required_facts": [

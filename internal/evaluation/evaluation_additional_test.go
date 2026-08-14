@@ -261,6 +261,35 @@ func TestRunAttachesCheckedInSourceContext(t *testing.T) {
 	}
 }
 
+func TestRunRequiresStaleSourceDetectionWhenContextIsEnabled(t *testing.T) {
+	t.Parallel()
+
+	corpus, err := Select(loadCorpus(t), []string{"source_log_disagreement"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, err := engine.New("stale-source-test", func() time.Time {
+		return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary, err := RunWithOptions(t.Context(), corpus, target, "source", RunOptions{
+		Repeats: 1,
+		SourceContext: &SourceContextOptions{
+			Mode: diagnosis.SourceContextFull, MaximumBytes: 256 * 1024,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Passed != 1 || summary.Metrics.SourceContextCases != 1 ||
+		summary.Metrics.SourceContextMismatches != 1 || len(summary.Results) != 1 ||
+		!summary.Results[0].SourceContextMismatchDetected {
+		t.Fatalf("stale-source summary = %#v", summary)
+	}
+}
+
 func TestSelectCorpusByNameAndTag(t *testing.T) {
 	t.Parallel()
 
@@ -269,7 +298,7 @@ func TestSelectCorpusByNameAndTag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(selected.Cases) != 4 {
+	if len(selected.Cases) != 5 {
 		t.Fatalf("node case count = %d", len(selected.Cases))
 	}
 	selected, err = Select(corpus, []string{"node_type_error"}, []string{"language.node"})

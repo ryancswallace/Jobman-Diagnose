@@ -27,7 +27,7 @@ func TestDeterministicCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if summary.Passed != summary.Cases || summary.Cases != 60 || summary.UniqueCases != 60 || summary.Repeats != 1 ||
+	if summary.Passed != summary.Cases || summary.Cases != 72 || summary.UniqueCases != 72 || summary.Repeats != 1 ||
 		summary.Metrics.PrimaryCodePrecision != 1 || summary.Metrics.UnsupportedClaimRate != 0 ||
 		summary.Metrics.CitationValidity != 1 || summary.Metrics.SafeActionRate != 1 ||
 		summary.Metrics.RetryAdviceAccuracy != 1 || summary.Metrics.DeterministicStability != 1 ||

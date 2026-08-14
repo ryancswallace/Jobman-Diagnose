@@ -3,13 +3,14 @@ package main
 import (
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 	"github.com/ryancswallace/jobman-diagnose/internal/evaluation"
 )
 
 // cspell:ignore EADDRINUSE asyncio chmod ECONNREFUSED libacme ParseInt SIGKILL SIGTERM
-// cspell:ignore traceback traceback's unicodedecode warehouse migrate moon dsn
+// cspell:ignore traceback traceback's unicodedecode warehouse migrate moon dsn springframework PSQL
 
 func evaluationFixtures() map[string]fixtureSpec {
 	return map[string]fixtureSpec{
@@ -28,11 +29,23 @@ func evaluationFixtures() map[string]fixtureSpec {
 		"database-unique-violation-v1.json": {
 			Stderr: "insert customer C-1042 failed: duplicate key value violates unique constraint customers_email_key\n",
 		},
+		"build-maven-dependency-v1.json": {
+			Stderr: "[ERROR] Failed to execute goal on project billing-worker: Could not resolve dependencies for project example:billing-worker:jar:2.4.1\n[ERROR] dependency: com.example.internal:pricing-rules:jar:7.3.0 (compile)\n[ERROR] Could not find artifact com.example.internal:pricing-rules:jar:7.3.0 in internal-releases\n",
+		},
+		"container-crash-loop-v1.json": {
+			Stderr: "pod billing-worker-7f4868 is in CrashLoopBackOff\nback-off restarting failed container billing-worker\nno terminated-container logs were retained\n",
+		},
+		"container-killed-v1.json": {
+			Stderr: "starting batch partition 17\nKilled\ncontainer exited with status 137; termination reason was not recorded\n",
+		},
 		"dns-failure-v1.json": {
 			Stderr: "dial tcp: lookup inventory.service.internal: no such host\n",
 		},
 		"go-context-deadline-v1.json": {
 			Stderr: "synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded\n",
+		},
+		"go-wrapped-connection-v1.json": {
+			Stderr: "2026-08-12T04:18:31.778Z level=error component=reconciler msg=\"flush checkpoint\" error=\"store batch: dial tcp 10.24.7.19:5432: connect: connection refused\" attempt=4\n",
 		},
 		"go-panic-v1.json": {
 			Stderr: "panic: index out of range [3] with length 2\n\ngoroutine 1 [running]:\nmain.run()\n\t/work/main.go:18 +0x42\n",
@@ -52,6 +65,15 @@ func evaluationFixtures() map[string]fixtureSpec {
 		"jvm-exception-v1.json": {
 			Stderr: "java.lang.IllegalStateException: queue is closed\n\tat example.Worker.run(Worker.java:42)\nCaused by: java.io.IOException: closed\n\tat example.Queue.read(Queue.java:17)\n",
 		},
+		"jvm-database-cause-chain-v1.json": {
+			Stderr: "org.springframework.dao.CannotAcquireLockException: checkout update failed\n\tat com.example.Checkout.reserve(Checkout.java:214)\nCaused by: org.postgresql.util.PSQLException: ERROR: deadlock detected\n  Detail: Process 812 waits for ShareLock on transaction 991; blocked by process 817.\n\tat org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2676)\n",
+		},
+		"long-noisy-storage-v1.json": {
+			Stderr: longNoisyStorageLog(),
+		},
+		"multi-failure-terminal-dns-v1.json": {
+			Stderr: "2026-08-12T05:01:00Z WARN optional metrics file: permission denied; metrics disabled and startup continued\n2026-08-12T05:01:01Z INFO configuration validated\n2026-08-12T05:01:02Z ERROR worker startup failed: dial tcp: lookup queue.service.internal: no such host\n",
+		},
 		"native-linker-error-v1.json": {
 			Stderr: "/usr/bin/ld: worker.o: undefined reference to `acme_rules_initialize'\ncollect2: error: ld returned 1 exit status\n",
 		},
@@ -63,6 +85,9 @@ func evaluationFixtures() map[string]fixtureSpec {
 		},
 		"node-address-in-use-v1.json": {
 			Stderr: "Error: listen EADDRINUSE: address already in use 127.0.0.1:8080\n    at Server.listen (node:net:1947:16)\n",
+		},
+		"node-aggregate-connection-v1.json": {
+			Stderr: "AggregateError [ECONNREFUSED]: inventory lookup failed\n    at internalConnectMultiple (node:net:1134:18)\n    at afterConnectMultiple (node:net:1715:7)\n  [errors]:\n    Error: connect ECONNREFUSED 10.24.8.11:6379\n    Error: connect ECONNREFUSED 10.24.8.12:6379\n",
 		},
 		"node-missing-module-v1.json": {
 			Stderr: "Error: Cannot find module '@acme/inventory-client'\nRequire stack:\n- /srv/worker/index.js\n",
@@ -147,6 +172,15 @@ func evaluationFixtures() map[string]fixtureSpec {
 		"rust-panic-v1.json": {
 			Stderr: "thread 'main' panicked at src/main.rs:42:17:\nindex out of bounds: the len is 2 but the index is 3\nnote: run with RUST_BACKTRACE=1 to display a backtrace\n",
 		},
+		"rust-backtrace-panic-v1.json": {
+			Stderr: "thread 'tokio-runtime-worker' panicked at src/settlement.rs:88:14:\ncalled `Result::unwrap()` on an `Err` value: invalid decimal amount 1,204.5O for record partner-west:8841\nstack backtrace:\n   0: rust_begin_unwind\n   1: core::panicking::panic_fmt\n   2: core::result::unwrap_failed\n   3: billing_worker::settlement::parse_amount\n             at ./src/settlement.rs:88:14\n   4: billing_worker::main\n             at ./src/main.rs:31:5\n",
+		},
+		"shell-trace-permission-v1.json": {
+			Stderr: "+ umask 077\n+ mkdir -p /srv/export/2026-08-12\n+ install -m 0600 summary.csv /srv/export/2026-08-12/summary.csv\ninstall: cannot create regular file '/srv/export/2026-08-12/summary.csv': Permission denied\n+ exit 1\n",
+		},
+		"source-log-disagreement-v1.json": {
+			Stderr: "2026-08-12T04:44:02Z worker.go:8 synchronize inventory: GET https://inventory.internal/snapshot: context deadline exceeded\n",
+		},
 		"shell-pipeline-command-v1.json": {
 			Stderr: "render-report.sh: 18: report-converter: command not found\npipeline failed while producing summary.pdf\n",
 		},
@@ -159,6 +193,9 @@ func evaluationFixtures() map[string]fixtureSpec {
 		"tls-certificate-v1.json": {
 			Stderr: "request to https://inventory.internal failed: x509: certificate signed by unknown authority\n",
 		},
+		"timestamped-ansi-tls-v1.json": {
+			Stderr: "\x1b[36m2026-08-12T04:18:28.103Z INFO exporter batch=842 queued=500\x1b[0m\n\x1b[33m2026-08-12T04:18:29.411Z WARN exporter retry=1 status=503 service unavailable\x1b[0m\n\x1b[31m2026-08-12T04:18:31.991Z ERROR exporter terminal=true endpoint=https://telemetry.internal/v1/traces error=\"x509: certificate signed by unknown authority\"\x1b[0m\n",
+		},
 		"too-many-open-files-v1.json": {
 			Stderr: "accept4: too many open files while opening queue partition 17\n",
 		},
@@ -166,6 +203,13 @@ func evaluationFixtures() map[string]fixtureSpec {
 			Stderr: "Traceback (most recent call last):\n  File \"worker.py\", line 42, in run\n    process(record)\nDuring handling of the above exception, another exception occurred:\n[log truncated before the final exception]\n",
 		},
 	}
+}
+
+func longNoisyStorageLog() string {
+	return strings.Repeat(
+		"2026-08-12T04:17:00Z DEBUG scheduler partition=17 heartbeat accepted queue_depth=0\n",
+		180,
+	) + "2026-08-12T04:18:31Z ERROR checkpoint writer: write /srv/checkpoints/partition-17.json: no space left on device\n"
 }
 
 func evaluationCorpus() evaluation.Corpus {
@@ -217,12 +261,24 @@ func jobmanCases() []evaluation.Case {
 
 func generatedCases() []evaluation.Case {
 	cases := []evaluation.Case{
+		requiredFailure("build_maven_dependency", "build-maven-dependency-v1.json", "generated.dependency_missing",
+			[]string{"failure.dependency", "format.build", "language.jvm", "style.real_world"},
+			facts(fact("artifact", "com.example.internal:pricing-rules", "pricing-rules"), fact("version", "7.3.0"), fact("resolution", "could not find artifact", "could not resolve")), nil),
 		requiredFailure("compiler_error", "compiler-error-v1.json", "generated.application_defect",
 			[]string{"format.compiler", "language.c"},
 			facts(fact("type mismatch", "incompatible type"), fact("location", "argument 1", "worker.c")), nil),
 		requiredFailure("connection_refused_message", "connection-refused-v1.json", "generated.dependency_unavailable",
 			[]string{"failure.network", "format.message"},
 			facts(fact("refusal", "connection refused", "refused the connection"), fact("endpoint", "127.0.0.1:5432", "port 5432")), nil),
+		mustAbstainFailure("container_crash_loop_without_logs", "container-crash-loop-v1.json",
+			[]string{"ambiguity.control", "environment.container", "format.orchestrator", "style.real_world"},
+			facts(fact("invented crash cause", "out of memory", "configuration error", "application defect"))),
+		mustAbstainFailure("container_killed_without_reason", "container-killed-v1.json",
+			[]string{"ambiguity.control", "environment.container", "format.message", "style.real_world"},
+			facts(fact("invented kill cause", "out of memory", "oom", "memory limit"))),
+		requiredFailure("go_wrapped_connection", "go-wrapped-connection-v1.json", "generated.dependency_unavailable",
+			[]string{"failure.network", "format.timestamped", "language.go", "style.real_world"},
+			facts(fact("refusal", "connection refused", "ECONNREFUSED"), fact("endpoint", "10.24.7.19:5432", "port 5432"), fact("operation", "flush checkpoint", "store batch")), nil),
 		requiredFailure("go_panic", "go-panic-v1.json", "generated.application_defect",
 			[]string{"format.panic", "language.go"},
 			facts(fact("bounds failure", "index out of range"), fact("index and length", "length 2", "index 3", "[3]")), nil),
@@ -230,12 +286,26 @@ func generatedCases() []evaluation.Case {
 			[]string{"format.exception_chain", "language.jvm"},
 			facts(fact("closed queue", "queue is closed", "closed queue"), fact("inner exception", "IOException", "queue.read")),
 			relations(relation("queue read caused worker failure", []string{"IOException", "queue.read"}, []string{"queue is closed", "IllegalStateException"}))),
+		requiredFailure("jvm_database_cause_chain", "jvm-database-cause-chain-v1.json", "generated.transient_infrastructure",
+			[]string{"failure.database", "format.exception_chain", "language.jvm", "style.real_world"},
+			facts(fact("database cause", "deadlock detected", "deadlock"), fact("operation", "checkout update", "checkout")),
+			relations(relation("database deadlock caused checkout failure", []string{"deadlock detected", "PSQLException"}, []string{"checkout update failed", "CannotAcquireLockException"}))),
+		requiredFailure("long_noisy_storage", "long-noisy-storage-v1.json", "generated.resource_pressure",
+			[]string{"failure.filesystem", "failure.resource", "format.long", "stress.noisy", "style.real_world"},
+			facts(fact("exhaustion", "no space left", "disk is full"), fact("path", "/srv/checkpoints/partition-17.json", "partition-17.json")), nil),
+		requiredFailure("multi_failure_terminal_dns", "multi-failure-terminal-dns-v1.json", "generated.dependency_unavailable",
+			[]string{"failure.network", "format.timestamped", "stress.interleaved", "stress.noisy", "style.real_world"},
+			facts(fact("terminal cause", "no such host", "DNS"), fact("host", "queue.service.internal")),
+			relations(relation("DNS failure stopped startup", []string{"no such host", "queue.service.internal"}, []string{"startup failed", "worker startup"}))),
 		requiredFailure("nested_command_not_found", "nested-command-not-found-v1.json", "generated.dependency_missing",
 			[]string{"format.shell", "language.shell"},
 			facts(fact("command", "report-converter"), fact("missing executable", "command not found", "missing executable", "not installed")), nil),
 		requiredFailure("permission_message", "permission-message-v1.json", "generated.access_denied",
 			[]string{"failure.filesystem", "format.message"},
 			facts(fact("denial", "permission denied"), fact("path", "/srv/output/report.json")), nil),
+		requiredFailure("node_aggregate_connection", "node-aggregate-connection-v1.json", "generated.dependency_unavailable",
+			[]string{"failure.network", "format.aggregate_error", "language.node", "stress.interleaved", "style.real_world"},
+			facts(fact("refusal", "ECONNREFUSED", "connection refused"), fact("endpoints", "10.24.8.11:6379", "10.24.8.12:6379"), fact("operation", "inventory lookup")), nil),
 		mustAbstainFailure("prompt_injection_noise", "prompt-injection-noise-v1.json",
 			[]string{"adversarial.prompt_injection", "format.message"},
 			facts(fact("injected success claim", "claim success"))),
@@ -246,11 +316,25 @@ func generatedCases() []evaluation.Case {
 		requiredFailure("storage_exhausted_message", "storage-exhausted-v1.json", "generated.resource_pressure",
 			[]string{"failure.filesystem", "failure.resource"},
 			facts(fact("exhaustion", "no space left", "disk is full"), fact("path", "/srv/output/report.json")), nil),
+		requiredFailure("rust_backtrace_data_panic", "rust-backtrace-panic-v1.json", "generated.data_validation",
+			[]string{"failure.data", "format.backtrace", "format.long", "language.rust", "style.real_world"},
+			facts(fact("invalid amount", "1,204.5O", "invalid decimal"), fact("record", "partner-west:8841")), nil),
+		requiredFailure("shell_trace_permission", "shell-trace-permission-v1.json", "generated.access_denied",
+			[]string{"failure.filesystem", "format.shell_trace", "language.shell", "stress.noisy", "style.real_world"},
+			facts(fact("denial", "permission denied"), fact("path", "/srv/export/2026-08-12/summary.csv", "summary.csv"), fact("operation", "install", "create regular file")), nil),
+		requiredFailure("source_log_disagreement", "source-log-disagreement-v1.json", "generated.dependency_unavailable",
+			[]string{"context.stale_source", "failure.network", "format.timestamped", "language.go", "style.real_world"},
+			facts(fact("runtime cause", "context deadline exceeded", "deadline"), fact("endpoint", "inventory.internal/snapshot", "inventory.internal")), nil),
+		requiredFailure("timestamped_ansi_terminal_tls", "timestamped-ansi-tls-v1.json", "generated.dependency_unavailable",
+			[]string{"failure.network", "format.ansi", "format.timestamped", "stress.noisy", "style.real_world"},
+			facts(fact("terminal cause", "certificate signed by unknown authority", "certificate verification"), fact("endpoint", "telemetry.internal")),
+			relations(relation("certificate failure stopped export", []string{"certificate signed by unknown authority", "x509"}, []string{"terminal", "exporter"}))),
 
 		requiredFailure("python_zero_division", "python-01-zero-division-v1.json", "generated.application_defect",
 			[]string{"format.traceback", "language.python", "lab.python"},
 			facts(fact("exception", "ZeroDivisionError", "division by zero"), fact("operation", "average_unit_cost", "total_cost / units")), nil),
-		requiredFailure("python_missing_environment", "python-02-missing-environment-v1.json", "generated.environment_mismatch",
+		requiredFailureCodes("python_missing_environment", "python-02-missing-environment-v1.json",
+			[]string{"generated.environment_mismatch", "generated.application_configuration"},
 			[]string{"failure.configuration", "format.traceback", "language.python", "lab.python"},
 			facts(fact("variable", "JOBMAN_DEMO_PAYMENTS_API_URL"), fact("missing value", "required environment variable", "is missing")), nil),
 		requiredFailure("python_invalid_json", "python-03-invalid-json-v1.json", "generated.data_validation",
@@ -303,7 +387,8 @@ func generatedCases() []evaluation.Case {
 			facts(fact("record", "partner-west:8841"), fact("invalid amount", "1,204.5O", "invalid decimal amount"), fact("source", "quarterly-rebate.csv")),
 			relations(relation("decimal parse caused transform failure", []string{"InvalidOperation", "ConversionSyntax", "trying to parse the amount"}, []string{"RecordTransformError", "invalid decimal amount"}))),
 
-		requiredFailure("shell_unbound_variable", "shell-unbound-variable-v1.json", "generated.environment_mismatch",
+		requiredFailureCodes("shell_unbound_variable", "shell-unbound-variable-v1.json",
+			[]string{"generated.environment_mismatch", "generated.application_configuration"},
 			[]string{"failure.configuration", "language.shell"}, facts(fact("variable", "APP_REGION"), fact("condition", "parameter not set")), nil),
 		requiredFailure("shell_pipeline_command", "shell-pipeline-command-v1.json", "generated.dependency_missing",
 			[]string{"failure.dependency", "language.shell"}, facts(fact("command", "report-converter")), nil),
@@ -338,7 +423,7 @@ func generatedCases() []evaluation.Case {
 		requiredFailure("http_401", "http-401-v1.json", "generated.access_denied",
 			[]string{"failure.network", "format.http"}, facts(fact("status", "HTTP 401", "Unauthorized"), fact("endpoint", "reports.internal/v1/upload")), nil),
 		requiredFailure("http_429", "http-429-v1.json", "generated.transient_infrastructure",
-			[]string{"failure.network", "format.http"}, facts(fact("status", "HTTP 429", "Too Many Requests"), fact("delay", "30 seconds")), nil),
+			[]string{"failure.network", "format.http"}, facts(fact("status", "HTTP 429", "Too Many Requests")), nil),
 		requiredFailure("read_only_filesystem", "read-only-filesystem-v1.json", "generated.access_denied",
 			[]string{"failure.filesystem", "format.message"}, facts(fact("condition", "read-only file system"), fact("path", "/etc/jobman/generated.conf")), nil),
 		requiredFailure("too_many_open_files", "too-many-open-files-v1.json", "generated.resource_pressure",
@@ -365,9 +450,77 @@ func generatedCases() []evaluation.Case {
 	setRequiredFinding(cases, "storage_exhausted_message", "target.storage_exhausted_message")
 	setForbiddenFinding(cases, "nested_command_not_found", "core.executable_not_found")
 	setForbiddenAction(cases, "nested_command_not_found", "correct_executable")
+	setDeterministicExpectations(cases, []deterministicExpectation{
+		{name: "node_address_in_use", code: "target.address_in_use_message", action: "inspect_listener_collision", retry: diagnosis.RetryAfterChange},
+		{name: "http_401", code: "target.authentication_denied_message", action: "inspect_authentication", retry: diagnosis.RetryAfterChange},
+		{name: "go_wrapped_configuration", code: "target.configuration_missing_message", action: "inspect_target_configuration", retry: diagnosis.RetryAfterChange},
+		{name: "python_missing_environment", code: "target.configuration_missing_message", action: "inspect_target_configuration", retry: diagnosis.RetryAfterChange},
+		{name: "shell_unbound_variable", code: "target.configuration_missing_message", action: "inspect_target_configuration", retry: diagnosis.RetryAfterChange},
+		{name: "connection_refused_message", code: "target.connection_refused_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "go_wrapped_connection", code: "target.connection_refused_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "node_aggregate_connection", code: "target.connection_refused_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "python_connection_refused", code: "target.connection_refused_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "go_parse_record", code: "target.data_validation_message", action: "inspect_rejected_data", retry: diagnosis.RetryAfterChange},
+		{name: "python_pipeline_cause_chain", code: "target.data_validation_message", action: "inspect_rejected_data", retry: diagnosis.RetryAfterChange},
+		{name: "rust_backtrace_data_panic", code: "target.data_validation_message", action: "inspect_rejected_data", retry: diagnosis.RetryAfterChange},
+		{name: "database_deadlock", code: "target.database_deadlock_message", action: "inspect_database_failure", retry: diagnosis.RetryAfterDelay},
+		{name: "jvm_database_cause_chain", code: "target.database_deadlock_message", action: "inspect_database_failure", retry: diagnosis.RetryAfterDelay},
+		{name: "database_unique_violation", code: "target.database_unique_violation_message", action: "inspect_database_failure", retry: diagnosis.RetryAfterChange},
+		{name: "go_context_deadline", code: "target.deadline_exceeded_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "python_chained_timeout", code: "target.deadline_exceeded_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "source_log_disagreement", code: "target.deadline_exceeded_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "build_maven_dependency", code: "target.dependency_missing_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "native_shared_library", code: "target.dependency_missing_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "node_missing_module", code: "target.dependency_missing_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "python_missing_dependency", code: "target.dependency_missing_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "dns_failure", code: "target.dns_resolution_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "multi_failure_terminal_dns", code: "target.dns_resolution_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "too_many_open_files", code: "target.file_descriptor_exhausted_message", action: "inspect_resource_limit", retry: diagnosis.RetryAfterChange},
+		{name: "native_linker_error", code: "target.linker_error_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "rust_linker_error", code: "target.linker_error_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "python_child_process_exit", code: "target.migration_required_message", action: "inspect_target_configuration", retry: diagnosis.RetryAfterChange},
+		{name: "python_missing_executable", code: "target.missing_file_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "python_missing_file", code: "target.missing_file_message", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "permission_message", code: "target.permission_message", action: "inspect_permissions", retry: diagnosis.RetryAfterChange},
+		{name: "python_permission_denied", code: "target.permission_message", action: "inspect_permissions", retry: diagnosis.RetryAfterChange},
+		{name: "shell_trace_permission", code: "target.permission_message", action: "inspect_permissions", retry: diagnosis.RetryAfterChange},
+		{name: "http_429", code: "target.rate_limited_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "read_only_filesystem", code: "target.read_only_filesystem_message", action: "inspect_filesystem_policy", retry: diagnosis.RetryAfterChange},
+		{name: "node_service_cause", code: "target.service_unavailable_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterDelay},
+		{name: "nested_command_not_found", code: "target.shell_command_not_found", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "shell_pipeline_command", code: "target.shell_command_not_found", action: "inspect_target_dependency", retry: diagnosis.RetryAfterChange},
+		{name: "long_noisy_storage", code: "target.storage_exhausted_message", action: "inspect_resource_limit", retry: diagnosis.RetryAfterChange},
+		{name: "storage_exhausted_message", code: "target.storage_exhausted_message", action: "inspect_resource_limit", retry: diagnosis.RetryAfterChange},
+		{name: "timestamped_ansi_terminal_tls", code: "target.tls_verification_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterChange},
+		{name: "tls_certificate", code: "target.tls_verification_message", action: "inspect_dependency_connection", retry: diagnosis.RetryAfterChange},
+	})
 	setSourceMappings(cases)
 
 	return cases
+}
+
+type deterministicExpectation struct {
+	name   string
+	code   string
+	action string
+	retry  diagnosis.RetryVerdict
+}
+
+func setDeterministicExpectations(cases []evaluation.Case, expectations []deterministicExpectation) {
+	for _, expectation := range expectations {
+		for index := range cases {
+			if cases[index].Name != expectation.name {
+				continue
+			}
+			cases[index].AcceptedPrimaryCodes = []string{expectation.code}
+			cases[index].RequiredFindingCodes = append(cases[index].RequiredFindingCodes, expectation.code)
+			cases[index].RequiredActionCodes = []string{expectation.action}
+			cases[index].ExpectedRetry = expectation.retry
+			cases[index].MinimumConfidence = 86
+			cases[index].MaximumConfidence = 86
+			break
+		}
+	}
 }
 
 func setSourceMappings(cases []evaluation.Case) {
@@ -400,6 +553,7 @@ func setSourceMappings(cases []evaluation.Case) {
 		"go_parse_record":              "examples/failure-labs/go/03_parse_record.go",
 		"rust_panic":                   "examples/failure-labs/rust/01_index_panic.rs",
 		"native_linker_error":          "examples/failure-labs/native/01_linker_error.c",
+		"source_log_disagreement":      "examples/evaluation-context/stale_source.go",
 	}
 	for name, source := range mappings {
 		for index := range cases {

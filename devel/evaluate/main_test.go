@@ -41,6 +41,14 @@ func TestParseEvaluationOptions(t *testing.T) {
 		{name: "live-only fallback", arguments: []string{"--allow-fallback"}, wantError: "require --live"},
 		{name: "live-only disclosure", arguments: []string{"--share", "metadata,command"}, wantError: "require --live"},
 		{name: "live-only capture", arguments: []string{"--capture-proposals", "capture.json"}, wantError: "require --live"},
+		{name: "live-only promotion", arguments: []string{"--promotion-policy", "policy.json"}, wantError: "require --live"},
+		{
+			name: "promotion rejects filters",
+			arguments: []string{
+				"--live", "--diagnosis-config", "config.yml", "--promotion-policy", "policy.json", "--tags", "language.go",
+			},
+			wantError: "complete unfiltered corpus",
+		},
 		{
 			name: "capture output collision",
 			arguments: []string{
@@ -226,7 +234,7 @@ func TestRunDeterministicEvaluationOutputs(t *testing.T) {
 		if err := run([]string{"--corpus", corpus, "--summary"}, &stdout, &bytes.Buffer{}); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(stdout.String(), "evaluation: 60/60 executions passed (60 cases x1)") ||
+		if !strings.Contains(stdout.String(), "evaluation: 72/72 executions passed (72 cases x1)") ||
 			!strings.Contains(stdout.String(), "useful n/a") {
 			t.Fatalf("summary = %q", stdout.String())
 		}
@@ -246,7 +254,7 @@ func TestRunDeterministicEvaluationOutputs(t *testing.T) {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.SchemaVersion != 4 || result.Mode != "deterministic" || result.Cases != 60 || result.Passed != 60 {
+		if result.SchemaVersion != 6 || result.Mode != "deterministic" || result.Cases != 72 || result.Passed != 72 {
 			t.Fatalf("result = %#v", result)
 		}
 	})
@@ -266,7 +274,7 @@ func TestRunDeterministicEvaluationOutputs(t *testing.T) {
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.UniqueCases != 4 || result.Repeats != 2 || result.Cases != 8 {
+		if result.UniqueCases != 5 || result.Repeats != 2 || result.Cases != 10 {
 			t.Fatalf("filtered repeated result = %#v", result)
 		}
 	})
