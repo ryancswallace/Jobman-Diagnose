@@ -67,6 +67,8 @@
     "generationprompt",
     "GOARCH",
     "GOBIN",
+    "GOROOT",
+    "GOTOOLCHAIN",
     "gocognit",
     "gocritic",
     "gofmt",

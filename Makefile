@@ -2,9 +2,16 @@ SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
 GO ?= go
+# Go derives its installation root from the selected executable. Ignore a
+# shell-level GOROOT so a stale version-manager setting cannot mix toolchains.
+unexport GOROOT
 BIN_DIR := bin
 
 GO_VERSION := $(shell tr -d '[:space:]' < go.version)
+# Select the pinned patch release even when another Go version appears first on
+# PATH. The go command uses an installed copy or its standard toolchain cache.
+GOTOOLCHAIN := go$(GO_VERSION)
+export GOTOOLCHAIN
 GOLANGCI_LINT_VERSION ?= v2.12.2
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.6.0
