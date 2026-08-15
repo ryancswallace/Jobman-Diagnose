@@ -16,14 +16,14 @@
 [![Documentation](https://img.shields.io/badge/docs-reference-blue)](docs/README.md)
 [![OSS hosting by Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-Cloudsmith-blue?logo=cloudsmith)](https://cloudsmith.com/)
 
-Jobman-Diagnose explains why a [Jobman] job failed and what to do next. The
-optional, read-only companion turns bounded Jobman evidence into a cited
-diagnosis with confidence, limitations, recommended actions, and explicit
-retry advice.
+Jobman-Diagnose helps you understand why a [Jobman] job failed. It points to
+the relevant evidence, suggests what to try next, and tells you whether a retry
+is likely to help.
 
-It works locally without configuration, credentials, Python, network access,
-or a model. Optional AI augmentation adds schema-validated hypotheses through
-pluggable local or hosted providers without overriding deterministic facts.
+It works locally with no setup beyond installation. You do not need an AI
+model, network access, credentials, or Python. If you choose to connect an AI
+provider, Jobman-Diagnose can add suggestions while keeping its built-in
+findings and retry advice in charge.
 
 <!-- Terminal demo slot. Generate the recording from
 docs/screencaps/tape/diagnose.tape, then replace this comment with:
@@ -35,61 +35,62 @@ docs/screencaps/tape/diagnose.tape, then replace this comment with:
 -->
 
 > [!TIP]
-> Start with `jobman diagnose JOB`; no model or configuration is required. See
-> the [documentation] for installation, AI setup, troubleshooting, and stable
-> data contracts.
+> Start with `jobman diagnose JOB`. No AI setup is required.
+
+## Quick start
+
+Install Jobman v1.4.0 or newer and Jobman-Diagnose, then run:
+
+```console
+jobman diagnose JOB
+```
+
+Replace `JOB` with a Jobman job ID or name. The report shows what happened,
+the evidence behind that conclusion, suggested next steps, and retry advice.
+If you get stuck, see the [troubleshooting guide].
 
 ## Features
 
 | Capability | Jobman-Diagnose provides... |
 | --- | --- |
-| Actionable diagnoses | Controlled findings, likely causes, next actions, and retry recommendations |
-| Cited evidence | Every factual finding points to exact evidence supplied and sealed by Jobman |
-| Deterministic defaults | Useful, reproducible, network-free analysis without a model |
-| Guarded AI augmentation | Strict structured generation whose proposals are validated before inclusion |
-| Controlled disclosure | Per-profile evidence allowlists, bounded projections, and an exact disclosure manifest |
-| Portable reports | Stable JSON, private evidence export, offline diagnosis, and reproducible support bundles |
-| Pluggable providers | OpenAI-compatible endpoints, local Ollama, and a bounded command bridge |
-| Safe operation | Read-only advice that never signals, retries, mutates, or repairs a job |
+| Clear explanations | Likely causes, next steps, and retry recommendations |
+| Evidence you can check | Each factual finding points back to Jobman's diagnostic data |
+| Useful local defaults | Repeatable analysis without a network connection or AI model |
+| Optional AI suggestions | Extra suggestions from a configured local or hosted provider |
+| Control over shared data | Logs and source code are shared only when you explicitly allow them |
+| Reports you can save | JSON output, offline diagnosis, and support bundles |
+| Read-only operation | Advice only: it never changes, retries, signals, or repairs a job |
 
 > [!NOTE]
-> Jobman-Diagnose is currently pre-v1. Check the [compatibility contract] before
-> combining versions. Generated hypotheses are advisory and uncalibrated;
-> deterministic facts, actions, and retry policy remain authoritative.
+> Jobman-Diagnose is currently pre-v1. Check the [compatibility guide] when
+> choosing Jobman and Jobman-Diagnose versions. AI suggestions are advisory;
+> the built-in findings, actions, and retry advice remain authoritative.
 
 ## Command overview
 
 | Task | Command |
 | --- | --- |
 | Diagnose locally | `jobman diagnose JOB` |
-| Add AI hypotheses | `jobman diagnose --ai JOB` |
-| Share intelligently selected redacted causal log context with AI | `jobman diagnose --ai-logs JOB` |
-| Add source near the failing line | `jobman diagnose --ai-logs --ai-source limited JOB` |
-| Add one complete source file | `jobman diagnose --ai-logs --ai-source full JOB` |
-| Include local system constraints | `jobman diagnose --system JOB` |
-| Produce stable machine output | `jobman diagnose --json JOB` |
-| Expand the human audit or control color | `jobman diagnose --details JOB`, `jobman diagnose --color=never JOB` |
-| Export or replay evidence | `jobman-diagnose --export-evidence FILE JOB`, `jobman-diagnose --from-evidence FILE` |
-| Create a private support archive | `jobman diagnose --support-bundle FILE JOB` |
-| Inspect AI configuration | `jobman diagnose config show`, `jobman diagnose profiles` |
-| Test a configured provider/model | `jobman diagnose doctor --profile NAME` |
+| Add AI suggestions | `jobman diagnose --ai JOB` |
+| Let AI use relevant log excerpts | `jobman diagnose --ai-logs JOB` |
+| Show more report detail | `jobman diagnose --details JOB` |
+| Produce JSON | `jobman diagnose --json JOB` |
+| Save a support bundle | `jobman diagnose --support-bundle FILE JOB` |
 
-Install both binaries on `PATH`; Jobman's external-command protocol provides
-the natural `jobman diagnose` form. Direct invocation also works:
+Install both binaries on `PATH` to use the `jobman diagnose` form. You can also
+run the companion directly:
 
 ```console
 jobman-diagnose --jobman /absolute/path/to/jobman JOB
 ```
 
-Human output is designed for scanning; automation should consume the sealed
-[`jobman.diagnosis_report` schema 1][report schema] JSON value. Human aliases
-such as `[E2]` and `[F1]` are report-local, while JSON retains canonical IDs
-and digests.
+For configuration inspection, offline diagnosis, evidence export, source
+sharing, and other advanced commands, see the [configuration guide] and the
+CLI help. Programs that consume JSON output should follow the [report schema].
 
 ## Installation
 
-Install Jobman v1.4.0 or newer first, then choose the package or archive for
-your system:
+Install Jobman v1.4.0 or newer first, then choose an option for your system:
 
 | Environment | Recommended installation |
 | --- | --- |
@@ -99,78 +100,40 @@ your system:
 | Alpine Linux | Configure [Cloudsmith], then `sudo apk add jobman jobman-diagnose` |
 | Other Linux or Windows | Install a verified archive from the [latest release] |
 
-Releases include signed APK, DEB, and RPM packages for Linux 386, amd64, and
-arm64, plus portable CGO-free archives for Linux, macOS, and Windows. See the
-[installation guide] for repository setup, exact asset names, upgrades, and
-checksum, signature, and attestation verification.
+The [installation guide] has step-by-step package setup, archive names,
+upgrade instructions, and release verification.
 
-## Optional AI augmentation
+## Optional AI suggestions
 
-AI mode uses the default profile in the strict per-user `diagnosis.yml`:
+The default local diagnosis is usually the best place to start. To add AI
+suggestions, configure a provider profile and run:
 
 ```console
 jobman diagnose --ai JOB
 jobman diagnose --ai-logs JOB
-jobman diagnose --ai-logs --ai-source limited JOB
 jobman diagnose config paths
 jobman diagnose config validate
 jobman diagnose doctor
 ```
 
-Use `--profile NAME` to select another configured model. Supported provider
-boundaries are:
+Use `--profile NAME` to select a different profile. `doctor` checks that the
+selected provider and model can return the format Jobman-Diagnose expects.
 
-| Provider | Intended use |
-| --- | --- |
-| OpenAI-compatible Chat Completions | Hosted APIs, vLLM, and other strict-schema compatible servers |
-| Ollama `/api/chat` | Local structured generation |
-| Absolute command bridge | A bounded local adapter for another runtime |
+AI use is always explicit. Logs are shared only with `--ai-logs`, and source
+code requires a separate source-sharing option. Source code is not redacted,
+so review it before sharing it with a provider. If the provider fails or its
+suggestions do not pass validation, Jobman-Diagnose still returns its local
+report.
 
-Profiles fix the endpoint, model, locality, timeout, credentials by reference,
-and allowed evidence classes. AI activation shares bounded metadata, command
-arguments, paths, environment variable names—never values—and typed execution
-context when the profile permits them. Log bytes remain a separate opt-in via
-`--ai-logs` or `--share log_content`. Current source text is another separate
-opt-in: enable it persistently for a profile with `source_context`, or override
-that profile for one run with `--ai-source none|limited|full`. Source sharing
-always requires a profile that allows `source_content`.
+The [configuration guide] explains profiles, supported providers, log and
+source sharing, limits, and the `doctor` command. Read the [security model] for
+the exact privacy and validation rules, or the [generation protocol] if you are
+building a provider integration.
 
-When log sharing is explicit, Jobman Diagnose ranks exact causal and structured
-diagnostic ranges across the collected streams and sends continuous context
-windows within the profile ceiling. With no recognized range it uses bounded
-terminal output. An implicit live search may examine up to Jobman's 1 MiB
-diagnostic limit locally; `--log-bytes` supplies a smaller explicit bound.
+## Offline use and support
 
-Before relying on a profile, `jobman diagnose doctor --profile NAME` sends a
-fixed synthetic causal probe through the configured provider/model and checks
-strict schema support, provenance, citations, semantic validation, and causal
-recognition. It sends no job evidence or logs and returns nonzero on failure.
-
-Limited mode sends the profile's configured number of lines before and after
-an explicit `--source-line`, a matching location inferred from the selected runtime log,
-or line 1 as a visible fallback; an explicit CLI limited mode retains the
-20-lines-per-side default when the profile has no limited source policy. Full
-mode sends the exact complete file and fails rather than truncating it. Jobman
-Diagnose infers a file only when the recorded direct command names exactly one
-supported source path; use `--source-file PATH` otherwise. Source text is not
-redacted and may contain secrets. It is a point-in-time snapshot of the current
-file, not proof of the code executed by the recorded run, so pair it with
-`--ai-logs` for grounded diagnosis.
-When target output records a source path and line, Jobman Diagnose compares
-that location with the selected current file. A different file, an out-of-range
-runtime line, or a differing Python traceback source line produces a
-`source_context_mismatch` warning and the current source is withheld from the
-provider. A compatible location is still only consistent, not revision proof.
-
-Provider responses are untrusted proposals. Jobman-Diagnose validates their
-schema, taxonomy, citations, contradictions, actions, and request identity;
-optional provider failure still returns the deterministic report. See the
-[configuration guide], [generation protocol], and [security model].
-
-## Evidence, offline use, and support
-
-Evidence can be reviewed, transported, and diagnosed without a live Jobman
-state store:
+You can export a job's diagnostic data and inspect it later or on another
+machine:
 
 ```console
 jobman-diagnose --export-evidence evidence.json JOB
@@ -178,12 +141,11 @@ jobman-diagnose --from-evidence evidence.json
 jobman-diagnose --from-evidence evidence.json --json --output report.json
 ```
 
-Explicit exports use private permissions, atomic publication, and no-overwrite
-semantics. Support bundles contain selected sealed evidence, reports,
-disclosure, capabilities, and build metadata—never credentials, environment
-values, database files, or Jobman's fingerprint key. Review logs and exported
-evidence before sharing them; configured redaction cannot recognize every
-possible secret.
+You can export diagnostic evidence on one machine and inspect it on another.
+You can also create a support bundle when a maintainer needs more context.
+These files can contain sensitive job details, so review them before sharing.
+See [support bundles] for the bundle contents and safety guidance, and the
+[security model] for file-handling details.
 
 ## Documentation
 
@@ -193,13 +155,13 @@ possible secret.
 | AI profiles and providers | [Configuration guide][configuration guide] |
 | Common failures | [Troubleshooting guide] |
 | Privacy and trust boundaries | [Security model][security model] |
-| Stable machine output | [Report schema][report schema] |
-| Model request and response contract | [Generation protocol][generation protocol] |
-| Private diagnostic archives | [Support bundles] |
-| Jobman version support | [Compatibility contract][compatibility contract] |
-| Component boundaries | [Architecture] |
-| Quality corpus and model evaluation | [Evaluation guide] |
-| Executable multi-language failure lab | [Failure labs] |
+| How JSON reports are structured | [Report schema][report schema] |
+| How AI requests and responses work | [Generation protocol][generation protocol] |
+| Creating and safely sharing support bundles | [Support bundles] |
+| Jobman version support | [Compatibility guide][compatibility guide] |
+| How the parts of Jobman-Diagnose fit together | [Architecture] |
+| Testing diagnosis quality and AI models | [Evaluation guide] |
+| Examples of failures in several languages | [Failure labs] |
 | Release artifacts and verification | [Release guide] |
 
 Use the [issue tracker] for reproducible bugs and feature proposals. Report
@@ -216,17 +178,14 @@ make check
 ```
 
 `make help` lists development, evaluation, documentation, packaging, and
-release targets. Production code has no provider SDK dependency, and tests use
-copied evidence fixtures, local fake servers, and helper processes rather than
-live models or credentials.
+release targets.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution requirements.
 
 [architecture]: docs/ARCHITECTURE.md
 [cloudsmith]: https://cloudsmith.io/~jobman/repos/stable/
-[compatibility contract]: docs/COMPATIBILITY.md
+[compatibility guide]: docs/COMPATIBILITY.md
 [configuration guide]: docs/CONFIGURATION.md
-[documentation]: docs/README.md
 [evaluation guide]: docs/EVALUATION.md
 [failure labs]: examples/failure-labs/README.md
 [generation protocol]: docs/GENERATION_PROTOCOL.md
