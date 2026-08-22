@@ -5,7 +5,7 @@
 #   - set JOBMAN_DEMO_CORE to an absolute path to a Jobman executable
 #   - set JOBMAN_DIAGNOSE_CONFIG to an absolute path to a trusted AI config
 #   - select a default profile that permits log_content disclosure
-#   - start and warm the configured model before recording
+#   - start the configured model; the tape runs `doctor` to validate and warm it
 #
 # Example:
 #   JOBMAN_DEMO_CORE=/path/to/jobman/bin/jobman \
@@ -32,6 +32,9 @@ Type `test -x "$JOBMAN_DEMO_CORE"`
 Enter
 Type `test -x ../../bin/jobman-diagnose`
 Enter
+Type `../../bin/jobman-diagnose doctor --diagnosis-config "$JOBMAN_DIAGNOSE_CONFIG" >/dev/null`
+Enter
+Wait@6m
 Type `DEMO_ROOT=$(mktemp -d)`
 Enter
 Type `mkdir -p "$DEMO_ROOT/work"`
@@ -51,7 +54,7 @@ Enter
 Wait
 
 Show
-Type `jobman run --name config-demo -- /bin/sh -c 'cat ./missing-demo.yml'`
+Type `jobman run --name config-demo -- /bin/sh -c 'echo "connect inventory: dial tcp 127.0.0.1:4319: connect: connection refused" >&2; exit 1'`
 Sleep 400ms
 Enter
 Wait
@@ -86,10 +89,10 @@ Enter
 Wait
 Show
 
-Type `jobman diagnose --ai-logs config-demo`
+Type `jobman diagnose --ai-logs --require-model config-demo`
 Sleep 400ms
 Enter
-Wait
+Wait@6m
 ScrollUp@5ms 200
 Sleep 6s
 ScrollDown@35ms 22
