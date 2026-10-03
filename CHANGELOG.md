@@ -7,6 +7,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Added
 
+- Added a bounded public decoder for immutable analysis evidence, preserving
+  local/shared identities and verifying wrapper/core seals before citation use.
 - Added the public `deterministic` Go package for bounded log enrichment and
   network-free diagnosis through the supported `diagnosis.Diagnostician`
   interface.

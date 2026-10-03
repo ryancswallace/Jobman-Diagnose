@@ -36,6 +36,13 @@ that exact immutable wrapper after rechecking current source/namespace access.
 Never replace old evidence with a fresh capture that happens to have matching
 job names or byte offsets. Verify report and wrapper on retrieval.
 
+Reload a stored analysis wrapper with `diagnosis.DecodeFailureEvidence(reader,
+diagnosis.DecodeLimits{})`. It rejects duplicate fields, trailing documents,
+unknown fields, and invalid wrapper/core seals before returning evidence. Input
+is bounded to 4 MiB and depth 32; callers can require tighter bounds. Use
+`diagnosis.Decode` for the paired report, then `ValidateAgainstEvidence` to
+verify the exact pair. Decoder errors contain no source text or item IDs.
+
 Shared reports use schema 2. Their `shared` field is copied from verified core
 evidence and participates in report identity, including deployment and Control
 instance, namespace, actual run UUID/number and execution, manifests and
