@@ -194,6 +194,50 @@ func TestSharedLatestRunNeverBorrowsAnotherRunsExit(t *testing.T) {
 	}
 }
 
+func TestSharedLatestRunNeverBorrowsHistoricalDependencyDecisions(t *testing.T) {
+	for _, currentSatisfied := range []bool{false, true} {
+		t.Run(map[bool]string{false: "current_missing", true: "current_satisfied"}[currentSatisfied], func(t *testing.T) {
+			core := sharedCore(t)
+			oldRun := core.Shared.Runs[0].ID
+			const latestRun = "01990000-0000-7000-8000-000000000099"
+			core.Shared.Runs = append(core.Shared.Runs, diagnostic.SharedRun{ID: latestRun, Number: 19})
+			core.Subject.SelectedRuns = append(core.Subject.SelectedRuns, 19)
+			dependency := diagnostic.SharedDependencyObservation{
+				JobID: "01990000-0000-7000-8000-000000000088", Predicate: "success",
+				ObservedOutcome: "failure", Disposition: "blocked",
+			}
+			core.Items = []diagnostic.Item{fact(t, diagnostic.CodeSharedDependencyObservation, dependency, oldRun)}
+			if currentSatisfied {
+				dependency.Satisfied = true
+				dependency.ObservedOutcome = "success"
+				dependency.Disposition = "ready"
+				current := fact(t, diagnostic.CodeSharedDependencyObservation, dependency, latestRun)
+				current.ID += ":current"
+				core.Items = append(core.Items, current)
+			}
+			report, _ := analyze(t, seal(t, core))
+			if primary(report).Code != "core.insufficient_structured_evidence" {
+				t.Fatal("historical dependency became the latest selected run's diagnosis")
+			}
+			if len(report.Citations) != 0 {
+				t.Fatal("current state borrowed historical dependency evidence")
+			}
+		})
+	}
+}
+
+func TestPublicPrepareHonorsCancellationWithoutLogArtifacts(t *testing.T) {
+	core := sharedCore(t)
+	if len(core.Artifacts) != 0 {
+		t.Fatal("cancellation regression requires metadata-only evidence")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := deterministic.Prepare(ctx, core); !errors.Is(err, context.Canceled) {
+		t.Fatalf("metadata-only preparation cancellation = %v", err)
+	}
+}
+
 func TestSharedLogEnrichmentStaysBoundToExactSealedBytes(t *testing.T) {
 	core := sharedCore(t)
 	core.Shared.Profile = diagnostic.SharedProfileIncludeLogTail
@@ -212,6 +256,65 @@ func TestSharedLogEnrichmentStaysBoundToExactSealedBytes(t *testing.T) {
 	evidence.Core.Artifacts[0].Data[0] = 'X'
 	if err := diagnosis.ValidateAgainstEvidence(report, evidence); err == nil {
 		t.Fatal("accepted substituted log citation bytes")
+	}
+}
+
+func sharedLogCore(t *testing.T) diagnostic.Evidence {
+	t.Helper()
+	core := sharedCore(t)
+	core.Shared.Profile = diagnostic.SharedProfileIncludeLogTail
+	data := []byte("permission denied\n")
+	core.Artifacts = []diagnostic.Artifact{{
+		ID: core.Shared.Logs[0].ID, Role: diagnostic.ArtifactRoleLogTail, Run: 3, Stream: "stderr",
+		MediaType: "application/octet-stream", Data: data, OriginalBytes: uint64(len(data)),
+		ByteEnd: uint64(len(data)), CapturedAt: core.CapturedAt, Quality: diagnostic.QualityConfirmed, Disclosure: diagnostic.DisclosureLogContent,
+	}}
+	core.Shared.Logs[0].Bytes = uint64(len(data))
+	core.Consistency.Artifacts = diagnostic.ArtifactsStable
+	observationTime := core.CapturedAt.Add(-time.Minute)
+	core.Items[0].ObservedAt = &observationTime
+	return seal(t, core)
+}
+
+func TestSharedRecapturePreservesSemanticIdentityAndCaptureProvenance(t *testing.T) {
+	core := sharedLogCore(t)
+	firstReport, first := analyze(t, core)
+	recaptured := sharedLogCore(t)
+	recaptured.CapturedAt = recaptured.CapturedAt.Add(time.Minute)
+	recaptured.Artifacts[0].CapturedAt = recaptured.CapturedAt
+	secondReport, second := analyze(t, seal(t, recaptured))
+	if first.Core.EvidenceID != second.Core.EvidenceID || first.AnalysisEvidenceID != second.AnalysisEvidenceID ||
+		firstReport.ReportID != secondReport.ReportID {
+		t.Fatal("capture-only change altered semantic identity")
+	}
+	if len(first.Enrichment) == 0 || len(second.Enrichment) == 0 ||
+		!first.Enrichment[0].ObservedAt.Equal(core.Artifacts[0].CapturedAt) ||
+		!second.Enrichment[0].ObservedAt.Equal(recaptured.Artifacts[0].CapturedAt) ||
+		first.Enrichment[0].ObservedAt.Equal(second.Enrichment[0].ObservedAt) {
+		t.Fatal("capture provenance was lost or mutated by semantic hashing")
+	}
+	roundTrip(t, firstReport, first)
+	roundTrip(t, secondReport, second)
+}
+
+func TestSharedSemanticIdentityRetainsContentAndSourceObservationTimes(t *testing.T) {
+	firstReport, first := analyze(t, sharedLogCore(t))
+	for name, mutate := range map[string]func(*diagnostic.Evidence){
+		"log content": func(core *diagnostic.Evidence) { core.Artifacts[0].Data[0] = 'P' },
+		"source observation time": func(core *diagnostic.Evidence) {
+			observedAt := core.Items[0].ObservedAt.Add(time.Minute)
+			core.Items[0].ObservedAt = &observedAt
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := sharedLogCore(t)
+			mutate(&changed)
+			report, evidence := analyze(t, seal(t, changed))
+			if evidence.Core.EvidenceID == first.Core.EvidenceID || evidence.AnalysisEvidenceID == first.AnalysisEvidenceID ||
+				report.ReportID == firstReport.ReportID {
+				t.Fatal("changed source fact retained semantic identity")
+			}
+		})
 	}
 }
 

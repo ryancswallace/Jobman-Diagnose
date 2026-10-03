@@ -172,7 +172,7 @@ func sharedStateCandidates(view evidenceView) []candidate {
 				"Control's observation confidence limits what is known about current execution. A successful API fetch does not make an old execution observation current, and staleness is not failure.", []string{item.ID}))
 		}
 	}
-	for _, item := range view.byCode[diagnostic.CodeSharedDependencyObservation] {
+	for _, item := range view.primaryItems(diagnostic.CodeSharedDependencyObservation) {
 		var dependency diagnostic.SharedDependencyObservation
 		if json.Unmarshal(item.Value, &dependency) == nil && !dependency.Satisfied {
 			result = append(result, observedCandidate(70, "shared.dependency_unsatisfied", "prerequisite", diagnosis.SeverityWarning,

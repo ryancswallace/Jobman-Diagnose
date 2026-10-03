@@ -96,6 +96,9 @@ func Collect(ctx context.Context, core diagnostic.Evidence) (diagnosis.FailureEv
 	if ctx == nil {
 		return diagnosis.FailureEvidence{}, fmt.Errorf("collect enrichment: nil context")
 	}
+	if err := ctx.Err(); err != nil {
+		return diagnosis.FailureEvidence{}, fmt.Errorf("collect enrichment: %w", err)
+	}
 	if err := diagnostic.Verify(core); err != nil {
 		return diagnosis.FailureEvidence{}, fmt.Errorf("collect enrichment: verify core evidence: %w", err)
 	}

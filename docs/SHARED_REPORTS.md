@@ -40,8 +40,12 @@ Shared reports use schema 2. Their `shared` field is copied from verified core
 evidence and participates in report identity, including deployment and Control
 instance, namespace, actual run UUID/number and execution, manifests and
 disclosure profile. `ValidateAgainstEvidence` compares it exactly. Schema-1
-report decoding and local engine behavior remain supported. Capture/generation
-wall time is excluded from semantic IDs; real observation times remain facts.
+report decoding and local engine behavior remain supported. For shared reports,
+core/artifact capture time, derived enrichment capture time and report generation
+time are excluded from semantic IDs. Enrichment `observed_at` retains the
+artifact capture time in the stored wrapper; it does not describe when a runtime
+event occurred. Actual source observation times in core facts remain part of
+semantic identity. Schema-1 local analysis keeps its existing digest behavior.
 
 The shared engine uses actual selected run identity to find exit observations.
 It does not parse a run number from an opaque citation ID or fall back to a

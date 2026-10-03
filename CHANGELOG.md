@@ -20,6 +20,10 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 - Reject ambiguous citation IDs across evidence collections and citation kinds
   that disagree with their exact source object.
+- Keep historical run dependency decisions out of the latest selected run's
+  findings, and honor canceled preparation for metadata-only evidence.
+- Keep shared analysis and report IDs stable across log recapture times while
+  preserving capture provenance, source observation times and local report IDs.
 
 ## [0.6.0] - 2026-08-13
 
