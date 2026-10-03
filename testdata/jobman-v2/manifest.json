@@ -1,0 +1,12 @@
+{
+  "source_repository": "https://github.com/ryancswallace/Jobman",
+  "source_commit": "7d6e8572164b7368b675dca446b5ac15a1cdb59f",
+  "evidence_schema": 2,
+  "fixtures": [
+    {
+      "file": "shared-control-failure-v2.json",
+      "evidence_id": "sha256:ac549b6169e2dd5f98e895bad220ba729a739f62214a9180d7650d19698f53d9",
+      "sha256": "65af51d47996bcc7fe2e0508062b9a84544963829457d257db7b87a6f8a0acf2"
+    }
+  ]
+}

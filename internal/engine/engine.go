@@ -46,6 +46,9 @@ func (engine *Engine) Diagnose(ctx context.Context, evidence diagnosis.FailureEv
 	if err := diagnosis.VerifyFailureEvidence(evidence); err != nil {
 		return diagnosis.Report{}, fmt.Errorf("diagnose: verify evidence: %w", err)
 	}
+	if evidence.Core.Shared != nil && len(evidence.SourceContext) != 0 {
+		return diagnosis.Report{}, errors.New("diagnose: shared deterministic analysis excludes local source context")
+	}
 	core := evidence.Core
 	view := newEvidenceView(evidence)
 	candidates, err := analyze(ctx, view)
@@ -92,6 +95,9 @@ func (engine *Engine) Diagnose(ctx context.Context, evidence diagnosis.FailureEv
 		MissingEvidence: missing, Warnings: warnings,
 		Disclosure:   diagnosis.DisclosureManifest{Locality: diagnosis.ProviderNotUsed},
 		Fingerprints: diagnosis.Fingerprints{Core: coreFailureFingerprint(view)},
+	}
+	if core.Shared != nil {
+		applySharedReport(&report, core.Shared)
 	}
 	sealed, err := diagnosis.Seal(report)
 	if err != nil {
@@ -178,6 +184,9 @@ func newEvidenceView(evidence diagnosis.FailureEvidence) evidenceView {
 
 func (view evidenceView) primaryItems(code string) []diagnostic.Item {
 	items := view.byCode[code]
+	if view.evidence.Shared != nil {
+		return view.sharedPrimaryItems(items)
+	}
 	if len(view.evidence.Subject.SelectedRuns) == 0 {
 		return slices.Clone(items)
 	}
@@ -203,6 +212,9 @@ type candidate struct {
 
 func analyze(ctx context.Context, view evidenceView) ([]candidate, error) {
 	var candidates []candidate
+	if view.evidence.Shared != nil {
+		candidates = append(candidates, sharedCandidates(view)...)
+	}
 	if intentional, ok := intentionalFalseCandidate(view); ok {
 		candidates = append(candidates, intentional)
 	}
@@ -362,6 +374,9 @@ func artifactCandidates(ctx context.Context, view evidenceView) []candidate {
 		if ctx.Err() != nil {
 			return result
 		}
+		if !view.primaryArtifact(artifact.ID) {
+			continue
+		}
 		lower := bytes.ToLower(artifact.Data)
 		switch {
 		case len(view.byEnrichmentCode["enrichment.traceback.python"]) == 0 &&
@@ -395,11 +410,17 @@ func enrichmentCandidates(view evidenceView) []candidate {
 	result := make([]candidate, 0, len(view.enrichment))
 	latestDiagnostic := make(map[string]uint64)
 	for _, item := range view.failure.Enrichment {
+		if !view.primaryArtifact(item.SourceArtifactID) {
+			continue
+		}
 		if item.Code == enrichment.CodeCausalMessage && item.ByteStart >= latestDiagnostic[item.SourceArtifactID] {
 			latestDiagnostic[item.SourceArtifactID] = item.ByteStart
 		}
 	}
 	for _, item := range view.failure.Enrichment {
+		if !view.primaryArtifact(item.SourceArtifactID) {
+			continue
+		}
 		switch item.Code {
 		case enrichment.CodePythonTraceback:
 			result = append(result, heuristicCandidate(76, "target.python_exception", "application",
@@ -581,7 +602,11 @@ func heuristicCandidate(priority int, code, category, summary, explanation, arti
 
 func secondaryCandidates(view evidenceView) []candidate {
 	result := make([]candidate, 0, 4)
-	for _, item := range view.byCode[diagnostic.CodeLogRecordingHealth] {
+	healthItems := view.byCode[diagnostic.CodeLogRecordingHealth]
+	if view.evidence.Shared != nil {
+		healthItems = view.primaryItems(diagnostic.CodeLogRecordingHealth)
+	}
+	for _, item := range healthItems {
 		var health string
 		if json.Unmarshal(item.Value, &health) == nil && health == "degraded" {
 			result = append(result, observedCandidate(52, "secondary.log_recording_degraded", "logging",
@@ -654,6 +679,9 @@ func sameFingerprintHistoryCandidate(view evidenceView) (candidate, bool) {
 }
 
 func stateCandidate(view evidenceView) candidate {
+	if view.evidence.Shared != nil {
+		return sharedFallbackCandidate(view)
+	}
 	if view.evidence.Subject.Outcome == "success" {
 		item := firstItemID(view.byCode[diagnostic.CodeJobOutcome], view.byCode[diagnostic.CodeJobPhase])
 		//nolint:errcheck // Scores and bases are controlled constants; Seal validates them again.

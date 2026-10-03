@@ -214,6 +214,9 @@ func validateFailureEvidence(value FailureEvidence, placeholder bool) error {
 	if err := diagnostic.Verify(value.Core); err != nil {
 		return fmt.Errorf("validate failure evidence: verify core evidence: %w", err)
 	}
+	if err := validateEvidenceCitationIDs(value); err != nil {
+		return err
+	}
 	if value.Enrichment == nil || len(value.Enrichment) > maximumEnrichmentItems {
 		return errors.New("validate failure evidence: invalid enrichment collection")
 	}

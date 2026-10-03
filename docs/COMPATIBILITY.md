@@ -1,6 +1,6 @@
 # Compatibility
 
-Status: Jobman Diagnose v0.6.0 compatibility matrix
+Status: v0.6.0 baseline, with shared-job support implemented for the next release
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
@@ -9,11 +9,11 @@ semantic versions.
 | --- | --- |
 | Jobman Diagnose release | v0.6.0 |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
-| Jobman diagnostic evidence | Schema 1 |
+| Jobman diagnostic evidence | Schemas 1 and 2; schema 2 requires a core build with the shared collector |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
 | Jobman extension environment | Protocol 1 |
-| Diagnosis report | Schema 1 |
-| Deterministic engine | Version 1.4.0 |
+| Diagnosis report | Schema 1 for local evidence; schema 2 for shared Control evidence |
+| Deterministic engine | Version 1.4.0 for local evidence; version 2.0.0 for shared evidence |
 | Diagnosis configuration | YAML schema 2 |
 | Generation request | `jobman.diagnosis_generation_request` schema 5 |
 | Generated proposal | `jobman.diagnosis_proposal` schema 2; report decoding retains recorded schema 1 provenance |
@@ -64,6 +64,17 @@ maximum-budget data, and secret canaries. The v1.4.0 fixture set is retained as
 the oldest schema-1 baseline even after newer Jobman releases add compatible
 evidence items.
 
-The development and release module both resolve a tagged Jobman dependency.
-Continuous integration uses the module graph directly, which verifies that a
-clean checkout can build without an unpublished sibling repository.
+Shared snapshots use the public core collector and preserve original job/run
+identities. Reports require exact source-qualified provenance and never emit
+local Jobman command vectors for shared jobs. The public
+[`deterministic` package](SHARED_REPORTS.md) is the supported embedding entry
+point; external applications must not import `internal/engine`.
+
+During review, the development module pins the published, CI-verified Jobman
+commit `62ac89b14547a5fc9c1b9e2852832d66498361c2` as
+`v1.8.1-0.20261003211041-62ac89b14547`. This is a temporary development
+dependency, not a release-supported baseline. Replace it with the approved
+released Jobman tag before merging for stable package or release acceptance.
+Final development checks use `GOWORK=off`. Continuous integration uses the
+module graph directly, so a clean checkout can build without a sibling
+repository or local replacement.

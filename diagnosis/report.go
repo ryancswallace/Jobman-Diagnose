@@ -5,13 +5,19 @@ package diagnosis
 import (
 	"context"
 	"time"
+
+	"github.com/ryancswallace/jobman/diagnostic"
 )
 
 const (
 	// Kind identifies a diagnosis report document.
 	Kind = "jobman.diagnosis_report"
-	// SchemaVersion is the newest report schema understood by this package.
+	// SchemaVersion is the stable local-store report schema.
 	SchemaVersion = 1
+	// SharedSchemaVersion seals explicit Control provenance in shared reports.
+	SharedSchemaVersion = 2
+	// SharedEngineVersion identifies the deterministic shared-job rules.
+	SharedEngineVersion = "2.0.0"
 	// EngineVersion identifies the current deterministic engine semantics.
 	EngineVersion = "1.4.0"
 )
@@ -24,26 +30,27 @@ type Diagnostician interface {
 
 // Report is one immutable diagnosis of a specific sealed evidence bundle.
 type Report struct {
-	Kind               string                `json:"kind"`
-	SchemaVersion      int                   `json:"schema_version"`
-	ReportID           string                `json:"report_id"`
-	GeneratedAt        time.Time             `json:"generated_at"`
-	CoreEvidenceID     string                `json:"core_evidence_id"`
-	AnalysisEvidenceID string                `json:"analysis_evidence_id"`
-	Versions           Versions              `json:"versions"`
-	Analyzers          []AnalyzerDescriptor  `json:"analyzers"`
-	Generators         []GeneratorDescriptor `json:"generators"`
-	Subject            Subject               `json:"subject"`
-	Mode               AnalysisMode          `json:"mode"`
-	PrimaryFindingID   string                `json:"primary_finding_id"`
-	Findings           []Finding             `json:"findings"`
-	Actions            []Action              `json:"actions"`
-	Retry              RetryAdvice           `json:"retry"`
-	Citations          []Citation            `json:"citations"`
-	MissingEvidence    []MissingEvidence     `json:"missing_evidence"`
-	Warnings           []Warning             `json:"warnings"`
-	Disclosure         DisclosureManifest    `json:"disclosure"`
-	Fingerprints       Fingerprints          `json:"fingerprints"`
+	Kind               string                       `json:"kind"`
+	SchemaVersion      int                          `json:"schema_version"`
+	ReportID           string                       `json:"report_id"`
+	GeneratedAt        time.Time                    `json:"generated_at"`
+	CoreEvidenceID     string                       `json:"core_evidence_id"`
+	AnalysisEvidenceID string                       `json:"analysis_evidence_id"`
+	Versions           Versions                     `json:"versions"`
+	Analyzers          []AnalyzerDescriptor         `json:"analyzers"`
+	Generators         []GeneratorDescriptor        `json:"generators"`
+	Subject            Subject                      `json:"subject"`
+	Mode               AnalysisMode                 `json:"mode"`
+	PrimaryFindingID   string                       `json:"primary_finding_id"`
+	Findings           []Finding                    `json:"findings"`
+	Actions            []Action                     `json:"actions"`
+	Retry              RetryAdvice                  `json:"retry"`
+	Citations          []Citation                   `json:"citations"`
+	MissingEvidence    []MissingEvidence            `json:"missing_evidence"`
+	Warnings           []Warning                    `json:"warnings"`
+	Disclosure         DisclosureManifest           `json:"disclosure"`
+	Fingerprints       Fingerprints                 `json:"fingerprints"`
+	Shared             *diagnostic.SharedProvenance `json:"shared,omitempty"`
 }
 
 // GeneratorDescriptor identifies the optional structured generator selected

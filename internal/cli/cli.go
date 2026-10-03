@@ -70,8 +70,9 @@ func runWithEnvironment(
 	}
 	if parsed.version {
 		_, writeErr := fmt.Fprintf(
-			stdout, "jobman-diagnose %s (evidence schema %d, report schema %d, configuration schema %d)\n",
-			buildinfo.Version, diagnostic.SchemaVersion, diagnosis.SchemaVersion, diagnosisconfig.SchemaVersion,
+			stdout, "jobman-diagnose %s (evidence schema %d/%d, report schema %d/%d, configuration schema %d)\n",
+			buildinfo.Version, diagnostic.SchemaVersion, diagnostic.SharedSchemaVersion,
+			diagnosis.SchemaVersion, diagnosis.SharedSchemaVersion, diagnosisconfig.SchemaVersion,
 		)
 		return writeErr
 	}

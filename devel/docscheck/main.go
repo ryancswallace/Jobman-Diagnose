@@ -145,7 +145,7 @@ func checkContractVersions(root string) ([]string, error) {
 func contractVersionReferences() []contractReference {
 	return []contractReference{
 		{path: "docs/COMPATIBILITY.md", fragments: []string{
-			fmt.Sprintf("| Diagnosis report | Schema %d |", diagnosis.SchemaVersion),
+			fmt.Sprintf("| Diagnosis report | Schema %d for local evidence; schema %d for shared Control evidence |", diagnosis.SchemaVersion, diagnosis.SharedSchemaVersion),
 			fmt.Sprintf("| Diagnosis configuration | YAML schema %d |", diagnosisconfig.SchemaVersion),
 			fmt.Sprintf("`jobman.diagnosis_generation_request` schema %d", provider.RequestSchemaVersion),
 			fmt.Sprintf("`jobman.diagnosis_proposal` schema %d", provider.ProposalSchemaVersion),

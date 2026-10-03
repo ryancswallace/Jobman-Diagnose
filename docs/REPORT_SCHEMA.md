@@ -1,8 +1,14 @@
-# Diagnosis report schema 1
+# Diagnosis report schemas
 
 The machine document kind is `jobman.diagnosis_report`; `schema_version` is
-`1`. `diagnosis.Encode`, `Decode`, `Seal`, `Verify`, and
+`1` for local evidence and `2` for shared Control evidence.
+`diagnosis.Encode`, `Decode`, `Seal`, `Verify`, and
 `ValidateAgainstEvidence` implement the public Go contract.
+
+Schema 2 adds a sealed `shared` field with the exact core source, real run and
+execution identities, manifest references and disclosure profile. It requires
+schema-2 core evidence and actions without execution. Schema-1 report meanings and
+decoding remain unchanged. See [shared report integration](SHARED_REPORTS.md).
 
 ## Required sections
 
@@ -28,7 +34,9 @@ The machine document kind is `jobman.diagnosis_report`; `schema_version` is
 | `fingerprints` | Optional core factual and stable companion diagnosis grouping fingerprints |
 
 Every evidence reference must exist in the exact source bundle and have one
-citation entry with the matching item code or artifact role. Report validation
+citation entry with the matching item code or artifact role and object kind.
+Citation IDs must be unique across core facts, artifacts, enrichment and source
+context. Report validation
 also compares the subject, Jobman version, evidence schema, and item/artifact
 counts with that source. Generated or human text cannot invent factual
 evidence. `contradicting_findings` names existing deterministic finding IDs and

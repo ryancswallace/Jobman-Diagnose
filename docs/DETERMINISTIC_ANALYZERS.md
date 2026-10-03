@@ -1,5 +1,13 @@
 # Deterministic analyzers
 
+Shared Control evidence uses the additional `builtin.shared/1` rules and
+engine version 2.0.0. They cite the exact recorded run outcome, exit observation,
+scheduler observation, dependency decision or execution confidence. Historical
+run selection follows real run UUID/number joins, never citation-ID text or
+another run's exit result. Staleness does not become failure, and a lost outcome
+does not prove process termination. Shared report actions contain advice only,
+without local CLI argument vectors. See [the embedding guide](SHARED_REPORTS.md).
+
 The built-in engine evaluates trusted structured core classifications and
 exact companion-derived log ranges separately.
 Those rules identify direct executable, working-directory, permission,
