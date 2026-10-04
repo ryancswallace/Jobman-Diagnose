@@ -5,6 +5,26 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Added
+
+- Added the public `deterministic` Go package for bounded log enrichment and
+  network-free diagnosis through the supported `diagnosis.Diagnostician`
+  interface.
+- Added shared Control evidence analysis and report schema 2, retaining sealed
+  deployment, namespace, run, execution, manifest and disclosure provenance.
+  Shared findings distinguish terminal outcomes, scheduler observations,
+  dependency decisions and uncertain execution observations. Shared actions
+  are advice without execution and never use local-only job selectors.
+
+### Fixed
+
+- Reject ambiguous citation IDs across evidence collections and citation kinds
+  that disagree with their exact source object.
+- Keep historical run dependency decisions out of the latest selected run's
+  findings, and honor canceled preparation for metadata-only evidence.
+- Keep shared analysis and report IDs stable across log recapture times while
+  preserving capture provenance, source observation times and local report IDs.
+
 ## [0.6.0] - 2026-08-13
 
 ### Added

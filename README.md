@@ -25,6 +25,10 @@ model, network access, credentials, or Python. If you choose to connect an AI
 provider, Jobman-Diagnose can add suggestions while keeping its built-in
 findings and retry advice in charge.
 
+Applications can embed the [public deterministic Go engine](docs/SHARED_REPORTS.md)
+to analyze sealed local or Control evidence without invoking providers or
+executing suggested actions.
+
 <!-- Terminal demo slot. Generate the recording from
 docs/screencaps/tape/diagnose.tape, then replace this comment with:
 <p align="center">

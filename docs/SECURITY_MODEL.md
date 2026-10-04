@@ -6,6 +6,21 @@ evidence or configuration file, and, only when selected, invoke one configured
 generator. It has no code path that mutates Jobman state, signals a target,
 executes a suggested action, or starts a retry.
 
+The public `deterministic` library performs no live evidence acquisition,
+source-file reads, credential lookup, provider invocation or network operation.
+Its shared Control path validates schema-2 evidence, seals the exact authority
+and real run/manifest identities into report schema 2, and emits advice without
+executable arguments. Source authentication and current namespace access remain
+the host application's responsibility for generation, storage, retrieval and
+every citation read. A valid digest is an integrity check, not an access grant.
+
+Citation IDs share one namespace across facts, artifacts, enrichment and source
+context. Validation rejects collisions and mismatched object kinds. Shared
+historical runs never borrow another run's exit observations or substitute the
+current job's outcome for an unobserved selected run. Shared deterministic
+generation rejects additional local source context; optional enriched log
+observations refer only to exact already-sealed sanitized bytes.
+
 ## Trust boundaries
 
 - Jobman's sealed evidence is trusted only after structural, size, digest, and

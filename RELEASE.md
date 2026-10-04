@@ -7,10 +7,15 @@ and generation contracts mature. The initial pre-v1 release is v0.1.0.
 
 ## Release prerequisites
 
-Jobman v1.4.0 is the immutable core compatibility baseline: it publishes
-diagnostic evidence schema 1, the module requires its tag directly, copied
-fixtures record that origin and exact hashes, and continuous integration builds
-without a sibling checkout.
+Jobman v1.4.0 remains the immutable local CLI compatibility baseline: it
+publishes diagnostic evidence schema 1 and copied fixtures record that origin
+and exact hashes. Shared Control evidence requires the newer core public
+schema-2 collector. During development, the module pins a published immutable
+core revision as recorded in `docs/COMPATIBILITY.md`; replace that temporary
+development dependency with its approved released tag before accepting or
+publishing a stable companion package. Continuous integration builds without
+a sibling checkout. This dependency transition does not waive the existing
+candidate or live-provider release gates below.
 
 Before creating a companion tag:
 

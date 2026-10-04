@@ -22,6 +22,7 @@ contracts behind the CLI.
 - [Report schema](REPORT_SCHEMA.md)
 - [Generation protocol](GENERATION_PROTOCOL.md)
 - [Deterministic analyzers](DETERMINISTIC_ANALYZERS.md)
+- [Embed shared reports](SHARED_REPORTS.md)
 - [Security model](SECURITY_MODEL.md)
 - [Evaluation](EVALUATION.md)
 

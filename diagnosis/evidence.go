@@ -40,7 +40,9 @@ const (
 
 // FailureEvidence retains immutable Jobman evidence, separately attributed
 // companion enrichment, and explicitly selected point-in-time source context.
-// AnalysisEvidenceID commits to every field in that companion-owned context.
+// AnalysisEvidenceID commits to semantic companion-owned context. For shared
+// evidence, derived enrichment capture times remain provenance but do not
+// change semantic identity; source observations remain part of core identity.
 type FailureEvidence struct {
 	Kind               string              `json:"kind"`
 	SchemaVersion      int                 `json:"schema_version"`
@@ -214,6 +216,9 @@ func validateFailureEvidence(value FailureEvidence, placeholder bool) error {
 	if err := diagnostic.Verify(value.Core); err != nil {
 		return fmt.Errorf("validate failure evidence: verify core evidence: %w", err)
 	}
+	if err := validateEvidenceCitationIDs(value); err != nil {
+		return err
+	}
 	if value.Enrichment == nil || len(value.Enrichment) > maximumEnrichmentItems {
 		return errors.New("validate failure evidence: invalid enrichment collection")
 	}
@@ -323,6 +328,16 @@ func validIdentifierText(value string, maximum int) bool {
 }
 
 func failureEvidenceDigest(value FailureEvidence) (string, error) {
+	semanticEnrichment := value.Enrichment
+	if value.Core.SchemaVersion == diagnostic.SharedSchemaVersion {
+		semanticEnrichment = slices.Clone(value.Enrichment)
+		for index := range semanticEnrichment {
+			// Shared enrichment derives from immutable artifact bytes. Its time
+			// records collection, not a new source observation. Keep the encoded
+			// provenance intact and preserve the legacy local digest projection.
+			semanticEnrichment[index].ObservedAt = time.Time{}
+		}
+	}
 	projection := struct {
 		Kind           string           `json:"kind"`
 		SchemaVersion  int              `json:"schema_version"`
@@ -331,7 +346,7 @@ func failureEvidenceDigest(value FailureEvidence) (string, error) {
 		SourceContext  []SourceContext  `json:"source_context"`
 	}{
 		Kind: value.Kind, SchemaVersion: value.SchemaVersion,
-		CoreEvidenceID: value.Core.EvidenceID, Enrichment: value.Enrichment,
+		CoreEvidenceID: value.Core.EvidenceID, Enrichment: semanticEnrichment,
 		SourceContext: value.SourceContext,
 	}
 	encoded, err := json.Marshal(projection)

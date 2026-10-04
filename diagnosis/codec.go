@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,7 +41,9 @@ func NewConfidence(score int, basis string) (Confidence, error) {
 // Seal normalizes, validates, and hashes a diagnosis report.
 func Seal(report Report) (Report, error) {
 	report.Kind = Kind
-	report.SchemaVersion = SchemaVersion
+	if report.SchemaVersion == 0 {
+		report.SchemaVersion = SchemaVersion
+	}
 	report.ReportID = ""
 	report = normalize(report)
 	fingerprint, err := diagnosisFingerprint(report)
@@ -111,7 +114,7 @@ func validateEvidenceProvenance(report Report, evidence FailureEvidence) error {
 		return errors.New("validate diagnosis evidence: report subject does not match core evidence")
 	}
 	if report.Versions.JobmanVersion != core.Source.JobmanVersion ||
-		report.Versions.EvidenceSchemaVersion != core.SchemaVersion {
+		report.Versions.EvidenceSchemaVersion != core.SchemaVersion || !reflect.DeepEqual(report.Shared, core.Shared) {
 		return errors.New("validate diagnosis evidence: report provenance does not match core evidence")
 	}
 	if report.Fingerprints.Core != "" && !failureEvidenceHasCoreFingerprint(evidence, report.Fingerprints.Core) {
@@ -146,11 +149,14 @@ func validateActionSubjects(actions []Action, subject diagnostic.Subject) error 
 func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 	core := evidence.Core
 	available := make(map[string]string, len(core.Items)+len(core.Artifacts)+len(evidence.Enrichment)+len(evidence.SourceContext))
+	coreKinds := make(map[string]string, len(core.Items)+len(core.Artifacts))
 	for _, item := range core.Items {
 		available[item.ID] = item.Code
+		coreKinds[item.ID] = "item"
 	}
 	for _, artifact := range core.Artifacts {
 		available[artifact.ID] = artifact.Role
+		coreKinds[artifact.ID] = "artifact"
 	}
 	enrichment := make(map[string]EnrichmentItem, len(evidence.Enrichment))
 	for _, item := range evidence.Enrichment {
@@ -170,6 +176,9 @@ func validateEvidenceReferences(report Report, evidence FailureEvidence) error {
 		}
 		if citation.Code != code {
 			return fmt.Errorf("validate diagnosis evidence: citation %q has the wrong code", citation.EvidenceID)
+		}
+		if kind, exists := coreKinds[citation.EvidenceID]; exists && citation.Kind != kind {
+			return fmt.Errorf("validate diagnosis evidence: citation %q has the wrong kind", citation.EvidenceID)
 		}
 		if item, ok := enrichment[citation.EvidenceID]; ok {
 			if citation.Kind != "enrichment" || citation.SourceEvidenceID != item.SourceArtifactID ||
@@ -275,7 +284,7 @@ func Decode(source io.Reader, limits DecodeLimits) (Report, error) {
 	if err := json.Unmarshal(encoded, &header); err != nil {
 		return Report{}, fmt.Errorf("decode diagnosis header: %w", err)
 	}
-	if header.Kind != Kind || header.SchemaVersion != SchemaVersion {
+	if header.Kind != Kind || !supportedReportSchema(header.SchemaVersion) {
 		return Report{}, fmt.Errorf("decode diagnosis: unsupported kind or schema version %q/%d", header.Kind, header.SchemaVersion)
 	}
 	var report Report
@@ -294,6 +303,9 @@ func validate(report Report, placeholder bool) error {
 		return err
 	}
 	if err := validateReportContents(report); err != nil {
+		return err
+	}
+	if err := validateSharedReport(report); err != nil {
 		return err
 	}
 
@@ -339,7 +351,7 @@ func validateReportHeader(report Report, placeholder bool) error {
 }
 
 func validateReportIdentity(report Report, placeholder bool) error {
-	if report.Kind != Kind || report.SchemaVersion != SchemaVersion {
+	if report.Kind != Kind || !supportedReportSchema(report.SchemaVersion) {
 		return errors.New("validate diagnosis: unsupported kind or schema version")
 	}
 	wantPlaceholder := "sha256:" + strings.Repeat("0", sha256.Size*2)
@@ -357,7 +369,7 @@ func validateReportIdentity(report Report, placeholder bool) error {
 func validateVersions(versions Versions) error {
 	if versions.CompanionVersion == "" || versions.EngineVersion == "" ||
 		versions.JobmanVersion == "" || versions.EvidenceSchemaVersion < 1 ||
-		versions.ReportSchemaVersion != SchemaVersion || versions.GenerationRequestSchemaVersion < 0 ||
+		!supportedReportSchema(versions.ReportSchemaVersion) || versions.GenerationRequestSchemaVersion < 0 ||
 		versions.GenerationRequestSchemaVersion > 5 || versions.ProposalSchemaVersion < 0 ||
 		versions.ProposalSchemaVersion > 2 || !validGenerationProtocolVersions(
 		versions.GenerationRequestSchemaVersion,

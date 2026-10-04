@@ -221,6 +221,10 @@ func TestFailureEvidenceValidationAndEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	const expectedAnalysisID = "sha256:bc738320226d71e42e0e00d261bc163a372ee2a392137b0bfcdba1bb294029bf"
+	if value.AnalysisEvidenceID != expectedAnalysisID {
+		t.Fatalf("local analysis ID = %q, want stable contract digest %q", value.AnalysisEvidenceID, expectedAnalysisID)
+	}
 	var encoded bytes.Buffer
 	if err := EncodeFailureEvidence(&encoded, value); err != nil || encoded.Len() == 0 {
 		t.Fatalf("EncodeFailureEvidence() = %d bytes, %v", encoded.Len(), err)
