@@ -23,7 +23,8 @@ const (
 	maximumTextBytes          = 16 * 1024
 )
 
-// DecodeLimits bounds untrusted report input. Zero values select safe defaults.
+// DecodeLimits bounds untrusted report or analysis-wrapper input. Zero values
+// select the respective decoder's safe defaults.
 type DecodeLimits struct {
 	MaxBytes int64
 	MaxDepth int

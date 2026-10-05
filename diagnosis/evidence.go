@@ -1,6 +1,7 @@
 package diagnosis
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -187,6 +188,8 @@ func VerifyFailureEvidence(value FailureEvidence) error {
 }
 
 // EncodeFailureEvidence writes one verified wrapper followed by a newline.
+// The complete encoding, including the newline, must fit the decoder's 4 MiB
+// ceiling. Oversized encodings are rejected before writing to destination.
 func EncodeFailureEvidence(destination io.Writer, value FailureEvidence) error {
 	if destination == nil {
 		return errors.New("encode failure evidence: destination is nil")
@@ -194,9 +197,16 @@ func EncodeFailureEvidence(destination io.Writer, value FailureEvidence) error {
 	if err := VerifyFailureEvidence(value); err != nil {
 		return err
 	}
-	encoder := json.NewEncoder(destination)
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(value); err != nil {
+		return fmt.Errorf("encode failure evidence: %w", err)
+	}
+	if encoded.Len() > maximumFailureEvidenceBytes {
+		return errors.New("encode failure evidence: output exceeds byte limit")
+	}
+	if _, err := encoded.WriteTo(destination); err != nil {
 		return fmt.Errorf("encode failure evidence: %w", err)
 	}
 

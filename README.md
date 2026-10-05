@@ -28,6 +28,8 @@ findings and retry advice in charge.
 Applications can embed the [public deterministic Go engine](docs/SHARED_REPORTS.md)
 to analyze sealed local or Control evidence without invoking providers or
 executing suggested actions.
+Stored analysis wrappers use a 4 MiB encoding limit; the public encoder rejects
+oversized output before writing it, and the decoder enforces the same ceiling.
 
 <!-- Terminal demo slot. Generate the recording from
 docs/screencaps/tape/diagnose.tape, then replace this comment with:

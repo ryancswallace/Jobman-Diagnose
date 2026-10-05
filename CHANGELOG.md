@@ -7,6 +7,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Added
 
+- Added a bounded public decoder for immutable analysis evidence, preserving
+  local/shared identities and verifying wrapper/core seals before citation use.
 - Added the public `deterministic` Go package for bounded log enrichment and
   network-free diagnosis through the supported `diagnosis.Diagnostician`
   interface.
@@ -18,6 +20,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Reject analysis evidence encodings larger than the decoder's 4 MiB ceiling
+  before writing any bytes, including when source-context paths are oversized.
 - Reject ambiguous citation IDs across evidence collections and citation kinds
   that disagree with their exact source object.
 - Keep historical run dependency decisions out of the latest selected run's
