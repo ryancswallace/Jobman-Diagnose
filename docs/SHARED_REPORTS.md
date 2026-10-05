@@ -42,6 +42,9 @@ unknown fields, and invalid wrapper/core seals before returning evidence. Input
 is bounded to 4 MiB and depth 32; callers can require tighter bounds. Use
 `diagnosis.Decode` for the paired report, then `ValidateAgainstEvidence` to
 verify the exact pair. Decoder errors contain no source text or item IDs.
+`EncodeFailureEvidence` enforces the same 4 MiB ceiling, including its trailing
+newline, before writing any bytes. A valid seal alone does not establish that
+an in-memory wrapper fits the stored encoding budget.
 
 Shared reports use schema 2. Their `shared` field is copied from verified core
 evidence and participates in report identity, including deployment and Control

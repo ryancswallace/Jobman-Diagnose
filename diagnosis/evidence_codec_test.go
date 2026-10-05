@@ -2,6 +2,7 @@ package diagnosis
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -9,11 +10,82 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/ryancswallace/jobman/diagnostic"
 
 	"github.com/ryancswallace/jobman-diagnose/internal/testevidence"
 )
+
+func TestFailureEvidenceEncodeByteCeiling(t *testing.T) {
+	t.Parallel()
+	core, err := testevidence.Failed("nonzero_exit", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("x\n")
+	source := SourceContext{
+		ID: "context:source:001", Role: "source.context", Path: "/synthetic-private-canary",
+		Language: "go", MediaType: "text/x-go", Mode: SourceContextFull,
+		AnchorReason: "full_file", StartLine: 1, EndLine: 1, TotalLines: 1,
+		ByteEnd: uint64(len(data)), FileBytes: uint64(len(data)),
+		ContentBytes: uint64(len(data)), Data: data,
+		Digest: contentDigest(data), ContentDigest: contentDigest(data),
+		CapturedAt: time.Date(2026, 1, 1, 0, 0, 1, 0, time.UTC),
+		Collector:  AnalyzerDescriptor{Name: "source", Version: "1"},
+		Quality:    diagnostic.QualityPointInTime, Disclosure: DisclosureSourceContent,
+	}
+	seal := func(path string) FailureEvidence {
+		t.Helper()
+		source.Path = path
+		value, sealErr := SealFailureEvidenceWithContext(core, nil, []SourceContext{source})
+		if sealErr != nil {
+			t.Fatal(sealErr)
+		}
+		return value
+	}
+	var baseline bytes.Buffer
+	if err := EncodeFailureEvidence(&baseline, seal(source.Path)); err != nil {
+		t.Fatal(err)
+	}
+	basePath := source.Path
+	for _, delta := range []int{-1, 0, 1} {
+		value := seal(basePath + strings.Repeat("a", maximumFailureEvidenceBytes-baseline.Len()+delta))
+		var encoded bytes.Buffer
+		err := EncodeFailureEvidence(&encoded, value)
+		if delta > 0 {
+			assertOversizedFailureEvidence(t, value, &encoded, err)
+			continue
+		}
+		if err != nil || encoded.Len() != maximumFailureEvidenceBytes+delta {
+			t.Fatalf("encoding within byte ceiling failed: %v", err)
+		}
+		decoded, err := DecodeFailureEvidence(&encoded, DecodeLimits{})
+		if err != nil || decoded.AnalysisEvidenceID != value.AnalysisEvidenceID {
+			t.Fatalf("encoding within byte ceiling did not round trip: %v", err)
+		}
+	}
+}
+
+func assertOversizedFailureEvidence(t *testing.T, value FailureEvidence, encoded *bytes.Buffer, encodeErr error) {
+	t.Helper()
+	if encodeErr == nil || encoded.Len() != 0 || strings.Contains(encodeErr.Error(), "synthetic-private-canary") {
+		t.Fatal("oversized encoding was written or exposed source content")
+	}
+	// Confirm this is a valid sealed wrapper whose wire encoding exceeds
+	// the decoder ceiling by exactly one byte, including its newline.
+	encoder := json.NewEncoder(encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		t.Fatal(err)
+	}
+	if encoded.Len() != maximumFailureEvidenceBytes+1 {
+		t.Fatal("oversized fixture does not straddle the byte ceiling")
+	}
+	if _, err := DecodeFailureEvidence(encoded, DecodeLimits{}); err == nil {
+		t.Fatal("decoder accepted oversized encoding")
+	}
+}
 
 func TestFailureEvidenceDecodePreservesLocalAndSharedSeals(t *testing.T) {
 	t.Parallel()

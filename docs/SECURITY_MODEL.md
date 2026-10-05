@@ -19,6 +19,9 @@ under a hard 4 MiB/depth-32 ceiling, rejects ambiguous or unknown fields and
 trailing documents, and verifies wrapper and core seals. It performs no evidence
 acquisition or provider calls. Reloaded wrappers still require current access
 checks and exact report/evidence pairing before any citation is disclosed.
+`EncodeFailureEvidence` also enforces the 4 MiB encoded-size ceiling, including
+its newline, before writing to its destination. Oversized encoding errors do
+not include source content.
 
 Citation IDs share one namespace across facts, artifacts, enrichment and source
 context. Validation rejects collisions and mismatched object kinds. Shared
