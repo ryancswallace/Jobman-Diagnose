@@ -1,13 +1,13 @@
 # Compatibility
 
-Status: v0.6.0 baseline, with shared-job support implemented for the next release
+Status: v0.7.0 candidate; stable publication awaits the documented live-provider gates
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
-| Jobman Diagnose release | v0.6.0 |
+| Jobman Diagnose release | v0.6.0 published; v0.7.0 candidate adds shared evidence |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schemas 1 and 2; schema 2 requires a core build with the shared collector |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
@@ -70,11 +70,12 @@ local Jobman command vectors for shared jobs. The public
 [`deterministic` package](SHARED_REPORTS.md) is the supported embedding entry
 point; external applications must not import `internal/engine`.
 
-During review, the development module pins the published, CI-verified Jobman
-commit `62ac89b14547a5fc9c1b9e2852832d66498361c2` as
-`v1.8.1-0.20261003211041-62ac89b14547`. This is a temporary development
-dependency, not a release-supported baseline. Replace it with the approved
-released Jobman tag before merging for stable package or release acceptance.
-Final development checks use `GOWORK=off`. Continuous integration uses the
-module graph directly, so a clean checkout can build without a sibling
-repository or local replacement.
+The v0.7.0 candidate pins published Jobman v1.9.0 for its public schema-2
+collector and bounded evidence decoder. Jobman v1.4.0 remains the oldest local
+CLI compatibility baseline; shared evidence requires Jobman v1.9.0 or a compatible
+newer release. Continuous integration tests assembled invocation against both
+released versions and current main, without sibling-module replacements.
+
+The dependency pin and deterministic checks do not waive the live-provider
+release gates in [RELEASE.md](../RELEASE.md). Keep the candidate unpublished as a
+stable release until those gates have recorded passing evidence.
