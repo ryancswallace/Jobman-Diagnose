@@ -28,6 +28,8 @@ jobs:
         include:
           - jobman: minimum v1.4.0
             jobman_ref: v1.4.0
+          - jobman: shared v1.9.0
+            jobman_ref: v1.9.0
           - jobman: current main
             jobman_ref: main
 

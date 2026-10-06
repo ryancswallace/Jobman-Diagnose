@@ -5,6 +5,11 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Changed
+
+- Pin the shared evidence implementation to published Jobman v1.9.0 and verify
+  assembled compatibility with that release in addition to the v1.4.0 baseline.
+
 ### Added
 
 - Added a bounded public decoder for immutable analysis evidence, preserving
