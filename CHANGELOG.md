@@ -25,6 +25,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Update the pinned Go toolchain to 1.26.10 to include standard-library
+  security fixes and restore the reachable vulnerability check.
 - Reject analysis evidence encodings larger than the decoder's 4 MiB ceiling
   before writing any bytes, including when source-context paths are oversized.
 - Reject ambiguous citation IDs across evidence collections and citation kinds
