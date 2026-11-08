@@ -296,7 +296,7 @@ func TestConfigAndProfilesCommandUsage(t *testing.T) {
 	t.Parallel()
 
 	usageCases := [][]string{
-		nil, {"unknown"}, {"paths", "extra"}, {"validate", "one", "two"}, {"show", "one", "two"},
+		nil, {"unknown"}, {"paths", "extra"}, {"validate", "one", "two"}, {"show", "one", "two"}, {"schema", "extra"},
 	}
 	for _, arguments := range usageCases {
 		if err := runConfigCommand(arguments, io.Discard, io.Discard); !errors.Is(err, errUsage) {

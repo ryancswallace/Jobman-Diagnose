@@ -15,10 +15,10 @@ import (
 
 func runConfigCommand(arguments []string, stdout, stderr io.Writer) error {
 	if len(arguments) == 0 {
-		return usageError(errors.New("config requires paths, validate, or show"))
+		return usageError(errors.New("config requires paths, validate, show, or schema"))
 	}
 	if arguments[0] == "--help" || arguments[0] == "-h" {
-		_, err := fmt.Fprintln(stderr, "usage: jobman-diagnose config {paths|validate|show} [PATH]")
+		_, err := fmt.Fprintln(stderr, "usage: jobman-diagnose config {paths|validate|show|schema} [PATH]")
 		if err != nil {
 			return err
 		}
@@ -26,6 +26,13 @@ func runConfigCommand(arguments []string, stdout, stderr io.Writer) error {
 		return flag.ErrHelp
 	}
 	switch arguments[0] {
+	case "schema":
+		if len(arguments) != 1 {
+			return usageError(errors.New("config schema does not accept arguments"))
+		}
+		encoder := json.NewEncoder(stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(diagnosisconfig.JSONSchema())
 	case "paths":
 		if len(arguments) != 1 {
 			return usageError(errors.New("config paths does not accept arguments"))
@@ -54,9 +61,13 @@ func writeConfigPaths(stdout io.Writer) error {
 	if environmentPath == "" {
 		environmentPath = "(not set)"
 	}
+	systemPath := os.Getenv(diagnosisconfig.SystemEnvironmentPath)
+	if systemPath == "" {
+		systemPath = "(not set)"
+	}
 	_, err = fmt.Fprintf(
-		stdout, "user:        %s\nenvironment: %s\neffective:   %s (%s)\n",
-		defaultPath, environmentPath, effectivePath, origin,
+		stdout, "user:        %s\nenvironment: %s\nsystem:      %s\neffective:   %s (%s)\n",
+		defaultPath, environmentPath, systemPath, effectivePath, origin,
 	)
 
 	return err

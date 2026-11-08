@@ -29,6 +29,7 @@ type Config struct {
 	MaximumInputBytes  int
 	MaximumOutputBytes int
 	RequestTimeout     time.Duration
+	Transport          provider.TransportOptions
 }
 
 // Generator calls one exact Chat Completions endpoint.
@@ -40,7 +41,11 @@ type Generator struct {
 
 // New returns a fail-closed compatible generator.
 func New(configuration Config) (*Generator, error) {
-	return newWithClient(configuration, providerhttp.Client(configuration.Locality, configuration.RequestTimeout))
+	client, err := providerhttp.ClientWithOptions(configuration.Endpoint, configuration.Locality, configuration.RequestTimeout, configuration.Transport)
+	if err != nil {
+		return nil, fmt.Errorf("construct OpenAI-compatible transport: %w", err)
+	}
+	return newWithClient(configuration, client)
 }
 
 func newWithClient(configuration Config, client *http.Client) (*Generator, error) {

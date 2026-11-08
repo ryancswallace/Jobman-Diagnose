@@ -1,5 +1,8 @@
 # Configuration
 
+External deployment selection, schema export, and explicit HTTPS transport
+settings are described in [deployment configuration](DEPLOYMENT_CONFIGURATION.md).
+
 Deterministic diagnosis is the default and reads no diagnosis configuration or
 provider credential. `--deterministic` makes that choice explicit. Even when
 `--diagnosis-config` names a malformed file, deterministic mode does not open
@@ -85,13 +88,15 @@ an endpoint, credential, evidence value, prompt, response, or log content.
 AI mode resolves its configuration in this order:
 
 1. `--diagnosis-config PATH`;
-2. `JOBMAN_DIAGNOSE_CONFIG`, which must be a clean absolute path; and
-3. `diagnosis.yml` in the platform per-user Jobman configuration directory.
+2. `JOBMAN_DIAGNOSE_CONFIG`, which must be a clean absolute path;
+3. `diagnosis.yml` in the platform per-user Jobman configuration directory; and
+4. `JOBMAN_DIAGNOSE_SYSTEM_CONFIG`, an explicitly selected clean absolute fallback
+   used only if the default user file does not exist.
 
 The ordinary defaults are `~/Library/Application Support/jobman/diagnosis.yml`
 on macOS, `${XDG_CONFIG_HOME:-$HOME/.config}/jobman/diagnosis.yml` on Linux,
 and the corresponding user configuration directory on Windows. There is no
-system or project-file discovery. Inspect the concrete paths with
+implicit system or project-file discovery. Inspect the concrete paths with
 `jobman diagnose config paths`.
 
 ## `diagnosis.yml` schema 2
