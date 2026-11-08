@@ -43,6 +43,9 @@ docs/screencaps/tape/diagnose.tape, then replace this comment with:
 > [!TIP]
 > Start with `jobman diagnose JOB`. No AI setup is required.
 
+Organization deployments can supply external profiles and explicit HTTPS trust
+settings; see [deployment configuration](docs/DEPLOYMENT_CONFIGURATION.md).
+
 ## Quick start
 
 Install Jobman v1.4.0 or newer and Jobman-Diagnose, then run:

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/ryancswallace/jobman-diagnose/internal/config"
+	"github.com/ryancswallace/jobman-diagnose/provider"
 	"github.com/ryancswallace/jobman-diagnose/provider/commandbridge"
 	"github.com/ryancswallace/jobman-diagnose/provider/ollama"
 	"github.com/ryancswallace/jobman-diagnose/provider/openaicompat"
@@ -19,6 +20,10 @@ func NewGenerator(profile config.Profile) (Generator, error) {
 		return nil, err
 	}
 	defer clear(credential)
+	transport := provider.TransportOptions{}
+	if profile.Transport != nil {
+		transport = *profile.Transport
+	}
 	switch profile.Provider {
 	case "command":
 		if profile.Command == nil {
@@ -39,6 +44,7 @@ func NewGenerator(profile config.Profile) (Generator, error) {
 			Endpoint: profile.Endpoint, Model: profile.Model, Credential: credential, Locality: profile.Locality,
 			MaximumInputBytes: profile.MaximumInputBytes, MaximumOutputBytes: profile.MaximumOutputBytes,
 			RequestTimeout: profile.TimeoutDuration(),
+			Transport:      transport,
 		})
 		if err != nil {
 			return nil, err
@@ -50,6 +56,7 @@ func NewGenerator(profile config.Profile) (Generator, error) {
 			Endpoint: profile.Endpoint, Model: profile.Model, Credential: credential,
 			MaximumInputBytes: profile.MaximumInputBytes, MaximumOutputBytes: profile.MaximumOutputBytes,
 			RequestTimeout: profile.TimeoutDuration(),
+			Transport:      transport,
 		})
 		if err != nil {
 			return nil, err

@@ -1,5 +1,14 @@
 # Security and privacy model
 
+Deployment profiles can select explicit HTTPS CA bundles, client certificate
+references, and a credential-free proxy origin. These options never disable
+hostname verification, redirect rejection, or local loopback enforcement.
+Local profiles cannot proxy. HTTPS proxies cannot be combined with client
+certificates, avoiding unintended certificate presentation to the proxy.
+Native configuration validation performs no
+credential or transport I/O; trust/key files are resolved only after generation
+is explicitly requested. See [deployment configuration](DEPLOYMENT_CONFIGURATION.md).
+
 The companion is a read-only native executable, not a sandbox. It receives the
 invoking user's authority to execute core Jobman, read an explicitly named
 evidence or configuration file, and, only when selected, invoke one configured
@@ -216,7 +225,8 @@ checked after decoding.
 Configuration is bounded and versioned. The YAML decoder rejects unknown or
 duplicate fields, aliases, anchors, merge keys, multiple documents, unsupported
 versions, ambiguous transports, and unsafe limits. AI mode may discover only
-the platform per-user `jobman/diagnosis.yml`; there is no system, project,
+the platform per-user `jobman/diagnosis.yml`, with an optional explicitly selected
+system fallback when that user file is absent. There is no project,
 working-directory, endpoint, provider, or credential-based activation.
 `defaults.profile` selects only after an explicit AI activation flag.
 

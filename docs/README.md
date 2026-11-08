@@ -10,6 +10,8 @@ contracts behind the CLI.
   Linux packages, and source builds.
 - [Configuration](CONFIGURATION.md) documents profiles, disclosure policy,
   provider credentials, and precedence.
+- [Deployment configuration](DEPLOYMENT_CONFIGURATION.md) covers external
+  profiles, native validation, enterprise transport, and configuration ownership.
 - [Troubleshooting](TROUBLESHOOTING.md) covers provider failures, configuration
   checks, progress output, and safe support data.
 - [Support bundles](SUPPORT_BUNDLES.md) explains private, reproducible evidence

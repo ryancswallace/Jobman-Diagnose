@@ -28,6 +28,7 @@ type Config struct {
 	MaximumInputBytes  int
 	MaximumOutputBytes int
 	RequestTimeout     time.Duration
+	Transport          provider.TransportOptions
 }
 
 // Generator calls a local Ollama chat endpoint.
@@ -50,10 +51,14 @@ func New(configuration Config) (*Generator, error) {
 		return nil, errors.New("construct Ollama generator: invalid configuration")
 	}
 	configuration.Credential = slices.Clone(configuration.Credential)
+	client, err := providerhttp.ClientWithOptions(configuration.Endpoint, provider.LocalityLocal, configuration.RequestTimeout, configuration.Transport)
+	if err != nil {
+		return nil, fmt.Errorf("construct Ollama transport: %w", err)
+	}
 
 	return &Generator{
 		config: configuration, endpoint: endpoint,
-		client: providerhttp.Client(provider.LocalityLocal, configuration.RequestTimeout),
+		client: client,
 	}, nil
 }
 

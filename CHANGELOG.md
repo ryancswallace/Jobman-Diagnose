@@ -12,6 +12,11 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Added
 
+- Added an explicit deployment configuration fallback, offline native schema
+  export, and optional HTTPS trust, client-certificate, and explicit proxy
+  settings. Generation remains opt-in and configuration validation never reads
+  referenced credentials or contacts a provider.
+
 - Added a bounded public decoder for immutable analysis evidence, preserving
   local/shared identities and verifying wrapper/core seals before citation use.
 - Added the public `deterministic` Go package for bounded log enrichment and

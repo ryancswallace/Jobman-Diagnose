@@ -17,6 +17,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ryancswallace/jobman-diagnose/internal/providerhttp"
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
@@ -24,10 +25,12 @@ const (
 	// SchemaVersion is the current diagnosis.yml schema.
 	SchemaVersion = 2
 	// EnvironmentPath names the optional diagnosis-configuration path override.
-	EnvironmentPath    = "JOBMAN_DIAGNOSE_CONFIG"
-	maximumConfigBytes = 1024 * 1024
-	maximumConfigDepth = 32
-	maximumProfiles    = 32
+	EnvironmentPath = "JOBMAN_DIAGNOSE_CONFIG"
+	// SystemEnvironmentPath opts into a deployment profile fallback when no user file exists.
+	SystemEnvironmentPath = "JOBMAN_DIAGNOSE_SYSTEM_CONFIG"
+	maximumConfigBytes    = 1024 * 1024
+	maximumConfigDepth    = 32
+	maximumProfiles       = 32
 	// MaximumSourceContextLines bounds the symmetric limited-source radius.
 	// A source file is already capped at 1 MiB, so a larger radius cannot select
 	// any additional lines.
@@ -56,18 +59,19 @@ type Defaults struct {
 
 // Profile selects one explicit generator transport and disclosure policy.
 type Profile struct {
-	Provider           string                 `json:"provider" yaml:"provider"`
-	Locality           provider.Locality      `json:"locality" yaml:"locality"`
-	Endpoint           string                 `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
-	Command            *Command               `json:"command,omitempty" yaml:"command,omitempty"`
-	Model              string                 `json:"model" yaml:"model"`
-	RequireJSONSchema  bool                   `json:"require_json_schema" yaml:"require_json_schema"`
-	Timeout            string                 `json:"timeout" yaml:"timeout"`
-	MaximumInputBytes  int                    `json:"maximum_input_bytes" yaml:"maximum_input_bytes"`
-	MaximumOutputBytes int                    `json:"maximum_output_bytes" yaml:"maximum_output_bytes"`
-	Disclosure         map[string]ClassLimits `json:"disclosure" yaml:"disclosure"`
-	SourceContext      *SourceContextPolicy   `json:"source_context,omitempty" yaml:"source_context,omitempty"`
-	Credential         *SecretReference       `json:"credential,omitempty" yaml:"credential,omitempty"`
+	Provider           string                     `json:"provider" yaml:"provider"`
+	Locality           provider.Locality          `json:"locality" yaml:"locality"`
+	Endpoint           string                     `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	Command            *Command                   `json:"command,omitempty" yaml:"command,omitempty"`
+	Model              string                     `json:"model" yaml:"model"`
+	RequireJSONSchema  bool                       `json:"require_json_schema" yaml:"require_json_schema"`
+	Timeout            string                     `json:"timeout" yaml:"timeout"`
+	MaximumInputBytes  int                        `json:"maximum_input_bytes" yaml:"maximum_input_bytes"`
+	MaximumOutputBytes int                        `json:"maximum_output_bytes" yaml:"maximum_output_bytes"`
+	Disclosure         map[string]ClassLimits     `json:"disclosure" yaml:"disclosure"`
+	SourceContext      *SourceContextPolicy       `json:"source_context,omitempty" yaml:"source_context,omitempty"`
+	Credential         *SecretReference           `json:"credential,omitempty" yaml:"credential,omitempty"`
+	Transport          *provider.TransportOptions `json:"transport,omitempty" yaml:"transport,omitempty"`
 	timeout            time.Duration
 }
 
@@ -110,7 +114,7 @@ func DefaultPath() (string, error) {
 	return filepath.Join(directory, "jobman", "diagnosis.yml"), nil
 }
 
-// ResolvePath applies CLI, environment, then per-user path precedence.
+// ResolvePath applies CLI, environment, user, then explicitly selected system fallback.
 func ResolvePath(explicit string) (string, string, error) {
 	if explicit != "" {
 		return explicit, "command_line", nil
@@ -125,6 +129,16 @@ func ResolvePath(explicit string) (string, string, error) {
 	path, err := DefaultPath()
 	if err != nil {
 		return "", "", err
+	}
+	if system := os.Getenv(SystemEnvironmentPath); system != "" {
+		if _, inspectErr := os.Lstat(path); errors.Is(inspectErr, os.ErrNotExist) {
+			if !filepath.IsAbs(system) || filepath.Clean(system) != system {
+				return "", "", fmt.Errorf("%s must name a clean absolute path", SystemEnvironmentPath)
+			}
+			return system, "system_fallback", nil
+		} else if inspectErr != nil {
+			return "", "", errors.New("inspect user diagnosis configuration failed")
+		}
 	}
 
 	return path, "user_default", nil
@@ -343,6 +357,9 @@ func validateClassLimits(class string, limits ClassLimits) error {
 //nolint:cyclop,gocognit // Provider-specific union validation stays centralized to prevent ambiguous profiles.
 func (profile Profile) validateTransport() error {
 	if profile.Provider == "command" {
+		if profile.Transport != nil {
+			return errors.New("command provider does not accept HTTP transport configuration")
+		}
 		if profile.Locality != provider.LocalityLocal || profile.Endpoint != "" || profile.Command == nil {
 			return errors.New("command provider requires local locality, a command, and no endpoint")
 		}
@@ -380,6 +397,9 @@ func (profile Profile) validateTransport() error {
 		if profile.Locality != provider.LocalityLocal || parsed.Path != "/api/chat" {
 			return errors.New("ollama requires a local endpoint whose exact path is /api/chat")
 		}
+	}
+	if profile.Transport != nil {
+		return providerhttp.ValidateTransport(profile.Endpoint, profile.Locality, *profile.Transport)
 	}
 
 	return nil

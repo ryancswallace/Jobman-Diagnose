@@ -386,7 +386,7 @@ func parse(arguments []string, stderr io.Writer) (options, error) {
 	flags.SetOutput(stderr)
 	var usageWriteErr error
 	flags.Usage = func() {
-		_, usageWriteErr = fmt.Fprintln(stderr, "usage: jobman-diagnose [options] JOB\n       jobman-diagnose [options] --from-evidence PATH\n       jobman-diagnose config {paths|validate|show} [PATH]\n       jobman-diagnose profiles [--diagnosis-config PATH]\n       jobman-diagnose doctor [--diagnosis-config PATH] [--profile NAME] [--json]")
+		_, usageWriteErr = fmt.Fprintln(stderr, "usage: jobman-diagnose [options] JOB\n       jobman-diagnose [options] --from-evidence PATH\n       jobman-diagnose config {paths|validate|show|schema} [PATH]\n       jobman-diagnose profiles [--diagnosis-config PATH]\n       jobman-diagnose doctor [--diagnosis-config PATH] [--profile NAME] [--json]")
 		flags.PrintDefaults()
 	}
 	registerFlags(flags, &parsed)

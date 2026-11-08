@@ -794,6 +794,18 @@ func TestRunConfigurationInspectionCommands(t *testing.T) {
 	}
 }
 
+func TestRunConfigurationSchemaDoesNotLoadConfiguration(t *testing.T) {
+	t.Setenv(diagnosisconfig.EnvironmentPath, filepath.Join(t.TempDir(), "missing.yml"))
+	t.Setenv(diagnosisconfig.SystemEnvironmentPath, "invalid-relative-path")
+	var stdout, stderr bytes.Buffer
+	if err := Run([]string{"config", "schema"}, bytes.NewReader(nil), &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(stdout.Bytes()) || !strings.Contains(stdout.String(), "client_certificate_file") || stderr.Len() != 0 {
+		t.Fatalf("unexpected schema output: %s; stderr: %s", stdout.String(), stderr.String())
+	}
+}
+
 func TestRunAIReportsMissingDefaultConfiguration(t *testing.T) {
 	_, evidencePath := writeEvidenceFixture(t)
 	missing := filepath.Join(t.TempDir(), "missing-diagnosis.yml")
