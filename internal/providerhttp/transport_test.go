@@ -52,8 +52,9 @@ func TestTransportValidationPreservesLocalityAndSecretBoundaries(t *testing.T) {
 	if redirectErr := client.CheckRedirect(nil, nil); !errors.Is(redirectErr, http.ErrUseLastResponse) {
 		t.Fatal("redirect rejection changed")
 	}
+	missing := filepath.Join(t.TempDir(), "not-present")
 	if err := ValidateTransport("https://model.example.invalid/generate", provider.LocalityRemote, provider.TransportOptions{
-		ProxyURL: "http://proxy.example.invalid", ClientCertificateFile: "/client.pem", ClientKeyFile: "/key.pem",
+		ProxyURL: "http://proxy.example.invalid", ClientCertificateFile: filepath.Join(missing, "client.pem"), ClientKeyFile: filepath.Join(missing, "key.pem"),
 	}); err != nil {
 		t.Fatalf("HTTP CONNECT with provider mTLS rejected: %v", err)
 	}

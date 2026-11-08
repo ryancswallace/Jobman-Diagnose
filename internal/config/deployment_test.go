@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,7 @@ import (
 func TestExplicitSystemFallbackNeverMasksUserOrExplicitErrors(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv(EnvironmentPath, "")
 	system := writeConfig(t, validOpenAIConfig())
 	t.Setenv(SystemEnvironmentPath, system)
@@ -49,6 +51,7 @@ func TestExplicitSystemFallbackNeverMasksUserOrExplicitErrors(t *testing.T) {
 func TestSystemFallbackRequiresExplicitAbsolutePath(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv(EnvironmentPath, "")
 	t.Setenv(SystemEnvironmentPath, "relative.yml")
 	if _, _, err := ResolvePath(""); err == nil {
@@ -58,12 +61,14 @@ func TestSystemFallbackRequiresExplicitAbsolutePath(t *testing.T) {
 
 func TestTransportValidationDoesNotReadReferencedFiles(t *testing.T) {
 	t.Parallel()
-	configuration := strings.Replace(validOpenAIConfig(), "model: structured-model", `model: structured-model
+	missing := filepath.Join(t.TempDir(), "not-present")
+	key := fmt.Sprintf("client_key_file: %q", filepath.Join(missing, "key.pem"))
+	configuration := strings.Replace(validOpenAIConfig(), "model: structured-model", fmt.Sprintf(`model: structured-model
     transport:
-      ca_file: /not-present/ca.pem
-      client_certificate_file: /not-present/client.pem
-      client_key_file: /not-present/key.pem
-      proxy_url: http://proxy.example.invalid:3128`, 1)
+      ca_file: %q
+      client_certificate_file: %q
+      %s
+      proxy_url: http://proxy.example.invalid:3128`, filepath.Join(missing, "ca.pem"), filepath.Join(missing, "client.pem"), key), 1)
 	file, err := LoadFile(writeConfig(t, configuration))
 	if err != nil {
 		t.Fatal(err)
@@ -72,9 +77,9 @@ func TestTransportValidationDoesNotReadReferencedFiles(t *testing.T) {
 		t.Fatal("transport configuration was discarded")
 	}
 	for _, invalid := range []string{
-		strings.Replace(configuration, "client_key_file: /not-present/key.pem", "client_key_file: relative", 1),
+		strings.Replace(configuration, key, "client_key_file: relative", 1),
 		strings.Replace(configuration, "http://proxy.example.invalid:3128", "http://name:secret-canary@proxy.example.invalid:3128", 1),
-		strings.Replace(configuration, "client_key_file: /not-present/key.pem", "unknown_transport_setting: true", 1),
+		strings.Replace(configuration, key, "unknown_transport_setting: true", 1),
 	} {
 		if _, err := LoadFile(writeConfig(t, invalid)); err == nil {
 			t.Fatal("invalid transport accepted")
