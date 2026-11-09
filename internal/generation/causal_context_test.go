@@ -106,6 +106,57 @@ func TestCausalContextOutranksGenericStderrTail(t *testing.T) {
 	}
 }
 
+func TestPreparePreservesColoredLogAndProjectsPlainDiagnosticLine(t *testing.T) {
+	t.Parallel()
+
+	message := "2026-08-12T04:18:31Z ERROR exporter: x509: certificate signed by unknown authority"
+	colored := "\x1b[31m" + message + "\x1b[0m"
+	controlled := "HTTP 503 service unavailable\x00, retrying"
+	log := controlled + "\n" + colored + "\n"
+	core, err := testevidence.Failed("nonzero_exit", []byte(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	core.Source.Capabilities = append(core.Source.Capabilities, "configured_value_redaction_v1")
+	core.EvidenceID = ""
+	core, err = diagnostic.Seal(core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := enrichment.Collect(t.Context(), core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := deterministic(t).Diagnose(t.Context(), evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := Prepare(evidence, report, "test", testProfile(t, true), []string{"metadata", "log_content"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	projection := prepared.Request.Projection
+	if len(projection.Artifacts) != 1 || projection.Artifacts[0].Content != log || len(projection.Enrichment) != 2 {
+		t.Fatalf("projection changed the log or enrichment set: %#v", projection)
+	}
+	expected := map[string]struct {
+		excerpt string
+		lines   []string
+	}{
+		"tls_verification_failed": {excerpt: colored, lines: []string{message}},
+		"service_unavailable":     {excerpt: controlled},
+	}
+	for _, item := range projection.Enrichment {
+		want := expected[item.Format]
+		excerpt := strings.TrimSuffix(log[item.ByteStart:item.ByteEnd], "\n")
+		if excerpt != want.excerpt || !slices.Equal(item.DiagnosticLines, want.lines) {
+			t.Fatalf("enrichment %s projected range %q and lines %#v, want %q and %#v",
+				item.Format, excerpt, item.DiagnosticLines, want.excerpt, want.lines)
+		}
+	}
+}
+
 func TestOversizedStructuredRangeKeepsAnchorInsideSelectedContext(t *testing.T) {
 	t.Parallel()
 

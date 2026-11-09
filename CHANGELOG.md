@@ -30,6 +30,9 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Keep generated diagnosis available for ANSI-colored logs by removing
+  terminal styling from derived diagnostic lines while retaining their
+  attributed log content.
 - Update the pinned Go toolchain to 1.26.10 to include standard-library
   security fixes and restore the reachable vulnerability check.
 - Reject analysis evidence encodings larger than the decoder's 4 MiB ceiling

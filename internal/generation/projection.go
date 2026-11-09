@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/ryancswallace/jobman/diagnostic"
 
@@ -16,6 +18,8 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/internal/sourcecontext"
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
+
+var ansiGraphicRendition = regexp.MustCompile(`(?:\x1b\[|\x{009b})[0-9:;]*m`)
 
 var allowedCategories = []string{
 	"application", "history", "launch", "lifecycle", "logging", "notification", "ownership",
@@ -324,6 +328,7 @@ func projectedDiagnosticLines(
 			continue
 		}
 		selected := strings.ToValidUTF8(string(artifact.Data[item.ByteStart:item.ByteEnd]), "�")
+		selected = ansiGraphicRendition.ReplaceAllString(selected, "")
 		return selectDiagnosticLines(item.Format, strings.Split(selected, "\n"))
 	}
 
@@ -457,7 +462,8 @@ func appendBoundedDiagnosticLine(lines []string, value string) []string {
 	for _, line := range lines {
 		totalBytes += len(line)
 	}
-	if value == "" || len(value) > 512 || len(lines) >= 8 || totalBytes > 2048 {
+	if value == "" || len(value) > 512 || len(lines) >= 8 || totalBytes > 2048 ||
+		strings.ContainsFunc(value, unicode.IsControl) {
 		return lines
 	}
 
