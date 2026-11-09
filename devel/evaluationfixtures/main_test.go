@@ -161,7 +161,8 @@ func TestGeneratedEvaluationExpectationsExcludeIncidentalDetails(t *testing.T) {
 	}
 
 	pipeline := cases["python_pipeline_cause_chain"].GeneratedExpectation.RequiredRelations
-	if len(pipeline) != 1 || !slices.Contains(pipeline[0].Causes, "trying to parse the amount") {
+	if len(pipeline) != 1 || !slices.Contains(pipeline[0].Causes, "invalid decimal amount") ||
+		!slices.Contains(pipeline[0].Effects, "record validation failure") {
 		t.Fatalf("python_pipeline_cause_chain relations = %#v", pipeline)
 	}
 }

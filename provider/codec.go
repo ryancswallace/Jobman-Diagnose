@@ -1087,7 +1087,15 @@ func genericFailureMechanism(value string) bool {
 
 func nonCausalExplanation(value string) bool {
 	value = normalizedDiagnosisText(value)
-	return containsAny(value,
+	if containsAny(value,
+		"configuration is rejected invalid missing unsupported or disabled",
+		"the targets causal path from root cause through the affected target operation or component",
+		"for chained exceptions connect the deepest supported cause",
+		"never repeat sentences copy taxonomy boilerplate",
+	) {
+		return true
+	}
+	for _, phrase := range []string{
 		"reserved a run with id",
 		"process started with this run id",
 		"completed with an exit code",
@@ -1095,11 +1103,18 @@ func nonCausalExplanation(value string) bool {
 		"exited with nonzero status",
 		"terminated with a nonzero exit",
 		"failure class of nonzero exit",
-		"configuration is rejected invalid missing unsupported or disabled",
-		"the targets causal path from root cause through the affected target operation or component",
-		"for chained exceptions connect the deepest supported cause",
-		"never repeat sentences copy taxonomy boilerplate",
-	)
+	} {
+		index := strings.Index(value, phrase)
+		if index < 0 {
+			continue
+		}
+		remainder := strings.TrimSpace(value[index+len(phrase):])
+		if remainder == "" || !containsAny(remainder, "due to", "because", "after", "when", "while", "from") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func hypothesisCauseSupported(hypothesis Hypothesis, request Request) bool {

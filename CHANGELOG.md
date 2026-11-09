@@ -68,9 +68,14 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
   tests now compare every mapped current source with its generated runtime
   location, except the intentional stale-source control. The database-deadlock
   case now accepts both the narrower concurrency class and the defensible
-  transient-infrastructure class.
+  transient-infrastructure class; the chained decimal case evaluates the
+  user-relevant invalid amount to transform-failure relation without requiring
+  an internal exception-class spelling.
 - Retain a validated first-pass diagnosis when an optional review loses
-  grounded causal detail, while still reporting the controlled review outcome.
+  grounded causal detail, including details grounded in shared source, while
+  still reporting the controlled review outcome. Preserve a concrete causal
+  clause that follows generic lifecycle framing instead of collapsing the
+  complete explanation to its root-cause label.
 - Suppress generated resolution actions that merely copy response-schema or
   deterministic-action boilerplate instead of adding incident-specific advice.
 - Route inferred out-of-range runtime source lines through stale-source

@@ -266,7 +266,7 @@ func projectedCausalText(projection provider.Projection) string {
 		}
 	}
 	for _, artifact := range projection.Artifacts {
-		if artifact.Disclosure == "log_content" {
+		if artifact.Disclosure == "log_content" || artifact.Disclosure == "source_content" {
 			value.WriteString(artifact.Content)
 			value.WriteByte(' ')
 		}

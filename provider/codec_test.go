@@ -518,7 +518,7 @@ func TestNormalizeProposalRemovesNonCausalLifecycleNarration(t *testing.T) {
 
 	for _, explanation := range []string{
 		"The process started with this run ID failed and completed with an exit code of 1.",
-		"The target exited with a nonzero status due to a JSON decoding error.",
+		"The target exited with a nonzero status.",
 		"The target's causal path from root cause through the affected target operation or component. For chained exceptions, connect the deepest supported cause.",
 	} {
 		proposal := normalizeProposal(Proposal{Hypotheses: []Hypothesis{{
@@ -529,6 +529,20 @@ func TestNormalizeProposalRemovesNonCausalLifecycleNarration(t *testing.T) {
 		if proposal.Hypotheses[0].Explanation != proposal.Hypotheses[0].RootCause {
 			t.Fatalf("normalized hypothesis = %#v", proposal.Hypotheses[0])
 		}
+	}
+}
+
+func TestNormalizeProposalPreservesSpecificCauseAfterLifecycleFraming(t *testing.T) {
+	t.Parallel()
+
+	explanation := "The target exited with a nonzero status due to a ZeroDivisionError in the average_unit_cost function."
+	proposal := normalizeProposal(Proposal{Hypotheses: []Hypothesis{{
+		Summary:     "The target exited with a nonzero status due to ZeroDivisionError",
+		RootCause:   "ZeroDivisionError: float division by zero",
+		Explanation: explanation,
+	}}})
+	if proposal.Hypotheses[0].Explanation != explanation {
+		t.Fatalf("normalized hypothesis = %#v", proposal.Hypotheses[0])
 	}
 }
 

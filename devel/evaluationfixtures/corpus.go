@@ -387,7 +387,7 @@ func generatedCases() []evaluation.Case {
 		requiredFailure("python_pipeline_cause_chain", "python-18-pipeline-cause-chain-v1.json", "generated.data_validation",
 			[]string{"failure.data", "format.exception_chain", "language.python", "lab.python"},
 			facts(fact("record", "partner-west:8841"), fact("invalid amount", "1,204.5O", "invalid decimal amount"), fact("source", "quarterly-rebate.csv")),
-			relations(relation("decimal parse caused transform failure", []string{"InvalidOperation", "ConversionSyntax", "trying to parse the amount"}, []string{"RecordTransformError", "invalid decimal amount"}))),
+			relations(relation("invalid amount caused transform failure", []string{"1,204.5O", "invalid decimal amount"}, []string{"RecordTransformError", "record validation failure", "validate the record"}))),
 
 		requiredFailureCodes("shell_unbound_variable", "shell-unbound-variable-v1.json",
 			[]string{"generated.environment_mismatch", "generated.application_configuration"},

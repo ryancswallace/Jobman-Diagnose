@@ -752,6 +752,36 @@ func proposalEvidenceCoverage(request provider.Request) []provider.EvidenceCover
 	return result
 }
 
+func TestGroundedCausalDetailScoreIncludesSharedSource(t *testing.T) {
+	t.Parallel()
+
+	projection := provider.Projection{Artifacts: []provider.ProjectedArtifact{
+		{
+			ID: "artifact:run:1:stderr", Disclosure: "log_content",
+			Content: "ZeroDivisionError: float division by zero\n",
+		},
+		{
+			ID: "context:source:001", Disclosure: "source_content",
+			Content: "def average_unit_cost(total_cost, units):\n    return total_cost / units\n",
+		},
+	}}
+	initial := provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Summary:     "Target exited with a nonzero status due to ZeroDivisionError",
+		RootCause:   "ZeroDivisionError: float division by zero",
+		Explanation: "The target exited with a nonzero status due to a ZeroDivisionError in the average_unit_cost function.",
+	}}}
+	reviewed := provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Summary:     "Target exited with a nonzero status due to ZeroDivisionError",
+		RootCause:   "ZeroDivisionError: float division by zero",
+		Explanation: "The target exited with a nonzero status due to ZeroDivisionError: float division by zero.",
+	}}}
+	initialScore := groundedCausalDetailScore(initial, projection)
+	reviewScore := groundedCausalDetailScore(reviewed, projection)
+	if initialScore <= reviewScore {
+		t.Fatalf("source-grounded initial/review scores = %d/%d", initialScore, reviewScore)
+	}
+}
+
 func mustJSON(t *testing.T, value any) []byte {
 	t.Helper()
 	encoded, err := json.Marshal(value)

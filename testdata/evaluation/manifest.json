@@ -2404,15 +2404,15 @@
         ],
         "required_relations": [
           {
-            "name": "decimal parse caused transform failure",
+            "name": "invalid amount caused transform failure",
             "causes": [
-              "InvalidOperation",
-              "ConversionSyntax",
-              "trying to parse the amount"
+              "1,204.5O",
+              "invalid decimal amount"
             ],
             "effects": [
               "RecordTransformError",
-              "invalid decimal amount"
+              "record validation failure",
+              "validate the record"
             ]
           }
         ],
