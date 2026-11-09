@@ -16,7 +16,7 @@ semantic versions.
 | Deterministic engine | Version 1.4.0 for local evidence; version 2.0.0 for shared evidence |
 | Diagnosis configuration | YAML schema 2 |
 | Generation request | `jobman.diagnosis_generation_request` schema 7 |
-| Generated proposal | `jobman.diagnosis_proposal` schema 4; report decoding retains recorded schemas 1 and 2 provenance |
+| Generated proposal | `jobman.diagnosis_proposal` schema 4. Report decoding retains provenance for supported historical request and proposal pairs. |
 | Provider/model doctor result | `jobman.diagnosis_provider_doctor` schema 1 |
 | Support bundle | `jobman.diagnosis_support_bundle` schema 2 |
 | Evaluation corpus/result | Corpus schema 4; result schema 6 |
