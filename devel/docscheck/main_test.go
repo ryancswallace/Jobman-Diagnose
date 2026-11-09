@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
 func TestCheckAcceptsResolvableLinksAndSkipsCodeFences(t *testing.T) {
@@ -58,13 +61,15 @@ func TestCheckContractVersions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read configuration fixture: %v", err)
 	}
-	content = bytes.Replace(content, []byte("schema-6 JSON"), []byte("schema-5 JSON"), 1)
+	wantVersion := fmt.Sprintf("schema-%d JSON", provider.RequestSchemaVersion)
+	staleVersion := fmt.Sprintf("schema-%d JSON", provider.RequestSchemaVersion-1)
+	content = bytes.Replace(content, []byte(wantVersion), []byte(staleVersion), 1)
 	// #nosec G703 -- the test path is a fixed name beneath t.TempDir().
 	if writeErr := os.WriteFile(configurationPath, content, 0o600); writeErr != nil {
 		t.Fatalf("write stale configuration fixture: %v", writeErr)
 	}
 	problems, err = checkContractVersions(root)
-	if err != nil || len(problems) != 1 || !strings.Contains(problems[0], "schema-6 JSON") {
+	if err != nil || len(problems) != 1 || !strings.Contains(problems[0], wantVersion) {
 		t.Fatalf("checkContractVersions(stale) = %v, %v", problems, err)
 	}
 }

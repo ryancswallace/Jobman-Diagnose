@@ -745,7 +745,7 @@ func proposalEvidenceCoverage(request provider.Request) []provider.EvidenceCover
 	result := make([]provider.EvidenceCoverage, 0, len(request.DiagnosticFocus))
 	for _, focus := range request.DiagnosticFocus {
 		result = append(result, provider.EvidenceCoverage{
-			EvidenceID: focus.EvidenceID, DiagnosticLines: slices.Clone(focus.Lines),
+			EvidenceID: focus.EvidenceID, DiagnosticLineIDs: slices.Clone(focus.LineIDs),
 		})
 	}
 
@@ -779,6 +779,33 @@ func TestGroundedCausalDetailScoreIncludesSharedSource(t *testing.T) {
 	reviewScore := groundedCausalDetailScore(reviewed, projection)
 	if initialScore <= reviewScore {
 		t.Fatalf("source-grounded initial/review scores = %d/%d", initialScore, reviewScore)
+	}
+}
+
+func TestReviewCausalDetailAllowsCompactReviewButRejectsMaterialRegression(t *testing.T) {
+	t.Parallel()
+
+	projection := provider.Projection{Artifacts: []provider.ProjectedArtifact{{
+		Disclosure: "log_content",
+		Content:    "inventory service timeout after 750 ms caused synchronization failure with UpstreamUnavailable",
+	}}}
+	initial := provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Summary:   "Inventory service timeout after 750 ms",
+		RootCause: "The inventory service timeout after 750 ms caused synchronization failure with UpstreamUnavailable.",
+	}}}
+	compact := provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Summary:   "Inventory timeout after 750 ms",
+		RootCause: "The inventory service timeout caused synchronization failure with UpstreamUnavailable.",
+	}}}
+	regressed := provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Summary:   "Synchronization failure",
+		RootCause: "The synchronization failed.",
+	}}}
+	if reviewLosesGroundedCausalDetail(compact, initial, projection) {
+		t.Fatal("compact review was treated as a material regression")
+	}
+	if !reviewLosesGroundedCausalDetail(regressed, initial, projection) {
+		t.Fatal("materially less specific review was accepted")
 	}
 }
 

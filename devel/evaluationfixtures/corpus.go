@@ -411,7 +411,11 @@ func generatedCases() []evaluation.Case {
 		requiredFailure("go_parse_record", "go-parse-record-v1.json", "generated.data_validation",
 			[]string{"failure.data", "language.go"}, facts(fact("record", "partner-west:8841"), fact("value", "12O4"), fact("parser", "ParseInt", "invalid syntax")), nil),
 		requiredFailure("rust_panic", "rust-panic-v1.json", "generated.application_defect",
-			[]string{"failure.application", "language.rust"}, facts(fact("condition", "index out of bounds"), fact("index and length", "len is 2", "index is 3")), nil),
+			[]string{"failure.application", "language.rust"},
+			facts(
+				fact("condition", "index out of bounds", "out-of-bounds", "out of bounds"),
+				fact("index and length", "len is 2", "index is 3", "length is 2", "length 2", "index 3"),
+			), nil),
 		requiredFailure("rust_linker_error", "rust-linker-error-v1.json", "generated.dependency_missing",
 			[]string{"failure.dependency", "format.linker", "language.rust"}, facts(fact("symbol", "SSL_new"), fact("condition", "undefined reference")), nil),
 		requiredFailure("native_linker_error", "native-linker-error-v1.json", "generated.dependency_missing",

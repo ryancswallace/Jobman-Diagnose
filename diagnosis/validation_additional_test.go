@@ -131,7 +131,9 @@ func TestDisclosureAndGeneratorValidation(t *testing.T) {
 func TestReportAcceptsSupportedGenerationProtocolVersions(t *testing.T) {
 	t.Parallel()
 
-	for _, versions := range []struct{ request, proposal int }{{1, 1}, {2, 1}, {2, 2}, {3, 2}, {4, 2}, {5, 2}} {
+	for _, versions := range []struct{ request, proposal int }{
+		{1, 1}, {2, 1}, {2, 2}, {3, 2}, {4, 2}, {5, 2}, {6, 3}, {7, 4},
+	} {
 		report, _ := validReportAndEvidence(t)
 		report.Versions.GenerationRequestSchemaVersion = versions.request
 		report.Versions.ProposalSchemaVersion = versions.proposal

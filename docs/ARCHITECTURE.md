@@ -20,7 +20,7 @@ core client -> verification -> exact-range enrichment -> deterministic engine
                                   explicit --ai/--profile activation
                                                    |
                                                    v
-                           disclosure projection -> sealed request schema 6
+                           disclosure projection -> sealed request schema 7
                                                    |
                                                    v
                         initial StructuredGenerator call (optional)
@@ -28,7 +28,7 @@ core client -> verification -> exact-range enrichment -> deterministic engine
                               complex context? -> bounded review call
                                                    |
                                                    v
-                        strict proposal schema 3 -> deterministic reconciliation
+                        strict proposal schema 4 -> deterministic reconciliation
                                                    |
                                                    v
                                       diagnosis report schema 1
@@ -137,7 +137,7 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    proposal as untrusted draft material. There is no discovery, proxy,
    redirect, provider fallback, tool call, multi-agent loop, or open-ended
    generation loop.
-6. The returned schema-3 `jobman.diagnosis_proposal` separates primary,
+6. The returned schema-4 `jobman.diagnosis_proposal` separates primary,
    contributing, and alternative causal claims. Each includes an issue-specific
    headline, concrete root cause, and causal failure path. The initial schema
    deliberately omits resolution; a review adds a verification observation,

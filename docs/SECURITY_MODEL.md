@@ -76,16 +76,17 @@ sanitized command arguments, outcomes, exit details, resource observations,
 and exact enrichment ranges. It uses report-local citation aliases; canonical
 evidence IDs and controlled citation summaries remain unchanged in JSON.
 Generated summaries are labeled advisory. To avoid useless generic diagnoses,
-proposal schema 3 bounds causal roles, diagnostic text, and resolution text,
+proposal schema 4 bounds causal roles, diagnostic text, and resolution text,
 and fixed instructions permit short
 fragments from an explicitly approved projection, such as an exception name,
 setting, path, endpoint, or rejected value. Bounded diagnostic-line
 enrichments deterministically copy only already disclosed source ranges; they
 add structure, not bytes or authority. The sealed request also derives a
-`diagnostic_focus` index over those lines, and the proposal must return an exact
-`evidence_coverage` checklist before making causal claims. Request verification
-rebuilds the index and proposal validation rejects added or omitted IDs and
-lines, so this attention mechanism cannot expand authority or disclosure.
+`diagnostic_focus` index over those lines with host-derived opaque line IDs,
+and the proposal must return an exact `evidence_coverage` ID checklist before
+making causal claims. Request verification rebuilds the index and proposal
+validation rejects added or omitted IDs, so this attention mechanism cannot
+expand authority or disclosure.
 Those instructions forbid complete
 artifact reproduction, secrets, and instruction-like target text. Generated
 prose is still untrusted and can repeat sensitive text that escaped core
@@ -224,12 +225,12 @@ than an action.
 Deterministic findings remain primary and deterministic retry advice is never
 replaced.
 
-Generation-request schema 6 derives a response schema from the sealed request
+Generation-request schema 7 derives a response schema from the sealed request
 and may include bounded traceback, exception-group, compiler, panic, or causal
 diagnostic lines deterministically selected from an already disclosed
-enrichment byte range. It repeats those lines in a derived `diagnostic_focus`
-index and requires exact proposal `evidence_coverage`; both remain untrusted
-data and confer no new authority.
+enrichment byte range. It repeats those lines with opaque line IDs in a derived
+`diagnostic_focus` index and requires exact proposal `evidence_coverage`; both
+remain untrusted data and confer no new authority.
 It constrains the model to the exact request ID and request-specific hypothesis,
 category, evidence, finding, and action catalogs before decoding. The host
 reconstructs that derived schema during request verification and rejects any

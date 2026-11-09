@@ -76,25 +76,25 @@ func specializeEvidenceCoverage(properties map[string]any, focus []DiagnosticFoc
 		return err
 	}
 	identifiers := make([]string, 0, len(focus))
-	lines := make([]string, 0, len(focus)*2)
+	lineIDs := make([]string, 0, len(focus)*2)
 	for _, item := range focus {
 		identifiers = append(identifiers, item.EvidenceID)
-		lines = append(lines, item.Lines...)
+		lineIDs = append(lineIDs, item.LineIDs...)
 	}
-	slices.Sort(lines)
-	lines = slices.Compact(lines)
 	if enumErr := setSchemaEnum(entry, "evidence_id", identifiers); enumErr != nil {
 		return enumErr
 	}
-	diagnosticLines, err := schemaObject(entry, "diagnostic_lines")
+	slices.Sort(lineIDs)
+	lineIDs = slices.Compact(lineIDs)
+	diagnosticLineIDs, err := schemaObject(entry, "diagnostic_line_ids")
 	if err != nil {
 		return err
 	}
-	diagnosticItems, err := schemaObject(diagnosticLines, "items")
+	diagnosticItems, err := schemaObject(diagnosticLineIDs, "items")
 	if err != nil {
 		return err
 	}
-	diagnosticItems["enum"] = lines
+	diagnosticItems["enum"] = lineIDs
 
 	return nil
 }

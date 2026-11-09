@@ -345,6 +345,35 @@ func TestHypothesisCauseSupportedIgnoresCurrentSourceWithoutRuntimeSignal(t *tes
 	}
 }
 
+func TestHypothesisCauseSupportedDoesNotTreatSourceSymbolsAsRuntimeEndpoints(t *testing.T) {
+	t.Parallel()
+
+	request := Request{Projection: Projection{Artifacts: []ProjectedArtifact{
+		{
+			ID: "stderr", Disclosure: "log_content",
+			Content: "connecting to local inventory service at 127.0.0.1:4319\n" +
+				"ConnectionRefusedError: [Errno 61] inventory service refused the configured connection: '127.0.0.1:4319'",
+		},
+		{
+			ID: "source", Disclosure: "source_content",
+			Content: "endpoint = \"127.0.0.1:4319\"\n" +
+				"raise ConnectionRefusedError(errno.ECONNREFUSED, \"inventory service refused the configured connection\", endpoint)",
+		},
+	}}}
+	hypothesis := Hypothesis{
+		Code:    "generated.dependency_unavailable",
+		Summary: "Inventory connection to 127.0.0.1:4319 refused",
+		RootCause: "The inventory service refused the configured connection to 127.0.0.1:4319, " +
+			"reported as ConnectionRefusedError: [Errno 61].",
+		Explanation:        "The connection refusal at 127.0.0.1:4319 caused the target failure.",
+		SupportingEvidence: []string{"stderr", "source"},
+	}
+
+	if !hypothesisCauseSupported(hypothesis, request) {
+		t.Fatal("source symbol errno.ECONNREFUSED was mistaken for an omitted runtime endpoint")
+	}
+}
+
 func TestHypothesisCauseSupportedFollowsCitedEnrichmentToArtifact(t *testing.T) {
 	t.Parallel()
 

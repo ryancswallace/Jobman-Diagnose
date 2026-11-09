@@ -95,7 +95,7 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	t.Parallel()
 
 	request := validRequest(t)
-	if RequestSchemaVersion != 6 {
+	if RequestSchemaVersion != 7 {
 		t.Fatalf("request schema constant = %d", RequestSchemaVersion)
 	}
 	if request.SchemaVersion != RequestSchemaVersion {
@@ -114,7 +114,7 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 		t.Fatalf("request ID schema = %#v", requestID)
 	}
 	hypothesis := mustSchemaObject(t, properties, "hypotheses", "items", "properties")
-	if ProposalSchemaVersion != 3 || mustSchemaObject(t, properties, "schema_version")["const"] != float64(3) {
+	if ProposalSchemaVersion != 4 || mustSchemaObject(t, properties, "schema_version")["const"] != float64(4) {
 		t.Fatalf("proposal schema version = %d / %#v", ProposalSchemaVersion, properties["schema_version"])
 	}
 	if got := schemaEnum(t, mustSchemaObject(t, hypothesis, "code")); !slices.Equal(got, request.AllowedHypothesisCodes) {
@@ -191,6 +191,38 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 		mustSchemaObject(t, hypothesis, "explanation")["maxLength"] != float64(maximumExplanationText) ||
 		mustSchemaObject(t, hypothesis, "supporting_evidence")["maxItems"] != float64(maximumReferences) {
 		t.Fatal("proposal schema text or citation limits diverged from host validation")
+	}
+}
+
+func TestProposalSchemaDoesNotEmbedUntrustedDiagnosticLineLiterals(t *testing.T) {
+	t.Parallel()
+
+	request := validRequest(t)
+	quotedLine := `ValueError: setting "region" is invalid`
+	request.DiagnosticFocus = []DiagnosticFocus{{
+		EvidenceID: "enrichment:quoted-diagnostic", Lines: []string{quotedLine},
+		LineIDs: diagnosticLineIDs([]string{quotedLine}),
+	}}
+	responseSchema, err := proposalJSONSchemaForRequest(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(responseSchema), quotedLine) {
+		t.Fatal("response schema embeds an untrusted diagnostic-line literal")
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(responseSchema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	properties := mustSchemaObject(t, schema, "properties")
+	coverage := mustSchemaObject(t, properties, "evidence_coverage")
+	entry := mustSchemaObject(t, coverage, "items", "properties")
+	if got := schemaEnum(t, mustSchemaObject(t, entry, "evidence_id")); !slices.Equal(got, []string{"enrichment:quoted-diagnostic"}) {
+		t.Fatalf("evidence coverage ID enum = %v", got)
+	}
+	diagnosticItems := mustSchemaObject(t, entry, "diagnostic_line_ids", "items")
+	if got := schemaEnum(t, diagnosticItems); !slices.Equal(got, diagnosticLineIDs([]string{quotedLine})) {
+		t.Fatalf("diagnostic line ID enum = %v", got)
 	}
 }
 

@@ -182,12 +182,12 @@ func TestEvidenceCoverageRequiresExactGlobalFocus(t *testing.T) {
 	t.Parallel()
 
 	focus := []DiagnosticFocus{
-		{EvidenceID: "enrichment:a", Lines: []string{"outer failure", "inner cause"}},
-		{EvidenceID: "enrichment:b", Lines: []string{"validation branch"}},
+		{EvidenceID: "enrichment:a", Lines: []string{"outer failure", "inner cause"}, LineIDs: []string{"line:outer", "line:inner"}},
+		{EvidenceID: "enrichment:b", Lines: []string{"validation branch"}, LineIDs: []string{"line:validation"}},
 	}
 	valid := []EvidenceCoverage{
-		{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure"}},
-		{EvidenceID: "enrichment:b", DiagnosticLines: []string{"inner cause", "validation branch"}},
+		{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:outer"}},
+		{EvidenceID: "enrichment:b", DiagnosticLineIDs: []string{"line:inner", "line:validation"}},
 	}
 	if !validEvidenceCoverage(valid, focus) {
 		t.Fatal("validEvidenceCoverage() rejected complete regrouped coverage")
@@ -198,24 +198,24 @@ func TestEvidenceCoverageRequiresExactGlobalFocus(t *testing.T) {
 		coverage []EvidenceCoverage
 	}{
 		{name: "omitted line", coverage: []EvidenceCoverage{
-			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure"}},
-			{EvidenceID: "enrichment:b", DiagnosticLines: []string{"validation branch"}},
+			{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:outer"}},
+			{EvidenceID: "enrichment:b", DiagnosticLineIDs: []string{"line:validation"}},
 		}},
 		{name: "invented line", coverage: []EvidenceCoverage{
-			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "inner cause"}},
-			{EvidenceID: "enrichment:b", DiagnosticLines: []string{"validation branch", "invented"}},
+			{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:outer", "line:inner"}},
+			{EvidenceID: "enrichment:b", DiagnosticLineIDs: []string{"line:validation", "line:invented"}},
 		}},
 		{name: "duplicate line", coverage: []EvidenceCoverage{
-			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "outer failure", "inner cause"}},
-			{EvidenceID: "enrichment:b", DiagnosticLines: []string{"validation branch"}},
+			{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:outer", "line:outer", "line:inner"}},
+			{EvidenceID: "enrichment:b", DiagnosticLineIDs: []string{"line:validation"}},
 		}},
 		{name: "duplicate ID", coverage: []EvidenceCoverage{
-			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "inner cause"}},
-			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"validation branch"}},
+			{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:outer", "line:inner"}},
+			{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:validation"}},
 		}},
 		{name: "unknown ID", coverage: []EvidenceCoverage{
-			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "inner cause"}},
-			{EvidenceID: "enrichment:c", DiagnosticLines: []string{"validation branch"}},
+			{EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:outer", "line:inner"}},
+			{EvidenceID: "enrichment:c", DiagnosticLineIDs: []string{"line:validation"}},
 		}},
 	}
 	for _, test := range tests {
@@ -337,9 +337,9 @@ func TestRequestNormalizationInitializesProtocolCollections(t *testing.T) {
 		t.Fatalf("normalizeProposal() left nil collections: %#v", proposal)
 	}
 	proposal = normalizeProposal(Proposal{EvidenceCoverage: []EvidenceCoverage{{
-		EvidenceID: "enrichment:a", DiagnosticLines: []string{"cause", "cause"},
+		EvidenceID: "enrichment:a", DiagnosticLineIDs: []string{"line:cause", "line:cause"},
 	}}})
-	if !slices.Equal(proposal.EvidenceCoverage[0].DiagnosticLines, []string{"cause"}) {
+	if !slices.Equal(proposal.EvidenceCoverage[0].DiagnosticLineIDs, []string{"line:cause"}) {
 		t.Fatalf("normalizeProposal() coverage = %#v", proposal.EvidenceCoverage)
 	}
 	if _, err := SealRequest(Request{}); err == nil {

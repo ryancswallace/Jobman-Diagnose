@@ -11,11 +11,11 @@ const (
 	// RequestKind identifies the structured-generation request protocol.
 	RequestKind = "jobman.diagnosis_generation_request"
 	// RequestSchemaVersion is the newest request schema understood here.
-	RequestSchemaVersion = 6
+	RequestSchemaVersion = 7
 	// ProposalKind identifies generated proposal documents.
 	ProposalKind = "jobman.diagnosis_proposal"
 	// ProposalSchemaVersion is the newest proposal schema understood here.
-	ProposalSchemaVersion = 3
+	ProposalSchemaVersion = 4
 )
 
 // AnalysisStage distinguishes an initial causal assessment from an optional
@@ -43,6 +43,7 @@ type Subject struct {
 type DiagnosticFocus struct {
 	EvidenceID string   `json:"evidence_id"`
 	Lines      []string `json:"lines"`
+	LineIDs    []string `json:"line_ids"`
 }
 
 // Projection contains only evidence classes approved by both profile and CLI.
@@ -176,8 +177,8 @@ type Proposal struct {
 // enrichment ID before synthesizing hypotheses. Validation requires an exact
 // match, so this section cannot introduce new evidence or claims.
 type EvidenceCoverage struct {
-	EvidenceID      string   `json:"evidence_id"`
-	DiagnosticLines []string `json:"diagnostic_lines"`
+	EvidenceID        string   `json:"evidence_id"`
+	DiagnosticLineIDs []string `json:"diagnostic_line_ids"`
 }
 
 // HypothesisRole describes how one generated causal claim relates to the

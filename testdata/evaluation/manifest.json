@@ -2880,14 +2880,19 @@
           {
             "name": "condition",
             "alternatives": [
-              "index out of bounds"
+              "index out of bounds",
+              "out-of-bounds",
+              "out of bounds"
             ]
           },
           {
             "name": "index and length",
             "alternatives": [
               "len is 2",
-              "index is 3"
+              "index is 3",
+              "length is 2",
+              "length 2",
+              "index 3"
             ]
           }
         ],

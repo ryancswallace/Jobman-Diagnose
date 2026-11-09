@@ -148,8 +148,7 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 					"The optional second synthesis pass returned no assessment; the validated first-pass assessment was retained.",
 				))
 			default:
-				if groundedCausalDetailScore(reviewed, reviewPrepared.Request.Projection) <
-					groundedCausalDetailScore(proposal, prepared.Request.Projection) {
+				if reviewLosesGroundedCausalDetail(reviewed, proposal, reviewPrepared.Request.Projection) {
 					warnings = append(warnings, reviewWarning(
 						"generator_review_regressed",
 						"The optional second synthesis pass lost grounded causal detail; the more specific validated first-pass assessment was retained.",
@@ -255,6 +254,13 @@ func groundedCausalDetailScore(proposal provider.Proposal, projection provider.P
 	}
 
 	return score
+}
+
+func reviewLosesGroundedCausalDetail(reviewed, initial provider.Proposal, projection provider.Projection) bool {
+	initialScore := groundedCausalDetailScore(initial, projection)
+	reviewedScore := groundedCausalDetailScore(reviewed, projection)
+
+	return initialScore > 0 && reviewedScore*5 < initialScore*4
 }
 
 func projectedCausalText(projection provider.Projection) string {

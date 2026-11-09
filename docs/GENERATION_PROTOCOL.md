@@ -1,12 +1,12 @@
-# Structured-generation protocol 6
+# Structured-generation protocol 7
 
-The provider boundary consists of a schema-6 generation request and a schema-3
+The provider boundary consists of a schema-7 generation request and a schema-4
 proposal. It is a proposal protocol, not a chat, agent, tool, or remote Jobman
 API.
 
 ## Request
 
-`jobman.diagnosis_generation_request` schema 6 contains:
+`jobman.diagnosis_generation_request` schema 7 contains:
 
 - a SHA-256 `request_id` over normalized semantic content;
 - an `initial` or `review` stage; a review also contains the previously
@@ -15,7 +15,8 @@ API.
   attributed enrichment, and any selected source snapshot, plus a minimal subject;
 - the exact approved evidence projection and accounting manifest;
 - a derived `diagnostic_focus` copy of every host-selected enrichment
-  diagnostic line, grouped by its existing evidence ID;
+  diagnostic line plus a host-derived opaque line ID, grouped by its existing
+  evidence ID;
 - deterministic candidates whose every citation is in that projection;
 - controlled hypothesis codes and categories plus existing non-executing
   action catalog entries;
@@ -78,7 +79,9 @@ accounts for their IDs and encoded bytes separately. Other `local_only`
 evidence is never present.
 
 `diagnostic_focus` is a deterministic attention index over those selected
-lines. It contains no text or evidence ID that is not already in the sealed
+lines. Its opaque line IDs let strict response schemas require exact checklist
+coverage without embedding untrusted text literals. It contains no text or
+evidence ID that is not already in the sealed
 projection, is covered by the request digest, and is rebuilt and compared
 exactly during verification. It makes the model account for each important
 branch before compression without creating a second disclosure channel.
@@ -126,10 +129,13 @@ draft so evidence remains the primary context.
 
 `jobman.diagnosis_proposal` contains the matching `request_id` and only:
 
-- an `evidence_coverage` checklist that copies every `diagnostic_focus` line
-  exactly under an allowed evidence ID before any causal synthesis. The host
-  requires the complete global set of focus IDs and lines, rejects additions
-  or omissions, and does not render this checklist directly;
+- an `evidence_coverage` checklist that copies every host-derived
+  `diagnostic_focus.line_ids` entry exactly under an allowed evidence ID before
+  any causal synthesis. The strict response schema binds those opaque IDs
+  without embedding untrusted diagnostic text as string literals, preserving
+  compatibility with structured-output backends. The host requires the
+  complete global set of focus and line IDs, rejects additions or omissions,
+  and does not render this checklist directly;
 - zero to four causal claims selected from the request's controlled code
   taxonomy: at most one `primary`, up to two independently supported
   `contributing` conditions, and up to two genuinely competing `alternative`
