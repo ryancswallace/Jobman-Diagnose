@@ -151,6 +151,45 @@ func TestSetupFailureIsSafeAndStructured(t *testing.T) {
 	}
 }
 
+func TestSafeProviderFailureClassifications(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "provider diagnostic",
+			err:  provider.NewFailure(provider.FailureHTTPStatus, errors.New("sensitive cause")),
+			want: "http_status: the provider returned a non-success HTTP status",
+		},
+		{
+			name: "deadline",
+			err:  context.DeadlineExceeded,
+			want: "request_timeout: the provider request exceeded the configured timeout",
+		},
+		{
+			name: "canceled",
+			err:  context.Canceled,
+			want: "request_canceled: the provider request was canceled",
+		},
+		{
+			name: "unclassified",
+			err:  errors.New("sensitive unclassified cause"),
+			want: "provider_failure_unspecified: the provider failed without a safe diagnostic classification",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := safeProviderFailure(test.err); got != test.want {
+				t.Fatalf("safeProviderFailure() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func validProbeResponse(t *testing.T, profile config.Profile) func(provider.Request) (provider.Response, error) {
 	t.Helper()
 	return func(request provider.Request) (provider.Response, error) {
