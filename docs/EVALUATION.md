@@ -15,9 +15,9 @@ Rust backtraces, build dependency failures, and container messages that do not
 contain enough evidence to claim OOM or an application cause. A stale-source
 case requires the recorded runtime diagnostic to remain execution truth when
 the explicitly shared current source represents another revision.
-Live generated runs project the long and noisy cases through schema-6 causal
-context selection, so buried exact diagnostics are evaluated under the same
-profile byte ceiling used in production.
+Live generated runs use the schema-7 request's causal context selection for the
+long and noisy cases, evaluating buried diagnostics under the same profile byte
+ceiling used in production.
 
 Every case defines deterministic finding, action, retry, and confidence
 expectations. Generated behavior uses one of three dispositions:

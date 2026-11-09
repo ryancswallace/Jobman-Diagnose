@@ -4,6 +4,9 @@ dist/
 *.test
 *.out
 coverage.*
+/docs/screencaps/gif/
+/docs/screencaps/mp4/
+/docs/screencaps/webm/
 
 # Local configuration and credentials
 .env
