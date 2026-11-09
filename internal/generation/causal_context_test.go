@@ -7,6 +7,7 @@ import (
 
 	"github.com/ryancswallace/jobman/diagnostic"
 
+	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 	"github.com/ryancswallace/jobman-diagnose/internal/config"
 	"github.com/ryancswallace/jobman-diagnose/internal/enrichment"
 	"github.com/ryancswallace/jobman-diagnose/internal/testevidence"
@@ -248,6 +249,166 @@ func TestLogContextFallsBackToBoundedTerminalOutput(t *testing.T) {
 		artifact.ByteStart == 0 || artifact.ByteEnd != artifact.FileBytes || artifact.EndLine != artifact.TotalLines ||
 		!strings.Contains(artifact.Content, "terminal marker") || !artifact.Truncated {
 		t.Fatalf("terminal context = %#v", artifact)
+	}
+}
+
+func TestLogContextCandidateRanking(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		left, right logContextCandidate
+		want        int
+	}{
+		{
+			name:  "anchor score",
+			left:  logContextCandidate{anchorScore: 300},
+			right: logContextCandidate{anchorScore: 200},
+			want:  -100,
+		},
+		{
+			name:  "newer run",
+			left:  logContextCandidate{artifact: diagnostic.Artifact{Run: 2}},
+			right: logContextCandidate{artifact: diagnostic.Artifact{Run: 1}},
+			want:  -1,
+		},
+		{
+			name:  "older run",
+			left:  logContextCandidate{artifact: diagnostic.Artifact{Run: 1}},
+			right: logContextCandidate{artifact: diagnostic.Artifact{Run: 2}},
+			want:  1,
+		},
+		{
+			name:  "stderr first",
+			left:  logContextCandidate{artifact: diagnostic.Artifact{Stream: "stderr"}},
+			right: logContextCandidate{artifact: diagnostic.Artifact{Stream: "stdout"}},
+			want:  -1,
+		},
+		{
+			name:  "stderr second",
+			left:  logContextCandidate{artifact: diagnostic.Artifact{Stream: "stdout"}},
+			right: logContextCandidate{artifact: diagnostic.Artifact{Stream: "stderr"}},
+			want:  1,
+		},
+		{
+			name:  "artifact ID",
+			left:  logContextCandidate{artifact: diagnostic.Artifact{ID: "a", Stream: "stdout"}},
+			right: logContextCandidate{artifact: diagnostic.Artifact{ID: "b", Stream: "stdout"}},
+			want:  -1,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := compareLogContextCandidates(test.left, test.right); got != test.want {
+				t.Fatalf("compareLogContextCandidates() = %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+func TestDiagnosticAnchorScoringAndSpan(t *testing.T) {
+	t.Parallel()
+
+	for format, want := range map[string]int{
+		"connection_refused": 300,
+		"python_traceback":   250,
+		"unknown":            200,
+	} {
+		if got := diagnosticAnchorScore(diagnosis.EnrichmentItem{Format: format}); got != want {
+			t.Fatalf("diagnosticAnchorScore(%q) = %d, want %d", format, got, want)
+		}
+	}
+
+	anchor := diagnosis.EnrichmentItem{ByteStart: 5, ByteEnd: 13}
+	if got := contextAnchor(logContextCandidate{}, 20); got != nil {
+		t.Fatalf("contextAnchor(no anchor) = %#v", got)
+	}
+	single := logContextCandidate{anchor: &anchor, enrichment: []diagnosis.EnrichmentItem{anchor}}
+	if got := contextAnchor(single, 20); got != &anchor {
+		t.Fatalf("contextAnchor(single) = %#v, want original anchor", got)
+	}
+	multiple := logContextCandidate{
+		anchor: &anchor,
+		enrichment: []diagnosis.EnrichmentItem{
+			anchor,
+			{ByteStart: 1, ByteEnd: 3},
+		},
+	}
+	if got := contextAnchor(multiple, 10); got != &anchor {
+		t.Fatalf("contextAnchor(oversized span) = %#v, want original anchor", got)
+	}
+	if got := contextAnchor(multiple, 20); got == nil || got.ByteStart != 1 || got.ByteEnd != 13 {
+		t.Fatalf("contextAnchor(bounded span) = %#v", got)
+	}
+}
+
+func TestSelectedLogByteRanges(t *testing.T) {
+	t.Parallel()
+
+	data := []byte("zero\none\ntwo\nthree\n")
+	if start, end := selectedLogByteRange(data, nil, 0); start != 0 || end != 0 {
+		t.Fatalf("selectedLogByteRange(zero budget) = %d:%d", start, end)
+	}
+	if start, end := selectedLogByteRange(data, nil, 100); start != 0 || end != len(data) {
+		t.Fatalf("selectedLogByteRange(full) = %d:%d", start, end)
+	}
+	anchor := diagnosis.EnrichmentItem{ByteStart: 5, ByteEnd: 13}
+	if start, end := selectedLogByteRange(data, &anchor, 8); start != 9 || end != 13 {
+		t.Fatalf("selectedLogByteRange(wide anchor) = %d:%d", start, end)
+	}
+	narrow := diagnosis.EnrichmentItem{ByteStart: 9, ByteEnd: 12}
+	if start, end := selectedLogByteRange(data, &narrow, 10); start != 5 || end != 13 {
+		t.Fatalf("selectedLogByteRange(context) = %d:%d", start, end)
+	}
+	plain := []byte("abcdefghijklmnop")
+	late := diagnosis.EnrichmentItem{ByteStart: 12, ByteEnd: 15}
+	if start, end := selectedLogByteRange(plain, &late, 6); start != 9 || end != 15 {
+		t.Fatalf("selectedLogByteRange(late anchor) = %d:%d", start, end)
+	}
+	fallback := diagnosis.EnrichmentItem{ByteStart: 6, ByteEnd: 8}
+	if start, end := selectedLogByteRange(data, &fallback, 5); start != 3 || end != 8 {
+		t.Fatalf("selectedLogByteRange(line fallback) = %d:%d", start, end)
+	}
+}
+
+func TestLogLineBoundaries(t *testing.T) {
+	t.Parallel()
+
+	data := []byte("zero\none\ntwo\nthree\n")
+	if got := nextLineStart(data, 0); got != 0 {
+		t.Fatalf("nextLineStart(0) = %d", got)
+	}
+	if got := nextLineStart(data, 1); got != 5 {
+		t.Fatalf("nextLineStart(1) = %d", got)
+	}
+	if got := nextLineStart(data, 17); got != 17 {
+		t.Fatalf("nextLineStart(last line) = %d", got)
+	}
+	if got := previousLineEnd(data, len(data)); got != len(data) {
+		t.Fatalf("previousLineEnd(end) = %d", got)
+	}
+	if got := previousLineEnd(data, 8); got != 5 {
+		t.Fatalf("previousLineEnd(8) = %d", got)
+	}
+	plain := []byte("abcdefghijklmnop")
+	if got := previousLineEnd(plain, 8); got != 8 {
+		t.Fatalf("previousLineEnd(no newline) = %d", got)
+	}
+	if got := logLineCount(nil); got != 0 {
+		t.Fatalf("logLineCount(nil) = %d", got)
+	}
+	if got := logLineCount([]byte("one\n")); got != 1 {
+		t.Fatalf("logLineCount(trailing newline) = %d", got)
+	}
+	if got := logLineCount([]byte("one\ntwo")); got != 2 {
+		t.Fatalf("logLineCount(no trailing newline) = %d", got)
+	}
+	if got := logLineAt(data, -1); got != 1 {
+		t.Fatalf("logLineAt(negative) = %d", got)
+	}
+	if got := logLineAt(data, len(data)+1); got != 5 {
+		t.Fatalf("logLineAt(after end) = %d", got)
 	}
 }
 
