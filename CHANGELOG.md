@@ -5,14 +5,18 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-09
+
 ### Changed
 
 - Pin the shared evidence implementation to published Jobman v1.9.0 and verify
   assembled compatibility with that release in addition to the v1.4.0 baseline.
-- Upgrade generated diagnosis to request schema 6 and proposal schema 3. AI
+- Upgrade generated diagnosis to request schema 7 and proposal schema 4. AI
   assessments now distinguish a primary cause, contributing conditions, and
   unresolved alternatives. A sealed diagnostic-focus index and exact proposal
-  coverage checklist make the model account for every selected diagnostic line;
+  coverage checklist uses host-derived opaque line IDs to make the model account
+  for every selected diagnostic line without placing untrusted text literals in
+  provider response schemas;
   accepted findings retain cited lines under `Observed diagnostics`. The first
   pass concentrates on causal analysis, while an accepted review can add
   verification, remediation, and an observable recovery condition rendered as
@@ -49,6 +53,12 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Keep OpenAI strict structured-output requests valid when diagnostic lines
+  contain quoted values by constraining host-derived line IDs instead of
+  untrusted text literals while retaining exact host-side coverage validation.
+- Derive required endpoints, paths, and failure signals from cited runtime
+  evidence so source-level error constants are not mistaken for omitted network
+  endpoints in an otherwise supported diagnosis.
 - Keep generated diagnosis available for ANSI-colored logs by removing
   terminal styling from derived diagnostic lines while retaining their
   attributed log content.
@@ -76,6 +86,9 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
   still reporting the controlled review outcome. Preserve a concrete causal
   clause that follows generic lifecycle framing instead of collapsing the
   complete explanation to its root-cause label.
+- Accept a validated review that makes citations more economical while
+  retaining substantially all grounded causal detail, rather than preserving
+  a noisier first pass for a minor token-level difference.
 - Suppress generated resolution actions that merely copy response-schema or
   deterministic-action boilerplate instead of adding incident-specific advice.
 - Route inferred out-of-range runtime source lines through stale-source
@@ -460,7 +473,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
-[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/ryancswallace/Jobman-Diagnose/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ryancswallace/Jobman-Diagnose/releases/tag/v0.4.0

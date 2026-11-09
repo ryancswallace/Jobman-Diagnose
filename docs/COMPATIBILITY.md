@@ -1,13 +1,13 @@
 # Compatibility
 
-Status: v0.7.0 candidate; stable publication awaits the documented live-provider gates
+Status: v0.7.0 stable
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
-| Jobman Diagnose release | v0.6.0 published; v0.7.0 candidate adds shared evidence |
+| Jobman Diagnose release | v0.7.0 |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schemas 1 and 2; schema 2 requires a core build with the shared collector |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
@@ -15,8 +15,8 @@ semantic versions.
 | Diagnosis report | Schema 1 for local evidence; schema 2 for shared Control evidence |
 | Deterministic engine | Version 1.4.0 for local evidence; version 2.0.0 for shared evidence |
 | Diagnosis configuration | YAML schema 2 |
-| Generation request | `jobman.diagnosis_generation_request` schema 6 |
-| Generated proposal | `jobman.diagnosis_proposal` schema 3; report decoding retains recorded schemas 1 and 2 provenance |
+| Generation request | `jobman.diagnosis_generation_request` schema 7 |
+| Generated proposal | `jobman.diagnosis_proposal` schema 4; report decoding retains recorded schemas 1 and 2 provenance |
 | Provider/model doctor result | `jobman.diagnosis_provider_doctor` schema 1 |
 | Support bundle | `jobman.diagnosis_support_bundle` schema 2 |
 | Evaluation corpus/result | Corpus schema 4; result schema 6 |
@@ -45,7 +45,7 @@ never assumed complete when core reports that older failures were not indexed.
 Provider compatibility is narrower than accepting arbitrary JSON. Every
 selected generator must claim native JSON Schema enforcement and satisfy the
 profile's byte limits and locality before invocation. The host then validates
-the response again against the exact schema-6 request. The response schema
+the response again against the exact schema-7 request. The response schema
 binds the exact request ID and request-specific code, category, citation,
 finding, and action catalogs before generation; relational validation remains
 authoritative after decoding. There is no fallback to JSON mode, a different
@@ -53,7 +53,7 @@ endpoint, a different provider, or a remote service.
 OpenAI-compatible servers must implement the configured Chat Completions
 strict `json_schema` request and response shape. Ollama profiles must implement
 local `/api/chat` structured output. Command bridges must implement the raw
-generation-request-schema-6/proposal-schema-3 stdin/stdout protocol documented
+generation-request-schema-7/proposal-schema-4 stdin/stdout protocol documented
 in [`GENERATION_PROTOCOL.md`](GENERATION_PROTOCOL.md).
 
 Copied core fixtures under `testdata/jobman-v1/` record their Jobman v1.4.0
@@ -70,12 +70,12 @@ local Jobman command vectors for shared jobs. The public
 [`deterministic` package](SHARED_REPORTS.md) is the supported embedding entry
 point; external applications must not import `internal/engine`.
 
-The v0.7.0 candidate pins published Jobman v1.9.0 for its public schema-2
+Jobman Diagnose v0.7.0 pins published Jobman v1.9.0 for its public schema-2
 collector and bounded evidence decoder. Jobman v1.4.0 remains the oldest local
 CLI compatibility baseline; shared evidence requires Jobman v1.9.0 or a compatible
 newer release. Continuous integration tests assembled invocation against both
 released versions and current main, without sibling-module replacements.
 
 The dependency pin and deterministic checks do not waive the live-provider
-release gates in [RELEASE.md](../RELEASE.md). Keep the candidate unpublished as a
-stable release until those gates have recorded passing evidence.
+release gates in [RELEASE.md](../RELEASE.md). The v0.7.0 stable release passed
+the complete hosted-provider promotion gate before publication.
