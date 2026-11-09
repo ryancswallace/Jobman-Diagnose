@@ -61,9 +61,11 @@ Traceback selection retains the terminal line of every visible exception-group
 branch and every visible traceback in a cause chain. Diagnostic-line selection
 also retains outer exceptions and operations, multi-field validation details,
 Python syntax locations, and bounded pre-traceback remediation messages.
-Causal-message selection exposes short exact lines such as a DNS name, TLS
-verification error, endpoint, rejected value, or database constraint. These
-lines remain untrusted data and do not expand artifact disclosure. The manifest
+Causal-message selection exposes short excerpts such as a DNS name, TLS
+verification error, endpoint, rejected value, or database constraint. Derived
+lines omit ANSI styling and skip excerpts with other control characters. The
+projected log and its attributed byte ranges retain the original log bytes
+after the existing UTF-8 conversion. The lines remain untrusted data. The manifest
 accounts for their IDs and encoded bytes separately. Other `local_only`
 evidence is never present.
 
