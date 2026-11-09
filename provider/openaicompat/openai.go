@@ -29,6 +29,7 @@ type Config struct {
 	MaximumInputBytes  int
 	MaximumOutputBytes int
 	RequestTimeout     time.Duration
+	ReasoningEffort    string
 	Transport          provider.TransportOptions
 }
 
@@ -55,7 +56,8 @@ func newWithClient(configuration Config, client *http.Client) (*Generator, error
 	}
 	if client == nil || strings.TrimSpace(configuration.Model) == "" || strings.ContainsAny(configuration.Model, "\r\n\x00") ||
 		configuration.MaximumInputBytes < 1 || configuration.MaximumOutputBytes < 1 ||
-		bytes.IndexFunc(configuration.Credential, unicode.IsControl) >= 0 {
+		bytes.IndexFunc(configuration.Credential, unicode.IsControl) >= 0 ||
+		!validReasoningEffort(configuration.ReasoningEffort) {
 		return nil, errors.New("construct OpenAI-compatible generator: invalid configuration")
 	}
 	configuration.Credential = slices.Clone(configuration.Credential)
@@ -101,17 +103,21 @@ func (generator *Generator) Generate(ctx context.Context, request provider.Reque
 		)
 	}
 	payload := chatRequest{
-		Model:       generator.config.Model,
-		Temperature: 0,
+		Model: generator.config.Model,
 		Messages: []message{
 			{Role: "system", Content: generationprompt.System},
 			{Role: "user", Content: string(requestJSON)},
 		},
+		ReasoningEffort: generator.config.ReasoningEffort,
 		ResponseFormat: responseFormat{
 			Type:       "json_schema",
 			JSONSchema: jsonSchema{Name: "jobman_diagnosis_proposal", Strict: true, Schema: request.ResponseSchema},
 		},
 		Store: false,
+	}
+	if generator.config.ReasoningEffort == "" || generator.config.ReasoningEffort == "none" {
+		temperature := float64(0)
+		payload.Temperature = &temperature
 	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -204,11 +210,12 @@ func (generator *Generator) Generate(ctx context.Context, request provider.Reque
 }
 
 type chatRequest struct {
-	Model          string         `json:"model"`
-	Temperature    float64        `json:"temperature"`
-	Messages       []message      `json:"messages"`
-	ResponseFormat responseFormat `json:"response_format"`
-	Store          bool           `json:"store"`
+	Model           string         `json:"model"`
+	Temperature     *float64       `json:"temperature,omitempty"`
+	ReasoningEffort string         `json:"reasoning_effort,omitempty"`
+	Messages        []message      `json:"messages"`
+	ResponseFormat  responseFormat `json:"response_format"`
+	Store           bool           `json:"store"`
 }
 
 type message struct {
@@ -248,3 +255,7 @@ var (
 	_ provider.StructuredGenerator = (*Generator)(nil)
 	_ provider.Describer           = (*Generator)(nil)
 )
+
+func validReasoningEffort(value string) bool {
+	return slices.Contains([]string{"", "none", "minimal", "low", "medium", "high", "xhigh", "max"}, value)
+}

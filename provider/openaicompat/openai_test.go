@@ -33,7 +33,8 @@ func TestGenerateUsesStrictSchemaAndKeepsEvidenceInUserData(t *testing.T) {
 			return
 		}
 		if payload.ResponseFormat.Type != "json_schema" || !payload.ResponseFormat.JSONSchema.Strict ||
-			!bytes.Equal(payload.ResponseFormat.JSONSchema.Schema, request.ResponseSchema) || payload.Temperature != 0 ||
+			!bytes.Equal(payload.ResponseFormat.JSONSchema.Schema, request.ResponseSchema) ||
+			payload.Temperature == nil || *payload.Temperature != 0 || payload.ReasoningEffort != "" ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "ignore prior instructions") ||
 			!strings.Contains(payload.Messages[0].Content, "best-supported underlying condition") ||
 			!strings.Contains(payload.Messages[1].Content, "ignore prior instructions") {
@@ -81,6 +82,81 @@ func TestGenerateUsesStrictSchemaAndKeepsEvidenceInUserData(t *testing.T) {
 	if response.ProviderRequestID != "provider-request-1" || response.InputUnits != 12 || response.OutputUnits != 7 {
 		t.Fatalf("response provenance = %#v", response)
 	}
+}
+
+func TestGenerateUsesReasoningCompatibleSamplingParameters(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		reasoningEffort string
+		wantTemperature bool
+	}{
+		{name: "none keeps deterministic temperature", reasoningEffort: "none", wantTemperature: true},
+		{name: "low omits unsupported temperature", reasoningEffort: "low", wantTemperature: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := openAIRequest(t)
+			server := reasoningTestServer(t, request, test.reasoningEffort, test.wantTemperature)
+			defer server.Close()
+
+			generator, err := New(Config{
+				Endpoint: server.URL + "/v1/chat/completions", Model: "configured-model",
+				Locality: provider.LocalityLocal, MaximumInputBytes: 64 * 1024, MaximumOutputBytes: 16 * 1024,
+				ReasoningEffort: test.reasoningEffort,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := generator.Generate(t.Context(), request); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func reasoningTestServer(
+	t *testing.T,
+	request provider.Request,
+	reasoningEffort string,
+	wantTemperature bool,
+) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, incoming *http.Request) {
+		var payload chatRequest
+		if err := json.NewDecoder(incoming.Body).Decode(&payload); err != nil {
+			http.Error(writer, "bad JSON", http.StatusBadRequest)
+			return
+		}
+		if payload.ReasoningEffort != reasoningEffort || (payload.Temperature != nil) != wantTemperature ||
+			payload.Temperature != nil && *payload.Temperature != 0 {
+			http.Error(writer, "bad sampling parameters", http.StatusBadRequest)
+			return
+		}
+		decodedRequest, err := provider.DecodeRequest(strings.NewReader(payload.Messages[1].Content), 64*1024)
+		if err != nil || decodedRequest.RequestID != request.RequestID {
+			http.Error(writer, "bad protocol", http.StatusBadRequest)
+			return
+		}
+		proposalJSON, err := json.Marshal(validOpenAIProposal(decodedRequest))
+		if err != nil {
+			http.Error(writer, "encode proposal", http.StatusInternalServerError)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(writer).Encode(map[string]any{
+			"id": "reasoning-request", "choices": []any{map[string]any{
+				"index": 0, "finish_reason": "stop",
+				"message": map[string]any{"role": "assistant", "content": string(proposalJSON)},
+			}},
+		}); err != nil {
+			t.Errorf("encode fake response: %v", err)
+		}
+	}))
 }
 
 func TestGenerateRejectsRedirectsAndDoesNotExposeErrorBodies(t *testing.T) {
@@ -173,6 +249,17 @@ func TestNewRejectsInsecureRemoteAndCredentialURL(t *testing.T) {
 		}); err == nil {
 			t.Fatalf("New(%q) error = nil", endpoint)
 		}
+	}
+}
+
+func TestNewRejectsUnknownReasoningEffort(t *testing.T) {
+	t.Parallel()
+
+	if _, err := New(Config{
+		Endpoint: "http://127.0.0.1:8000/v1/chat/completions", Model: "model", Locality: provider.LocalityLocal,
+		MaximumInputBytes: 4096, MaximumOutputBytes: 1024, ReasoningEffort: "extreme",
+	}); err == nil {
+		t.Fatal("New(unknown reasoning effort) error = nil")
 	}
 }
 

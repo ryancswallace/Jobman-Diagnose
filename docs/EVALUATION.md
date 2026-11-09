@@ -203,5 +203,31 @@ returns nonzero, preserving evidence for review. Policy mode cannot be combined
 with `--cases` or `--tags`; focused runs remain useful for iteration but cannot
 authorize a release.
 
+For a hosted provider not previously exercised, first run `doctor`, then a
+small adversarial smoke set without the promotion policy:
+
+```console
+jobman diagnose doctor \
+  --diagnosis-config /private/path/diagnosis-openai.yml \
+  --profile hosted-openai
+
+go run ./devel/evaluate \
+  --live \
+  --diagnosis-config /private/path/diagnosis-openai.yml \
+  --profile hosted-openai \
+  --share metadata,log_content \
+  --cases long_noisy_storage,timestamped_ansi_terminal_tls,database_deadlock,container_crash_loop_without_logs,python_chained_timeout,source_log_disagreement \
+  --output hosted-smoke.json \
+  --capture-proposals hosted-smoke-proposals.json
+```
+
+If both pass, run `make evaluate-release` with the same profile. A release
+record should retain the doctor result, smoke and promotion outputs, private
+proposal captures, exact repository commit, model ID, and nonsecret profile
+limits. Do not combine partial results from different providers into one
+promotion assessment. The direct OpenAI profile in the
+[configuration guide](CONFIGURATION.md#openai-compatible-http) is suitable for
+this sequence after `OPENAI_API_KEY` is set in the invoking environment.
+
 Strict JSON Schema establishes shape and bounded authority. The host's
 evidence-grounding checks and this corpus establish diagnostic usefulness.

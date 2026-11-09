@@ -99,6 +99,8 @@ func TestLoadRejectsUnsafeTransportAndDisclosure(t *testing.T) {
 		"local only disclosure": strings.Replace(validOpenAIConfig(), "metadata:", "local_only:", 1),
 		"schema disabled":       strings.Replace(validOpenAIConfig(), "require_json_schema: true", "require_json_schema: false", 1),
 		"analysis passes":       strings.Replace(validOpenAIConfig(), "maximum_output_bytes: 32768", "maximum_output_bytes: 32768\n    maximum_analysis_passes: 3", 1),
+		"reasoning effort":      strings.Replace(validOpenAIConfig(), "maximum_output_bytes: 32768", "maximum_output_bytes: 32768\n    reasoning_effort: extreme", 1),
+		"non-OpenAI reasoning":  strings.Replace(validCommandConfig(), "maximum_output_bytes: 16384", "maximum_output_bytes: 16384\n    reasoning_effort: none", 1),
 	}
 	for name, encoded := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -107,6 +109,24 @@ func TestLoadRejectsUnsafeTransportAndDisclosure(t *testing.T) {
 				t.Fatal("Load() error = nil")
 			}
 		})
+	}
+}
+
+func TestLoadAcceptsOpenAIReasoningEffort(t *testing.T) {
+	t.Parallel()
+
+	encoded := strings.Replace(
+		validOpenAIConfig(),
+		"maximum_output_bytes: 32768",
+		"maximum_output_bytes: 32768\n    reasoning_effort: none",
+		1,
+	)
+	profile, err := Load(writeConfig(t, encoded), "hosted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.ReasoningEffort != "none" {
+		t.Fatalf("reasoning effort = %q", profile.ReasoningEffort)
 	}
 }
 

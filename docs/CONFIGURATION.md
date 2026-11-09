@@ -124,6 +124,7 @@ profiles:
     maximum_input_bytes: 262144
     maximum_output_bytes: 32768
     maximum_analysis_passes: 2
+    reasoning_effort: none
     disclosure:
       metadata:
         maximum_items: 256
@@ -155,6 +156,16 @@ through 256 KiB. `maximum_analysis_passes` is optional: omitted or `1` makes
 one model call, while `2` permits one bounded review call for a complex
 assessment. Both calls use the same provider/model, evidence authority, byte
 limits, and total `timeout`; there is no open-ended loop.
+
+`reasoning_effort` is optional and valid only for `openai_compatible`
+profiles. Accepted values are `none`, `minimal`, `low`, `medium`, `high`,
+`xhigh`, and `max`; the selected endpoint and model may support only a subset.
+When omitted, the adapter preserves its existing deterministic
+`temperature: 0` request. Explicit `none` sends both `reasoning_effort: none`
+and `temperature: 0`. For every other effort, the adapter omits temperature so
+reasoning models that reject custom sampling parameters can accept the
+request. Run `doctor` against the exact provider/model pair rather than
+assuming that an OpenAI-compatible endpoint implements these parameters.
 
 `disclosure.metadata` is mandatory and requires `maximum_items` and
 `maximum_bytes`. Optional `command`, `path`, and `environment_name` classes
@@ -410,6 +421,58 @@ output; there is no fallback to JSON mode. Schema enforcement constrains the
 proposal shape and authority, but it does not make a model diagnostically
 capable. Use the checked-in live evaluation and its generated-specificity
 metric when choosing a model or quantization for log analysis.
+
+For direct OpenAI release evaluation with the current cost-oriented model, a
+private profile can use:
+
+```yaml
+schema_version: 2
+
+defaults:
+  profile: hosted-openai
+
+profiles:
+  hosted-openai:
+    provider: openai_compatible
+    locality: remote
+    endpoint: https://api.openai.com/v1/chat/completions
+    model: gpt-6-luna
+    reasoning_effort: none
+    require_json_schema: true
+    timeout: 2m
+    maximum_input_bytes: 524288
+    maximum_output_bytes: 32768
+    maximum_analysis_passes: 2
+    disclosure:
+      metadata:
+        maximum_items: 256
+        maximum_bytes: 131072
+      command:
+        maximum_items: 16
+        maximum_bytes: 131072
+      path:
+        maximum_items: 256
+        maximum_bytes: 131072
+      environment_name:
+        maximum_items: 256
+        maximum_bytes: 131072
+      log_content:
+        maximum_artifacts: 4
+        maximum_bytes: 65536
+      source_content:
+        maximum_artifacts: 6
+        maximum_bytes: 65536
+    source_context:
+      mode: limited
+      lines_before_and_after: 60
+    credential:
+      environment: OPENAI_API_KEY
+```
+
+Keep the key in the referenced environment value, not in YAML. This profile
+approves remote log and source disclosure when the invocation requests those
+classes; use it only with reviewed nonsecret evidence such as the synthetic
+release corpus, or narrow the disclosure policy for ordinary use.
 
 ### Ollama
 

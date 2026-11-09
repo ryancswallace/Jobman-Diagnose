@@ -24,6 +24,10 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 - Expand limited source context from one inferred file to bounded direct-command
   and runtime-referenced files, and retain useful terminal context from other
   streams alongside higher-ranked causal log windows.
+- Allow OpenAI-compatible profiles to select a validated reasoning effort.
+  Explicit `none` retains deterministic temperature-zero sampling, while
+  higher efforts omit the custom temperature rejected by current reasoning
+  models.
 
 ### Added
 

@@ -69,6 +69,7 @@ type Profile struct {
 	MaximumInputBytes     int                        `json:"maximum_input_bytes" yaml:"maximum_input_bytes"`
 	MaximumOutputBytes    int                        `json:"maximum_output_bytes" yaml:"maximum_output_bytes"`
 	MaximumAnalysisPasses int                        `json:"maximum_analysis_passes,omitempty" yaml:"maximum_analysis_passes,omitempty"`
+	ReasoningEffort       string                     `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 	Disclosure            map[string]ClassLimits     `json:"disclosure" yaml:"disclosure"`
 	SourceContext         *SourceContextPolicy       `json:"source_context,omitempty" yaml:"source_context,omitempty"`
 	Credential            *SecretReference           `json:"credential,omitempty" yaml:"credential,omitempty"`
@@ -281,6 +282,9 @@ func (profile *Profile) validate() error {
 	if profile.MaximumAnalysisPasses < 0 || profile.MaximumAnalysisPasses > 2 {
 		return errors.New("maximum_analysis_passes must be 1 or 2 when set")
 	}
+	if err := profile.validateReasoningEffort(); err != nil {
+		return err
+	}
 	if err := profile.validateDisclosure(); err != nil {
 		return err
 	}
@@ -292,6 +296,23 @@ func (profile *Profile) validate() error {
 	}
 
 	return profile.validateTransport()
+}
+
+func (profile Profile) validateReasoningEffort() error {
+	if profile.ReasoningEffort == "" {
+		return nil
+	}
+	if profile.Provider != "openai_compatible" {
+		return errors.New("reasoning_effort is supported only by openai_compatible profiles")
+	}
+	if !slices.Contains(
+		[]string{"none", "minimal", "low", "medium", "high", "xhigh", "max"},
+		profile.ReasoningEffort,
+	) {
+		return errors.New("reasoning_effort must be none, minimal, low, medium, high, xhigh, or max")
+	}
+
+	return nil
 }
 
 func (profile Profile) validateSourceContext() error {

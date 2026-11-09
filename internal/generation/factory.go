@@ -41,10 +41,10 @@ func NewGenerator(profile config.Profile) (Generator, error) {
 		return value, nil
 	case "openai_compatible":
 		value, err := openaicompat.New(openaicompat.Config{
-			Endpoint: profile.Endpoint, Model: profile.Model, Credential: credential, Locality: profile.Locality,
+			Endpoint: profile.Endpoint, Model: profile.Model, Credential: credential,
+			Locality: profile.Locality, ReasoningEffort: profile.ReasoningEffort,
 			MaximumInputBytes: profile.MaximumInputBytes, MaximumOutputBytes: profile.MaximumOutputBytes,
-			RequestTimeout: profile.TimeoutDuration(),
-			Transport:      transport,
+			RequestTimeout: profile.TimeoutDuration(), Transport: transport,
 		})
 		if err != nil {
 			return nil, err

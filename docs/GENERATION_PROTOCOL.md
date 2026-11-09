@@ -260,7 +260,9 @@ The OpenAI-compatible adapter maps the proposal schema to Chat Completions
 `response_format` with type `json_schema` and `strict: true`. The request uses
 one fixed system message and one user/data message containing the versioned
 request. Streaming is disabled. Refusals and incomplete finish reasons are
-provider failures.
+provider failures. A configured `reasoning_effort` is forwarded exactly.
+Omitted or explicitly `none` reasoning uses temperature zero; other efforts
+omit temperature for compatibility with reasoning-model parameter rules.
 
 The Ollama adapter maps the same schema to `/api/chat` `format`, disables
 streaming and thinking, and sets temperature to zero. It is loopback-only.
