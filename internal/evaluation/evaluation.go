@@ -180,6 +180,7 @@ type RunOptions struct {
 type SourceContextOptions struct {
 	Mode                diagnosis.SourceContextMode
 	LinesBeforeAndAfter uint64
+	MaximumArtifacts    uint64
 	MaximumBytes        uint64
 }
 
@@ -476,6 +477,7 @@ func runCase(
 		source, sourceErr := sourcecontext.Collect(ctx, core, sourcecontext.Options{
 			Mode: sourceOptions.Mode, File: sourcePath,
 			LinesBeforeAndAfter: sourceOptions.LinesBeforeAndAfter,
+			MaximumArtifacts:    sourceOptions.MaximumArtifacts,
 			MaximumBytes:        sourceOptions.MaximumBytes,
 		})
 		if sourceErr != nil {
@@ -534,7 +536,7 @@ func runCase(
 	generatedFindings := make([]diagnosis.Finding, 0, 1)
 	for _, finding := range report.Findings {
 		findingCodes = append(findingCodes, finding.Code)
-		if finding.Analyzer != "generator.proposal/1" {
+		if !strings.HasPrefix(finding.Analyzer, "generator.proposal/") {
 			continue
 		}
 		counters.generatedClaims++

@@ -334,6 +334,7 @@
         "target.database_deadlock_message"
       ],
       "allowed_generated_codes": [
+        "generated.concurrency_failure",
         "generated.transient_infrastructure"
       ],
       "required_finding_codes": [
@@ -868,6 +869,7 @@
         "target.database_deadlock_message"
       ],
       "allowed_generated_codes": [
+        "generated.concurrency_failure",
         "generated.transient_infrastructure"
       ],
       "required_finding_codes": [
@@ -2041,6 +2043,7 @@
         "core.nonzero_exit"
       ],
       "allowed_generated_codes": [
+        "generated.application_configuration",
         "generated.data_validation"
       ],
       "required_finding_codes": [

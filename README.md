@@ -134,6 +134,14 @@ so review it before sharing it with a provider. If the provider fails or its
 suggestions do not pass validation, Jobman-Diagnose still returns its local
 report.
 
+Accepted AI assessments distinguish the best-supported cause from contributing
+conditions and unresolved alternatives. The host requires the model to account
+for every selected diagnostic line and preserves cited lines under a distinct
+`Observed diagnostics` label. When a review pass runs, it can pair claims with
+a safe verification observation, remediation, and recovery condition. Profiles can
+permit one conditional second model call to review complex, multi-stream or
+source-rich incidents; simple incidents still use one call.
+
 The [configuration guide] explains profiles, supported providers, log and
 source sharing, limits, and the `doctor` command. Read the [security model] for
 the exact privacy and validation rules, or the [generation protocol] if you are

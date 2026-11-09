@@ -91,6 +91,7 @@ func TestProposalCaptureWritesPrivateReplaceableDocument(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "capture.json")
 	generator := captureGenerator{records: []proposalCapture{{
+		Stage: provider.AnalysisInitial, AnalysisPass: 1,
 		RequestID: "sha256:" + strings.Repeat("a", 64), AnalysisEvidenceID: "sha256:" + strings.Repeat("b", 64),
 		Provider: "openai_compatible", Model: "test", ProposalAccepted: false,
 		ValidationCode: "proposal_not_specific", Proposal: json.RawMessage(`{"hypotheses":[]}`),
@@ -114,8 +115,9 @@ func TestProposalCaptureWritesPrivateReplaceableDocument(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(encoded, &document); unmarshalErr != nil {
 		t.Fatal(unmarshalErr)
 	}
-	if document.Kind != "jobman.diagnosis_evaluation_proposal_capture" || document.SchemaVersion != 3 ||
+	if document.Kind != "jobman.diagnosis_evaluation_proposal_capture" || document.SchemaVersion != 4 ||
 		len(document.Records) != 1 ||
+		document.Records[0].Stage != provider.AnalysisInitial || document.Records[0].AnalysisPass != 1 ||
 		document.Records[0].ValidationCode != "proposal_not_specific" || document.Records[0].ProposalAccepted {
 		t.Fatalf("capture document = %#v", document)
 	}
@@ -147,6 +149,26 @@ func TestProposalCaptureAnnotatesCasesAndIterations(t *testing.T) {
 	if generator.records[0].CaseName != "case_one" || generator.records[0].Iteration != 1 ||
 		generator.records[1].CaseName != "case_one" || generator.records[1].Iteration != 2 {
 		t.Fatalf("annotated records = %#v", generator.records)
+	}
+}
+
+func TestProposalCaptureAnnotatesReviewWithItsInitialPass(t *testing.T) {
+	t.Parallel()
+
+	evidenceID := "sha256:" + strings.Repeat("c", 64)
+	generator := captureGenerator{records: []proposalCapture{
+		{AnalysisEvidenceID: evidenceID, Stage: provider.AnalysisInitial, AnalysisPass: 1},
+		{AnalysisEvidenceID: evidenceID, Stage: provider.AnalysisReview, AnalysisPass: 2},
+		{AnalysisEvidenceID: evidenceID, Stage: provider.AnalysisInitial, AnalysisPass: 1},
+		{AnalysisEvidenceID: evidenceID, Stage: provider.AnalysisReview, AnalysisPass: 2},
+	}}
+	generator.annotate([]evaluation.Result{
+		{Name: "case_one", Iteration: 1, AnalysisEvidenceID: evidenceID},
+		{Name: "case_one", Iteration: 2, AnalysisEvidenceID: evidenceID},
+	})
+	if generator.records[0].Iteration != 1 || generator.records[1].Iteration != 1 ||
+		generator.records[2].Iteration != 2 || generator.records[3].Iteration != 2 {
+		t.Fatalf("annotated review records = %#v", generator.records)
 	}
 }
 
@@ -441,7 +463,8 @@ profiles:
 		t.Fatal(err)
 	}
 	if len(document.Records) != 1 || !document.Records[0].ProposalAccepted ||
-		document.Records[0].CaseName != "ambiguous_worker_stop" || document.Records[0].Iteration != 1 {
+		document.Records[0].CaseName != "ambiguous_worker_stop" || document.Records[0].Iteration != 1 ||
+		document.Records[0].Stage != provider.AnalysisInitial || document.Records[0].AnalysisPass != 1 {
 		t.Fatalf("capture document = %#v", document)
 	}
 }
@@ -488,7 +511,10 @@ func TestNewLiveDiagnosticianRoutesApprovedLogs(t *testing.T) {
 func TestCaptureGeneratorRecordsProviderFailures(t *testing.T) {
 	t.Parallel()
 
-	request := provider.Request{RequestID: "request", AnalysisEvidenceID: "evidence"}
+	request := provider.Request{
+		Stage: provider.AnalysisReview, RequestID: "request", AnalysisEvidenceID: "evidence",
+		PriorProposal: &provider.Proposal{RequestID: "prior"},
+	}
 	tests := []struct {
 		name string
 		err  error
@@ -506,7 +532,9 @@ func TestCaptureGeneratorRecordsProviderFailures(t *testing.T) {
 			}
 			if len(capture.records) != 1 || capture.records[0].FailureCode != test.code ||
 				capture.records[0].RequestID != request.RequestID ||
-				capture.records[0].AnalysisEvidenceID != request.AnalysisEvidenceID {
+				capture.records[0].AnalysisEvidenceID != request.AnalysisEvidenceID ||
+				capture.records[0].Stage != provider.AnalysisReview || capture.records[0].AnalysisPass != 2 ||
+				capture.records[0].PriorRequestID != "prior" {
 				t.Fatalf("capture records = %#v", capture.records)
 			}
 		})

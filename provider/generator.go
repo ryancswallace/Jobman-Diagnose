@@ -19,6 +19,8 @@ type Request struct {
 	Kind                   string                   `json:"kind"`
 	SchemaVersion          int                      `json:"schema_version"`
 	RequestID              string                   `json:"request_id"`
+	Stage                  AnalysisStage            `json:"stage"`
+	DiagnosticFocus        []DiagnosticFocus        `json:"diagnostic_focus"`
 	AnalysisEvidenceID     string                   `json:"analysis_evidence_id"`
 	Subject                Subject                  `json:"subject"`
 	Deterministic          []DeterministicCandidate `json:"deterministic_candidates"`
@@ -29,6 +31,9 @@ type Request struct {
 	ResponseSchema         json.RawMessage          `json:"response_schema"`
 	Manifest               ProjectionManifest       `json:"manifest"`
 	Projection             Projection               `json:"projection"`
+	// PriorProposal intentionally follows the evidence projection so a review
+	// encounters source facts before the untrusted draft that it must audit.
+	PriorProposal *Proposal `json:"prior_proposal,omitempty"`
 	// Instructions intentionally encode last so the final content in a model's
 	// user message is trusted host guidance rather than untrusted target output.
 	Instructions []string `json:"instructions"`

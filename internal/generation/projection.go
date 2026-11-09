@@ -19,7 +19,7 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
-var ansiGraphicRendition = regexp.MustCompile(`(?:\x1b\[|\x{009b})[0-9:;]*m`)
+var ansiControlSequence = regexp.MustCompile(`(?:\x1b\[|\x{009b})[0-?]*[ -/]*[@-~]`)
 
 var allowedCategories = []string{
 	"application", "history", "launch", "lifecycle", "logging", "notification", "ownership",
@@ -31,14 +31,21 @@ var allowedHypothesisCodes = []string{
 	"generated.application_configuration",
 	"generated.application_defect",
 	"generated.application_input",
+	"generated.concurrency_failure",
+	"generated.configuration_drift",
+	"generated.data_contract_mismatch",
 	"generated.data_validation",
 	"generated.dependency_missing",
 	"generated.dependency_unavailable",
+	"generated.deployment_mismatch",
 	"generated.environment_mismatch",
 	"generated.external_service_failure",
+	"generated.resource_leak",
 	"generated.resource_pressure",
+	"generated.stale_artifact",
 	"generated.transient_infrastructure",
 	"generated.unknown_target_error",
+	"generated.version_incompatibility",
 }
 
 // Prepared contains a sealed provider request and the exact disclosure facts
@@ -82,6 +89,7 @@ func Prepare(
 		})
 	}
 	request, err := provider.SealRequest(provider.Request{
+		Stage:              provider.AnalysisInitial,
 		AnalysisEvidenceID: evidence.AnalysisEvidenceID,
 		Subject: provider.Subject{
 			Phase: evidence.Core.Subject.Phase, Outcome: evidence.Core.Subject.Outcome,
@@ -110,6 +118,36 @@ func Prepare(
 		Request: request, ProfileName: profileName, Provider: profile.Provider, Model: profile.Model,
 		Locality: profile.Locality, RequestBytes: uint64(len(encoded)),
 	}, nil
+}
+
+// PrepareReview seals a second-pass request over the identical evidence
+// authority and a previously validated proposal. Prior generated text remains
+// untrusted draft material and cannot expand citations, taxonomy, or actions.
+func PrepareReview(prepared Prepared, proposal provider.Proposal, maximumInputBytes int) (Prepared, error) {
+	request := prepared.Request
+	request.Stage = provider.AnalysisReview
+	request.PriorProposal = &proposal
+	request.RequestID = ""
+	request.DiagnosticFocus = nil
+	request.ResponseSchema = nil
+	sealed, err := provider.SealRequest(request)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("prepare generated diagnosis review: seal request: %w", err)
+	}
+	encoded, err := json.Marshal(sealed)
+	if err != nil {
+		return Prepared{}, fmt.Errorf("prepare generated diagnosis review: encode request: %w", err)
+	}
+	if len(encoded) > maximumInputBytes {
+		return Prepared{}, fmt.Errorf(
+			"prepare generated diagnosis review: request requires %d bytes but profile allows %d",
+			len(encoded), maximumInputBytes,
+		)
+	}
+	prepared.Request = sealed
+	prepared.RequestBytes += uint64(len(encoded))
+
+	return prepared, nil
 }
 
 func relevantHypothesisCodes(projection provider.Projection) []string {
@@ -328,7 +366,7 @@ func projectedDiagnosticLines(
 			continue
 		}
 		selected := strings.ToValidUTF8(string(artifact.Data[item.ByteStart:item.ByteEnd]), "�")
-		selected = ansiGraphicRendition.ReplaceAllString(selected, "")
+		selected = ansiControlSequence.ReplaceAllString(selected, "")
 		return selectDiagnosticLines(item.Format, strings.Split(selected, "\n"))
 	}
 
@@ -457,6 +495,7 @@ func firstDiagnosticLine(lines []string, matches func(string) bool) []string {
 }
 
 func appendBoundedDiagnosticLine(lines []string, value string) []string {
+	value = ansiControlSequence.ReplaceAllString(value, "")
 	value = strings.TrimSpace(value)
 	totalBytes := len(value)
 	for _, line := range lines {

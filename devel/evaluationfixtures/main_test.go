@@ -11,7 +11,10 @@ import (
 
 	"github.com/ryancswallace/jobman/diagnostic"
 
+	"github.com/ryancswallace/jobman-diagnose/diagnosis"
 	"github.com/ryancswallace/jobman-diagnose/internal/evaluation"
+	"github.com/ryancswallace/jobman-diagnose/internal/sourcecontext"
+	"github.com/ryancswallace/jobman-diagnose/internal/testevidence"
 )
 
 func TestGenerateEvaluationFixtures(t *testing.T) {
@@ -91,6 +94,45 @@ func TestEvaluationCorpusSourceMappingsResolve(t *testing.T) {
 	}
 	if sourceCases != 29 {
 		t.Fatalf("source case count = %d", sourceCases)
+	}
+}
+
+func TestEvaluationCorpusSourceMappingsMatchGeneratedRuntime(t *testing.T) {
+	t.Parallel()
+
+	fixtures := evaluationFixtures()
+	for _, test := range evaluationCorpus().Cases {
+		if test.Source == "" {
+			continue
+		}
+		t.Run(test.Name, func(t *testing.T) {
+			t.Parallel()
+
+			specification, ok := fixtures[filepath.Base(test.Evidence)]
+			if !ok {
+				t.Fatalf("source case evidence %q is not generated", test.Evidence)
+			}
+			failureClass := specification.FailureClass
+			if failureClass == "" {
+				failureClass = "nonzero_exit"
+			}
+			evidence, err := testevidence.Failed(failureClass, []byte(specification.Stderr))
+			if err != nil {
+				t.Fatal(err)
+			}
+			contexts, err := sourcecontext.Collect(t.Context(), evidence, sourcecontext.Options{
+				Mode: diagnosis.SourceContextLimited, File: filepath.Join("..", "..", filepath.FromSlash(test.Source)),
+				LinesBeforeAndAfter: 60, MaximumArtifacts: 1, MaximumBytes: 64 * 1024,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assessment := sourcecontext.Assess(evidence.Artifacts, contexts[0])
+			wantMismatch := slices.Contains(test.Tags, "context.stale_source")
+			if gotMismatch := assessment.Status == sourcecontext.AssessmentMismatch; gotMismatch != wantMismatch {
+				t.Fatalf("source assessment = %#v, want mismatch %t", assessment, wantMismatch)
+			}
+		})
 	}
 }
 

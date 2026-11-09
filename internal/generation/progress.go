@@ -9,6 +9,8 @@ const (
 	ProgressPreparing ProgressEvent = "preparing"
 	// ProgressWaiting indicates that a configured provider request is in flight.
 	ProgressWaiting ProgressEvent = "waiting"
+	// ProgressReviewing indicates that a bounded second synthesis pass is being prepared.
+	ProgressReviewing ProgressEvent = "reviewing"
 	// ProgressValidating indicates that a provider response is being validated.
 	ProgressValidating ProgressEvent = "validating"
 	// ProgressFallback indicates that optional generation is falling back to the deterministic report.

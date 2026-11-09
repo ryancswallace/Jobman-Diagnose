@@ -120,7 +120,8 @@ func Run(
 		return report, nil
 	}
 	report.pass("proposal_contract", "the response passed request-specific schema, authority, and evidence validation")
-	if len(proposal.Hypotheses) != 1 || proposal.Hypotheses[0].Code != "generated.dependency_unavailable" ||
+	if len(proposal.Hypotheses) != 1 || proposal.Hypotheses[0].Role != provider.HypothesisPrimary ||
+		proposal.Hypotheses[0].Code != "generated.dependency_unavailable" ||
 		!slices.Contains(proposal.Hypotheses[0].SupportingEvidence, "doctor:artifact:stderr") {
 		report.fail("causal_probe", "the model did not identify the direct synthetic connection-refusal cause")
 		return report, nil

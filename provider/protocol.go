@@ -1,5 +1,7 @@
 package provider
 
+// cspell:ignore unranked
+
 import (
 	"encoding/json"
 	"time"
@@ -9,11 +11,23 @@ const (
 	// RequestKind identifies the structured-generation request protocol.
 	RequestKind = "jobman.diagnosis_generation_request"
 	// RequestSchemaVersion is the newest request schema understood here.
-	RequestSchemaVersion = 5
+	RequestSchemaVersion = 6
 	// ProposalKind identifies generated proposal documents.
 	ProposalKind = "jobman.diagnosis_proposal"
 	// ProposalSchemaVersion is the newest proposal schema understood here.
-	ProposalSchemaVersion = 2
+	ProposalSchemaVersion = 3
+)
+
+// AnalysisStage distinguishes an initial causal assessment from an optional
+// bounded review of an already validated proposal. A review receives the same
+// evidence authority and treats prior generated content as untrusted draft
+// material rather than new evidence.
+type AnalysisStage string
+
+// Supported generated-analysis stages.
+const (
+	AnalysisInitial AnalysisStage = "initial"
+	AnalysisReview  AnalysisStage = "review"
 )
 
 // Subject is the minimum operational context disclosed to a generator.
@@ -21,6 +35,14 @@ type Subject struct {
 	Phase        string   `json:"phase"`
 	Outcome      string   `json:"outcome,omitempty"`
 	SelectedRuns []uint64 `json:"selected_runs"`
+}
+
+// DiagnosticFocus repeats only the already projected, bounded diagnostic
+// lines that deserve first-pass causal attention. It is derived by the host
+// from Projection.Enrichment and cannot expand disclosure authority.
+type DiagnosticFocus struct {
+	EvidenceID string   `json:"evidence_id"`
+	Lines      []string `json:"lines"`
 }
 
 // Projection contains only evidence classes approved by both profile and CLI.
@@ -140,24 +162,58 @@ type AllowedAction struct {
 // Proposal contains untrusted hypotheses and references. It intentionally has
 // no retry verdict, lifecycle facts, tools, commands, URLs, or arguments.
 type Proposal struct {
-	Kind               string            `json:"kind"`
-	SchemaVersion      int               `json:"schema_version"`
-	RequestID          string            `json:"request_id"`
-	Hypotheses         []Hypothesis      `json:"hypotheses"`
-	RecommendedActions []string          `json:"recommended_action_ids"`
-	MissingEvidence    []MissingEvidence `json:"missing_evidence"`
+	Kind               string             `json:"kind"`
+	SchemaVersion      int                `json:"schema_version"`
+	RequestID          string             `json:"request_id"`
+	EvidenceCoverage   []EvidenceCoverage `json:"evidence_coverage"`
+	Hypotheses         []Hypothesis       `json:"hypotheses"`
+	RecommendedActions []string           `json:"recommended_action_ids"`
+	MissingEvidence    []MissingEvidence  `json:"missing_evidence"`
 }
 
-// Hypothesis is one uncalibrated generated alternative.
+// EvidenceCoverage is a non-rendered attention and completeness check. A
+// model must copy each host-selected diagnostic line under its existing
+// enrichment ID before synthesizing hypotheses. Validation requires an exact
+// match, so this section cannot introduce new evidence or claims.
+type EvidenceCoverage struct {
+	EvidenceID      string   `json:"evidence_id"`
+	DiagnosticLines []string `json:"diagnostic_lines"`
+}
+
+// HypothesisRole describes how one generated causal claim relates to the
+// incident-level assessment. Roles are deliberately bounded so the model can
+// distinguish a root cause from a contributing condition or unresolved
+// alternative without returning an unranked list of guesses.
+type HypothesisRole string
+
+// Supported generated hypothesis roles.
+const (
+	HypothesisPrimary      HypothesisRole = "primary"
+	HypothesisContributing HypothesisRole = "contributing"
+	HypothesisAlternative  HypothesisRole = "alternative"
+)
+
+// ResolutionPlan is a non-executing, prose-only plan tied to one hypothesis.
+// It may explain how a user could verify, remediate, and confirm recovery, but
+// cannot contain commands, links, tool invocations, or executable arguments.
+type ResolutionPlan struct {
+	Verification     string `json:"verification"`
+	Remediation      string `json:"remediation"`
+	SuccessCondition string `json:"success_condition"`
+}
+
+// Hypothesis is one uncalibrated generated causal claim.
 type Hypothesis struct {
-	Code                  string   `json:"code"`
-	Category              string   `json:"category"`
-	Summary               string   `json:"summary"`
-	RootCause             string   `json:"root_cause"`
-	Explanation           string   `json:"explanation"`
-	SupportingEvidence    []string `json:"supporting_evidence"`
-	ContradictingEvidence []string `json:"contradicting_evidence"`
-	ContradictsFindings   []string `json:"contradicts_findings"`
+	Role                  HypothesisRole `json:"role"`
+	Code                  string         `json:"code"`
+	Category              string         `json:"category"`
+	Summary               string         `json:"summary"`
+	RootCause             string         `json:"root_cause"`
+	Explanation           string         `json:"explanation"`
+	Resolution            ResolutionPlan `json:"resolution"`
+	SupportingEvidence    []string       `json:"supporting_evidence"`
+	ContradictingEvidence []string       `json:"contradicting_evidence"`
+	ContradictsFindings   []string       `json:"contradicts_findings"`
 }
 
 // MissingEvidence describes additional factual input that could distinguish

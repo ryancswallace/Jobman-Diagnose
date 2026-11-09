@@ -15,7 +15,7 @@ Rust backtraces, build dependency failures, and container messages that do not
 contain enough evidence to claim OOM or an application cause. A stale-source
 case requires the recorded runtime diagnostic to remain execution truth when
 the explicitly shared current source represents another revision.
-Live generated runs project the long and noisy cases through schema-5 causal
+Live generated runs project the long and noisy cases through schema-6 causal
 context selection, so buried exact diagnostics are evaluated under the same
 profile byte ceiling used in production.
 
@@ -99,7 +99,9 @@ remaining evidence-only cases still run without source. No additional
 `--share` class or source flag is required. Each result records
 `source_context_used`, and the summary reports the number of source-enabled
 executions. Source mappings are repository-relative, strictly bounded, and
-validated by the corpus generator.
+validated by fixture tests against the generated runtime locations. The one
+`context.stale_source` control is required to disagree; other mapped fixtures
+must remain consistent or unverified rather than mismatched.
 
 To inspect rejected as well as accepted raw model output, capture proposals to
 a separate private file:
@@ -115,8 +117,9 @@ go run ./devel/evaluate \
   --capture-proposals proposals-local-vllm.json
 ```
 
-Proposal-capture schema 3 labels every record with its case and iteration,
-binds it to the companion analysis-evidence ID,
+Proposal-capture schema 4 labels every provider call with its case, iteration,
+analysis stage and pass number, binds it to the companion analysis-evidence ID,
+and links a review to its initial request ID. It records the
 provider result, parsed proposal when available, and the host acceptance or
 rejection reason. The file can contain complete model output and disclosed
 fixture content. Evaluation results and proposal captures are atomically

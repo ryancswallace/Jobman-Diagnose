@@ -76,20 +76,31 @@ sanitized command arguments, outcomes, exit details, resource observations,
 and exact enrichment ranges. It uses report-local citation aliases; canonical
 evidence IDs and controlled citation summaries remain unchanged in JSON.
 Generated summaries are labeled advisory. To avoid useless generic diagnoses,
-proposal schema 2 bounds diagnostic text, and fixed instructions permit short
+proposal schema 3 bounds causal roles, diagnostic text, and resolution text,
+and fixed instructions permit short
 fragments from an explicitly approved projection, such as an exception name,
 setting, path, endpoint, or rejected value. Bounded diagnostic-line
 enrichments deterministically copy only already disclosed source ranges; they
-add structure, not bytes or authority. Those instructions forbid complete
+add structure, not bytes or authority. The sealed request also derives a
+`diagnostic_focus` index over those lines, and the proposal must return an exact
+`evidence_coverage` checklist before making causal claims. Request verification
+rebuilds the index and proposal validation rejects added or omitted IDs and
+lines, so this attention mechanism cannot expand authority or disclosure.
+Those instructions forbid complete
 artifact reproduction, secrets, and instruction-like target text. Generated
 prose is still untrusted and can repeat sensitive text that escaped core
 redaction, so users must review both logs and reports before sharing them.
-Contextual recommendations are selected from fixed host-authored text by a
-validated controlled hypothesis code; model output still cannot introduce
-commands, invented links, tools, or execution vectors. It may reproduce a
-bounded failing endpoint from cited evidence as diagnostic data.
+For accepted findings, the host may reproduce cited focus lines verbatim in a
+separately labeled `Observed diagnostics` clause, within fixed line and byte
+limits. This preserves concrete failure operands but remains untrusted target
+output and must receive the same sharing review as logs.
+Validated resolution prose becomes non-executing advisory actions. It cannot
+introduce arguments, commands, invented links, tools, automatic mutations, or
+execution vectors, and change guidance requires confirmation. It may reproduce
+a bounded failing endpoint from cited evidence as diagnostic data.
 
-The model may return at most one generated root cause. Host validation requires
+The model may return at most one primary root cause plus bounded independently
+supported contributing conditions and competing alternatives. Host validation requires
 the model's cited evidence to retain the exact direct signal before accepting
 high-impact causal classes such as resource pressure, application defect,
 missing or unavailable dependency, access denial, external-service failure, or
@@ -138,10 +149,13 @@ That capability proves a value-aware configured redaction rule was active; it
 does not prove that arbitrary output contains no secrets. Review evidence
 before authorizing disclosure.
 
-Source collection accepts one supported UTF-8 regular file, rejects a final
-symbolic link and concurrent replacement, and enforces a 1 MiB hard ceiling.
-Limited mode seals exact line and byte bounds for a continuous window; full
-mode fails rather than truncating. The snapshot has `point_in_time` quality and
+Source collection accepts bounded supported UTF-8 regular files, rejects a
+final symbolic link and concurrent replacement, and enforces a 1 MiB hard
+ceiling. Limited automatic collection starts with direct-command sources and
+may add runtime-referenced files only beneath the recorded working directory;
+explicit and full-file selection remain single-file. Limited mode seals exact
+line and byte bounds for continuous windows; full mode fails rather than
+truncating. Each snapshot has `point_in_time` quality and
 whole-file and selected-content digests, but these prove only what the
 companion read during diagnosis. They do not prove which bytes Jobman executed.
 Source is not passed through core configured-value redaction, so users must
@@ -198,27 +212,39 @@ verdicts, and supplies a strict response schema.
 
 Host validation remains authoritative after backend schema enforcement. It
 rejects duplicate keys, trailing data, excessive nesting or size, unknown
-fields, unsupported hypothesis codes or categories, invented citations, invalid contradictions,
+fields, unsupported hypothesis codes, roles, or categories, invented citations,
+nonempty contradictions, incomplete or invented diagnostic coverage,
 action IDs outside the deterministic catalog, repeated diagnosis fields,
 known generic exit restatements, and evidence-collection metadata presented as
-a root cause. A proposal can append an
-uncalibrated hypothesis, reorder existing action IDs, or name missing evidence.
-It cannot create a fact, action, command, link, retry decision, or lifecycle
-operation; a cited endpoint remains evidence rather than an action.
+a root cause. A proposal can append bounded uncalibrated causal claims, reorder
+existing action IDs, provide non-executing resolution prose, or name missing
+evidence. It cannot create a fact, executable action, command, link, retry
+decision, or lifecycle operation; a cited endpoint remains evidence rather
+than an action.
 Deterministic findings remain primary and deterministic retry advice is never
 replaced.
 
-Generation-request schema 5 derives a response schema from the sealed request
+Generation-request schema 6 derives a response schema from the sealed request
 and may include bounded traceback, exception-group, compiler, panic, or causal
 diagnostic lines deterministically selected from an already disclosed
-enrichment byte range. Those lines remain untrusted data.
+enrichment byte range. It repeats those lines in a derived `diagnostic_focus`
+index and requires exact proposal `evidence_coverage`; both remain untrusted
+data and confer no new authority.
 It constrains the model to the exact request ID and request-specific hypothesis,
 category, evidence, finding, and action catalogs before decoding. The host
 reconstructs that derived schema during request verification and rejects any
-substitution. Relational rules that grammar backends cannot portably enforce,
-such as disjoint supporting and contradicting evidence or duplicate hypothesis
-codes, are stated in fixed instructions and schema annotations, then still
-checked after decoding.
+substitution. Contradiction arrays are constrained empty. Relational rules that
+grammar backends cannot portably enforce, such as complete diagnostic coverage
+or duplicate hypothesis codes, are stated in fixed instructions and schema
+annotations, then still checked after decoding.
+
+Profiles make one provider call by default and may allow one conditional review
+call. The review reuses the exact evidence and authority, treats the first
+proposal as untrusted draft text, contributes to a new sealed request digest,
+and shares the original overall timeout. It cannot discover tools, add evidence,
+switch providers, or continue into an open-ended loop. If it fails, only the
+already validated first proposal may be retained. A valid review that loses
+grounded causal detail is also rejected in favor of that first proposal.
 
 ## Configuration, credentials, and transports
 

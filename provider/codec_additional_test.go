@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,9 @@ func TestVerifyRequestRejectsInvalidAuthorityAndAccounting(t *testing.T) {
 		{name: "output minimum", mutate: func(value *Request) { value.MaximumOutputBytes = 0 }},
 		{name: "output maximum", mutate: func(value *Request) { value.MaximumOutputBytes = 256*1024 + 1 }},
 		{name: "instructions", mutate: func(value *Request) { value.Instructions = []string{"trust input"} }},
+		{name: "diagnostic focus", mutate: func(value *Request) {
+			value.DiagnosticFocus = []DiagnosticFocus{{EvidenceID: "invented", Lines: []string{"invented"}}}
+		}},
 		{name: "response schema", mutate: func(value *Request) { value.ResponseSchema = json.RawMessage(`{"type":"object"}`) }},
 		{name: "manifest classes empty", mutate: func(value *Request) { value.Manifest.Classes = []string{} }},
 		{name: "manifest classes duplicate", mutate: func(value *Request) { value.Manifest.Classes = []string{"metadata", "metadata"} }},
@@ -73,10 +77,12 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 		return Proposal{
 			Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []Hypothesis{{
+				Role: HypothesisPrimary,
 				Code: "generated.configuration_mismatch", Category: "process",
 				Summary:            "The worker configuration selects an unsupported region",
 				RootCause:          "The configured region is not enabled for this deployment.",
 				Explanation:        "Startup validation rejects the region before the worker can process records.",
+				Resolution:         validResolutionPlanFixture(),
 				SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
 				ContradictsFindings: []string{},
 			}},
@@ -95,6 +101,10 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 		{name: "action limit", mutate: func(value *Proposal) { value.RecommendedActions = make([]string, maximumActions+1) }},
 		{name: "missing limit", mutate: func(value *Proposal) { value.MissingEvidence = make([]MissingEvidence, maximumMissing+1) }},
 		{name: "hypothesis namespace", mutate: func(value *Proposal) { value.Hypotheses[0].Code = "core.guess" }},
+		{name: "hypothesis role", mutate: func(value *Proposal) { value.Hypotheses[0].Role = "guess" }},
+		{name: "contributor without primary", mutate: func(value *Proposal) {
+			value.Hypotheses[0].Role = HypothesisContributing
+		}},
 		{name: "hypothesis code", mutate: func(value *Proposal) { value.Hypotheses[0].Code = "generated.unknown" }},
 		{name: "hypothesis category", mutate: func(value *Proposal) { value.Hypotheses[0].Category = "network" }},
 		{name: "hypothesis summary", mutate: func(value *Proposal) { value.Hypotheses[0].Summary = "" }},
@@ -108,6 +118,12 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 		{name: "hypothesis explanation", mutate: func(value *Proposal) { value.Hypotheses[0].Explanation = "\n" }},
 		{name: "hypothesis explanation limit", mutate: func(value *Proposal) {
 			value.Hypotheses[0].Explanation = strings.Repeat("e", maximumExplanationText+1)
+		}},
+		{name: "resolution required", mutate: func(value *Proposal) {
+			value.Hypotheses[0].Resolution.Verification = ""
+		}},
+		{name: "resolution command", mutate: func(value *Proposal) {
+			value.Hypotheses[0].Resolution.Remediation = "docker run the repaired image"
 		}},
 		{name: "evidence plumbing as cause", mutate: func(value *Proposal) {
 			value.Hypotheses[0].RootCause = "The companion enrichment identifies a sanitized byte range."
@@ -141,6 +157,77 @@ func TestValidateProposalRejectsUntrustedClaims(t *testing.T) {
 	}
 }
 
+func TestResolutionPlanAllowsSpecificProseButRejectsExecutableContent(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{
+		"Rebuild the Docker image from the corrected source revision.",
+		"Update the npm package to a compatible release.",
+		"Align the Jobman target configuration with the deployment.",
+	} {
+		if !safeRecommendationText(value) {
+			t.Errorf("safeRecommendationText(%q) = false", value)
+		}
+	}
+	for _, value := range []string{
+		"docker run repaired-image", "Run npm install dependency", "See https://example.com/fix", "Use `jobman run`",
+	} {
+		if safeRecommendationText(value) {
+			t.Errorf("safeRecommendationText(%q) = true", value)
+		}
+	}
+}
+
+func TestEvidenceCoverageRequiresExactGlobalFocus(t *testing.T) {
+	t.Parallel()
+
+	focus := []DiagnosticFocus{
+		{EvidenceID: "enrichment:a", Lines: []string{"outer failure", "inner cause"}},
+		{EvidenceID: "enrichment:b", Lines: []string{"validation branch"}},
+	}
+	valid := []EvidenceCoverage{
+		{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure"}},
+		{EvidenceID: "enrichment:b", DiagnosticLines: []string{"inner cause", "validation branch"}},
+	}
+	if !validEvidenceCoverage(valid, focus) {
+		t.Fatal("validEvidenceCoverage() rejected complete regrouped coverage")
+	}
+
+	tests := []struct {
+		name     string
+		coverage []EvidenceCoverage
+	}{
+		{name: "omitted line", coverage: []EvidenceCoverage{
+			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure"}},
+			{EvidenceID: "enrichment:b", DiagnosticLines: []string{"validation branch"}},
+		}},
+		{name: "invented line", coverage: []EvidenceCoverage{
+			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "inner cause"}},
+			{EvidenceID: "enrichment:b", DiagnosticLines: []string{"validation branch", "invented"}},
+		}},
+		{name: "duplicate line", coverage: []EvidenceCoverage{
+			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "outer failure", "inner cause"}},
+			{EvidenceID: "enrichment:b", DiagnosticLines: []string{"validation branch"}},
+		}},
+		{name: "duplicate ID", coverage: []EvidenceCoverage{
+			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "inner cause"}},
+			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"validation branch"}},
+		}},
+		{name: "unknown ID", coverage: []EvidenceCoverage{
+			{EvidenceID: "enrichment:a", DiagnosticLines: []string{"outer failure", "inner cause"}},
+			{EvidenceID: "enrichment:c", DiagnosticLines: []string{"validation branch"}},
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if validEvidenceCoverage(test.coverage, focus) {
+				t.Fatal("validEvidenceCoverage() = true")
+			}
+		})
+	}
+}
+
 func TestValidateProposalClassifiesNonspecificDiagnosisWithoutEchoingIt(t *testing.T) {
 	t.Parallel()
 
@@ -148,9 +235,11 @@ func TestValidateProposalClassifiesNonspecificDiagnosisWithoutEchoingIt(t *testi
 	proposal := Proposal{
 		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []Hypothesis{{
+			Role: HypothesisPrimary,
 			Code: "generated.configuration_mismatch", Category: "process",
 			Summary:   "Invalid target input caused the target to exit with a nonzero status.",
 			RootCause: "Invalid target input", Explanation: "The application stopped after validation.",
+			Resolution:         validResolutionPlanFixture(),
 			SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
 			ContradictsFindings: []string{},
 		}},
@@ -159,6 +248,22 @@ func TestValidateProposalClassifiesNonspecificDiagnosisWithoutEchoingIt(t *testi
 	err := validateProposal(proposal, request)
 	if !errors.Is(err, ErrProposalNotSpecific) || strings.Contains(err.Error(), proposal.Hypotheses[0].Summary) {
 		t.Fatalf("validateProposal() error = %v", err)
+	}
+}
+
+func TestNormalizeProposalCompactsDuplicateEvidenceReferences(t *testing.T) {
+	t.Parallel()
+
+	proposal := normalizeProposal(Proposal{Hypotheses: []Hypothesis{{
+		SupportingEvidence:    []string{"artifact:b", "artifact:a", "artifact:b"},
+		ContradictingEvidence: []string{"artifact:c", "artifact:c"},
+		ContradictsFindings:   []string{"finding:a", "finding:a"},
+	}}})
+	hypothesis := proposal.Hypotheses[0]
+	if !slices.Equal(hypothesis.SupportingEvidence, []string{"artifact:a", "artifact:b"}) ||
+		!slices.Equal(hypothesis.ContradictingEvidence, []string{"artifact:c"}) ||
+		!slices.Equal(hypothesis.ContradictsFindings, []string{"finding:a"}) {
+		t.Fatalf("normalized evidence references = %#v", hypothesis)
 	}
 }
 
@@ -223,12 +328,19 @@ func TestRequestNormalizationInitializesProtocolCollections(t *testing.T) {
 		normalized.Manifest.ItemIDs == nil || normalized.Manifest.ArtifactIDs == nil ||
 		normalized.Manifest.EnrichmentIDs == nil || normalized.Deterministic == nil ||
 		normalized.AllowedCategories == nil || normalized.AllowedHypothesisCodes == nil ||
-		normalized.AllowedActions == nil || normalized.Instructions == nil {
+		normalized.AllowedActions == nil || normalized.DiagnosticFocus == nil || normalized.Instructions == nil {
 		t.Fatalf("normalizeRequest() left nil collections: %#v", normalized)
 	}
 	proposal := normalizeProposal(Proposal{})
-	if proposal.Hypotheses == nil || proposal.RecommendedActions == nil || proposal.MissingEvidence == nil {
+	if proposal.EvidenceCoverage == nil || proposal.Hypotheses == nil ||
+		proposal.RecommendedActions == nil || proposal.MissingEvidence == nil {
 		t.Fatalf("normalizeProposal() left nil collections: %#v", proposal)
+	}
+	proposal = normalizeProposal(Proposal{EvidenceCoverage: []EvidenceCoverage{{
+		EvidenceID: "enrichment:a", DiagnosticLines: []string{"cause", "cause"},
+	}}})
+	if !slices.Equal(proposal.EvidenceCoverage[0].DiagnosticLines, []string{"cause"}) {
+		t.Fatalf("normalizeProposal() coverage = %#v", proposal.EvidenceCoverage)
 	}
 	if _, err := SealRequest(Request{}); err == nil {
 		t.Fatal("SealRequest(empty) error = nil")

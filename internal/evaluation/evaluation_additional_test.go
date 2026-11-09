@@ -600,7 +600,7 @@ func generatedEvaluationTarget(
 			Summary: summary, Explanation: explanation, Confidence: confidence,
 			SupportingEvidence:    slices.Clone(report.Findings[0].SupportingEvidence),
 			ContradictingEvidence: []string{}, ContradictingFindings: []string{},
-			Analyzer: "generator.proposal/1",
+			Analyzer: "generator.proposal/2/primary",
 		})
 		report.Mode = diagnosis.ModeMixed
 		report.Versions.GenerationRequestSchemaVersion = provider.RequestSchemaVersion

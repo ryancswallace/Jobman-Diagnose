@@ -51,56 +51,70 @@ type Options struct {
 	// LinesBeforeAndAfter sets the symmetric limited-source radius. Zero uses
 	// DefaultLinesBeforeAndAfter for backward compatibility.
 	LinesBeforeAndAfter uint64
-	MaximumBytes        uint64
+	// MaximumArtifacts bounds automatic multi-file collection. Zero preserves
+	// the historical single-file behavior. Explicit File and full-file mode
+	// always select exactly one source artifact.
+	MaximumArtifacts uint64
+	MaximumBytes     uint64
 }
 
-// Collect reads one bounded regular source file and returns an immutable
-// point-in-time snapshot. It rejects a symbolic link at the final path.
+// Collect reads bounded regular source files and returns immutable point-in-time
+// snapshots. Limited automatic collection starts with direct command sources,
+// then adds runtime-referenced files under the recorded working directory.
+// Explicit and full-file collection remain single-file operations.
 func Collect(ctx context.Context, evidence diagnostic.Evidence, options Options) ([]diagnosis.SourceContext, error) {
 	if err := validateCollection(ctx, evidence, options); err != nil {
 		return nil, err
 	}
-	path, err := resolveSourcePath(evidence, options.File)
+	paths, err := resolveSourcePaths(evidence, options)
 	if err != nil {
 		return nil, err
 	}
-	language, mediaType, ok := sourceType(path)
-	if !ok {
-		return nil, fmt.Errorf("collect source context: %q does not have a supported source-file extension", path)
-	}
-	data, capturedAt, err := readSource(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	selection, err := selectSourceContext(path, data, evidence.Artifacts, options)
-	if err != nil {
-		return nil, err
-	}
-	selected := slices.Clone(data[selection.byteStart:selection.byteEnd])
-	if uint64(len(selected)) > options.MaximumBytes {
-		return nil, fmt.Errorf(
-			"collect source context: selected %s context requires %d bytes but the profile allows %d",
-			options.Mode, len(selected), options.MaximumBytes,
-		)
-	}
-	fileDigest := digest(data)
-	context := diagnosis.SourceContext{
-		ID: "context:source:001", Role: "source.context", Path: path,
-		Language: language, MediaType: mediaType, Mode: options.Mode,
-		AnchorLine: selection.anchor, AnchorReason: selection.reason,
-		StartLine: selection.startLine, EndLine: selection.endLine,
-		TotalLines: selection.totalLines, ByteStart: selection.byteStart, ByteEnd: selection.byteEnd,
-		FileBytes: uint64(len(data)), ContentBytes: uint64(len(selected)), Data: selected,
-		Digest: fileDigest, ContentDigest: digest(selected), CapturedAt: capturedAt,
-		Collector: diagnosis.AnalyzerDescriptor{Name: collectorName, Version: collectorVersion},
-		Quality:   diagnostic.QualityPointInTime, Disclosure: diagnosis.DisclosureSourceContent,
-	}
-	if options.Mode == diagnosis.SourceContextFull {
-		context.AnchorLine = 0
-		context.AnchorReason = "full_file"
+	contexts := make([]diagnosis.SourceContext, 0, len(paths))
+	var selectedBytes uint64
+	for _, path := range paths {
+		language, mediaType, ok := sourceType(path)
+		if !ok {
+			return nil, fmt.Errorf("collect source context: %q does not have a supported source-file extension", path)
+		}
+		data, capturedAt, readErr := readSource(ctx, path)
+		if readErr != nil {
+			return nil, readErr
+		}
+		selection, selectionErr := selectSourceContext(path, data, evidence.Artifacts, options)
+		if selectionErr != nil {
+			return nil, selectionErr
+		}
+		selected := slices.Clone(data[selection.byteStart:selection.byteEnd])
+		if selectedBytes > options.MaximumBytes || uint64(len(selected)) > options.MaximumBytes-selectedBytes {
+			if options.File == "" && options.Mode == diagnosis.SourceContextLimited && len(contexts) != 0 {
+				continue
+			}
+			return nil, fmt.Errorf(
+				"collect source context: selected %s contexts require %d bytes but the profile allows %d",
+				options.Mode, selectedBytes+uint64(len(selected)), options.MaximumBytes,
+			)
+		}
+		selectedBytes += uint64(len(selected))
+		context := diagnosis.SourceContext{
+			ID: fmt.Sprintf("context:source:%03d", len(contexts)+1), Role: "source.context", Path: path,
+			Language: language, MediaType: mediaType, Mode: options.Mode,
+			AnchorLine: selection.anchor, AnchorReason: selection.reason,
+			StartLine: selection.startLine, EndLine: selection.endLine,
+			TotalLines: selection.totalLines, ByteStart: selection.byteStart, ByteEnd: selection.byteEnd,
+			FileBytes: uint64(len(data)), ContentBytes: uint64(len(selected)), Data: selected,
+			Digest: digest(data), ContentDigest: digest(selected), CapturedAt: capturedAt,
+			Collector: diagnosis.AnalyzerDescriptor{Name: collectorName, Version: collectorVersion},
+			Quality:   diagnostic.QualityPointInTime, Disclosure: diagnosis.DisclosureSourceContent,
+		}
+		if options.Mode == diagnosis.SourceContextFull {
+			context.AnchorLine = 0
+			context.AnchorReason = "full_file"
+		}
+		contexts = append(contexts, context)
 	}
 
-	return []diagnosis.SourceContext{context}, nil
+	return contexts, nil
 }
 
 func validateCollection(ctx context.Context, evidence diagnostic.Evidence, options Options) error {
@@ -118,6 +132,9 @@ func validateCollection(ctx context.Context, evidence diagnostic.Evidence, optio
 	}
 	if options.MaximumBytes == 0 || options.MaximumBytes > hardMaximumBytes {
 		return fmt.Errorf("collect source context: maximum bytes must be between 1 and %d", hardMaximumBytes)
+	}
+	if options.MaximumArtifacts > 16 {
+		return errors.New("collect source context: maximum artifacts must not exceed 16")
 	}
 	if options.Mode == diagnosis.SourceContextFull && (options.Line != 0 || options.LinesBeforeAndAfter != 0) {
 		return errors.New("collect source context: a source line or context radius is only valid in limited mode")
@@ -161,9 +178,16 @@ func selectSourceContext(
 		}
 	}
 	if selection.anchor > selection.totalLines {
-		return sourceSelection{}, fmt.Errorf(
-			"collect source context: line %d is outside %q (1-%d)", selection.anchor, path, len(lineStarts),
-		)
+		if options.Line != 0 {
+			return sourceSelection{}, fmt.Errorf(
+				"collect source context: line %d is outside %q (1-%d)", selection.anchor, path, len(lineStarts),
+			)
+		}
+		// Retain a bounded current snapshot so later source assessment can
+		// classify and withhold stale source instead of aborting diagnosis before
+		// it can emit the controlled mismatch warning.
+		selection.anchor = selection.totalLines
+		selection.reason = "runtime_log_clipped"
 	}
 	radius := options.LinesBeforeAndAfter
 	if radius == 0 {
@@ -183,43 +207,129 @@ func selectSourceContext(
 	return selection, nil
 }
 
-func resolveSourcePath(evidence diagnostic.Evidence, explicit string) (string, error) {
-	if explicit != "" {
-		path, err := filepath.Abs(explicit)
-		if err != nil {
-			return "", fmt.Errorf("collect source context: resolve explicit source file: %w", err)
-		}
-
-		return filepath.Clean(path), nil
+func resolveSourcePaths(evidence diagnostic.Evidence, options Options) ([]string, error) {
+	if options.File != "" {
+		return resolveExplicitSourcePath(options.File)
 	}
 	command, found := targetCommand(evidence.Items)
 	if !found {
-		return "", errors.New("collect source context: target command is unavailable; use --source-file PATH")
+		return nil, errors.New("collect source context: target command is unavailable; use --source-file PATH")
 	}
 	candidates := sourceCandidates(command)
-	if len(candidates) == 0 {
-		return "", errors.New("collect source context: no source file could be inferred from the direct target command; use --source-file PATH")
-	}
-	if len(candidates) > 1 {
-		return "", fmt.Errorf(
+	maximumArtifacts := sourceArtifactLimit(options)
+	if len(candidates) > 1 && maximumArtifacts == 1 {
+		return nil, fmt.Errorf(
 			"collect source context: multiple source files appear in the direct target command (%s); use --source-file PATH",
 			strings.Join(candidates, ", "),
 		)
 	}
-	path := candidates[0]
+	workingDirectory, hasWorkingDirectory := targetWorkingDirectory(evidence.Items)
+	paths := make([]string, 0, maximumArtifacts)
+	for _, candidate := range candidates {
+		paths = appendSourcePath(paths, candidate, workingDirectory, hasWorkingDirectory, maximumArtifacts)
+	}
+	if options.Mode == diagnosis.SourceContextLimited && maximumArtifacts > uint64(len(paths)) && hasWorkingDirectory {
+		paths = appendRuntimeSourcePaths(paths, evidence.Artifacts, workingDirectory, maximumArtifacts)
+	}
+	if len(paths) == 0 {
+		if !hasWorkingDirectory {
+			return nil, errors.New("collect source context: target working directory is unavailable; use --source-file PATH")
+		}
+		return nil, errors.New("collect source context: no source file could be inferred from the direct target command or runtime locations; use --source-file PATH")
+	}
+
+	return paths, nil
+}
+
+func resolveExplicitSourcePath(file string) ([]string, error) {
+	path, err := filepath.Abs(file)
+	if err != nil {
+		return nil, fmt.Errorf("collect source context: resolve explicit source file: %w", err)
+	}
+
+	return []string{filepath.Clean(path)}, nil
+}
+
+func sourceArtifactLimit(options Options) uint64 {
+	if options.Mode == diagnosis.SourceContextFull || options.Line != 0 {
+		return 1
+	}
+	if options.MaximumArtifacts == 0 {
+		return 1
+	}
+
+	return options.MaximumArtifacts
+}
+
+func appendSourcePath(
+	paths []string,
+	candidate string,
+	workingDirectory string,
+	hasWorkingDirectory bool,
+	maximumArtifacts uint64,
+) []string {
+	if uint64(len(paths)) >= maximumArtifacts {
+		return paths
+	}
+	path := candidate
 	if !filepath.IsAbs(path) {
-		workingDirectory, ok := targetWorkingDirectory(evidence.Items)
-		if !ok {
-			return "", errors.New("collect source context: target working directory is unavailable; use --source-file PATH")
+		if !hasWorkingDirectory {
+			return paths
 		}
 		path = filepath.Join(workingDirectory, path)
 	}
 	path = filepath.Clean(path)
-	if !filepath.IsAbs(path) {
-		return "", errors.New("collect source context: inferred source path is not absolute; use --source-file PATH")
+	if !filepath.IsAbs(path) || slices.Contains(paths, path) {
+		return paths
 	}
 
-	return path, nil
+	return append(paths, path)
+}
+
+func appendRuntimeSourcePaths(
+	paths []string,
+	artifacts []diagnostic.Artifact,
+	workingDirectory string,
+	maximumArtifacts uint64,
+) []string {
+	locations := sourceLocations(artifacts)
+	for index := len(locations) - 1; index >= 0; index-- {
+		path, ok := safeRuntimeSourcePath(workingDirectory, locations[index].path)
+		if ok {
+			paths = appendSourcePath(paths, path, workingDirectory, true, maximumArtifacts)
+		}
+	}
+
+	return paths
+}
+
+func safeRuntimeSourcePath(workingDirectory, reference string) (string, bool) {
+	if _, _, ok := sourceType(reference); !ok {
+		return "", false
+	}
+	root := filepath.Clean(workingDirectory)
+	path := filepath.Clean(reference)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, path)
+	}
+	if !filepath.IsAbs(root) || !filepath.IsAbs(path) || !pathWithinRoot(root, path) {
+		return "", false
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", false
+	}
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err != nil || !pathWithinRoot(resolvedRoot, resolvedPath) {
+		return "", false
+	}
+
+	return path, true
+}
+
+func pathWithinRoot(root, candidate string) bool {
+	relative, err := filepath.Rel(root, candidate)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
 }
 
 func targetCommand(items []diagnostic.Item) (diagnostic.Command, bool) {

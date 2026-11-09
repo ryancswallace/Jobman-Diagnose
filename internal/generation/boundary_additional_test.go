@@ -157,47 +157,79 @@ func TestGenerationFailureAndReconciliationHelpers(t *testing.T) {
 	}
 }
 
-func TestGeneratedGuidanceCatalogIsHostAuthoredAndNonExecuting(t *testing.T) {
+func TestGeneratedPlansPreserveAuthoritativeOrderAndCausalRoles(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		code         string
-		wantCode     string
-		wantKind     diagnosis.ActionKind
-		confirmation bool
-	}{
-		{"generated.access_denied", "review_target_access", diagnosis.ActionChange, true},
-		{"generated.application_configuration", "review_application_configuration", diagnosis.ActionChange, true},
-		{"generated.application_defect", "review_application_defect", diagnosis.ActionChange, true},
-		{"generated.application_input", "review_application_input", diagnosis.ActionChange, true},
-		{"generated.data_validation", "review_invalid_data", diagnosis.ActionChange, true},
-		{"generated.dependency_missing", "restore_missing_dependency", diagnosis.ActionChange, true},
-		{"generated.dependency_unavailable", "restore_required_dependency", diagnosis.ActionChange, true},
-		{"generated.environment_mismatch", "review_target_environment", diagnosis.ActionChange, true},
-		{"generated.external_service_failure", "inspect_external_service", diagnosis.ActionInspect, false},
-		{"generated.resource_pressure", "inspect_resource_constraints", diagnosis.ActionInspect, false},
-		{"generated.transient_infrastructure", "confirm_infrastructure_recovery", diagnosis.ActionWait, false},
+	plan := provider.ResolutionPlan{
+		Verification: "Observe whether the condition remains present.", Remediation: "Correct the condition.",
+		SuccessCondition: "The affected operation completes successfully.",
 	}
-	for _, test := range tests {
-		t.Run(test.code, func(t *testing.T) {
-			t.Parallel()
-			hypothesis := provider.Hypothesis{Code: test.code, SupportingEvidence: []string{"evidence"}}
-			action, ok := generatedGuidanceAction(hypothesis)
-			if !ok || action.Code != test.wantCode || action.Kind != test.wantKind ||
-				action.RequiresConfirmation != test.confirmation || action.Execution != diagnosis.ActionExecutionNone ||
-				action.SafeToAutomate || !slices.Equal(action.SupportingEvidence, hypothesis.SupportingEvidence) {
-				t.Fatalf("generatedGuidanceAction(%q) = %#v, %t", test.code, action, ok)
-			}
-		})
+	existing := []diagnosis.Action{{
+		ID: "action:001", Code: "inspect_evidence", Kind: diagnosis.ActionInspect,
+		Summary: "Inspect evidence", Description: "Inspect the cited evidence.",
+		SupportingEvidence: []string{}, Execution: diagnosis.ActionExecutionNone, Arguments: []string{},
+	}}
+	got := appendGeneratedPlans(existing, []provider.Hypothesis{
+		{Role: provider.HypothesisPrimary, Summary: "primary", Resolution: plan, SupportingEvidence: []string{"evidence"}},
+		{Role: provider.HypothesisContributing, Summary: "contributor", Resolution: plan, SupportingEvidence: []string{"evidence"}},
+		{Role: provider.HypothesisAlternative, Summary: "alternative", Resolution: plan, SupportingEvidence: []string{"evidence"}},
+	})
+	if len(got) != 6 || got[0].Code != existing[0].Code ||
+		got[1].Code != "generated.verify_primary_cause" || got[2].Code != "generated.address_primary_cause" ||
+		got[3].Code != "generated.verify_contributing_condition" ||
+		got[4].Code != "generated.address_contributing_condition" ||
+		got[5].Code != "generated.distinguish_alternative" || got[1].RequiresConfirmation ||
+		!got[2].RequiresConfirmation || !got[4].RequiresConfirmation || got[5].RequiresConfirmation {
+		t.Fatalf("generated plans = %#v", got)
 	}
-	if _, ok := generatedGuidanceAction(provider.Hypothesis{Code: "generated.unknown_target_error"}); ok {
-		t.Fatal("unknown target error received specific host guidance")
+}
+
+func TestReviewSelectionRecognizesMultiBranchDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	request := provider.Request{
+		Stage: provider.AnalysisInitial,
+		DiagnosticFocus: []provider.DiagnosticFocus{{
+			EvidenceID: "enrichment:traceback",
+			Lines:      []string{"OuterError: operation failed", "InnerError: dependency rejected input"},
+		}},
 	}
-	existing := []diagnosis.Action{{Code: "review_application_configuration"}}
-	if got := prependGeneratedGuidance(existing, []provider.Hypothesis{{
-		Code: "generated.application_configuration",
-	}}); len(got) != 1 || got[0].Code != existing[0].Code {
-		t.Fatalf("duplicate host guidance = %#v", got)
+	proposal := provider.Proposal{Hypotheses: []provider.Hypothesis{{Role: provider.HypothesisPrimary}}}
+	if !shouldReview(request, proposal) {
+		t.Fatal("shouldReview() = false for multi-branch diagnostic")
+	}
+	request.DiagnosticFocus[0].Lines = request.DiagnosticFocus[0].Lines[:1]
+	if shouldReview(request, proposal) {
+		t.Fatal("shouldReview() = true for one simple diagnostic")
+	}
+}
+
+func TestGeneratedPlansOmitSchemaAndCatalogBoilerplate(t *testing.T) {
+	t.Parallel()
+
+	existing := []diagnosis.Action{{
+		ID: "action:001", Code: "inspect_evidence", Kind: diagnosis.ActionInspect,
+		Summary: "Inspect evidence", Description: "Inspect the cited evidence.",
+		SupportingEvidence: []string{}, Execution: diagnosis.ActionExecutionNone, Arguments: []string{},
+	}}
+	hypothesis := provider.Hypothesis{
+		Role: provider.HypothesisPrimary, Summary: "upstream returned HTTP 503",
+		Resolution: provider.ResolutionPlan{
+			Verification:     "A concrete, non-executing observation or comparison that would confirm or refute this claim.",
+			Remediation:      "Verify the intended endpoint, dependency health, name resolution, trust policy, and retry guidance that apply to the cited local diagnostic.",
+			SuccessCondition: "The observable condition that would demonstrate recovery after remediation.",
+		},
+		SupportingEvidence: []string{"evidence"},
+	}
+	if got := appendGeneratedPlans(existing, []provider.Hypothesis{hypothesis}); len(got) != len(existing) {
+		t.Fatalf("generic generated plans = %#v", got)
+	}
+
+	hypothesis.Resolution.Verification = "Observe whether inventory returns a successful reservation response."
+	got := appendGeneratedPlans(existing, []provider.Hypothesis{hypothesis})
+	if len(got) != len(existing)+1 || got[1].Code != "generated.verify_primary_cause" ||
+		strings.Contains(got[1].Description, "Expected recovery") {
+		t.Fatalf("partly specific generated plans = %#v", got)
 	}
 }
 
@@ -209,14 +241,21 @@ func TestGeneratedCauseTaxonomyCoversSpecificFailureClasses(t *testing.T) {
 		"generated.application_configuration",
 		"generated.application_defect",
 		"generated.application_input",
+		"generated.concurrency_failure",
+		"generated.configuration_drift",
+		"generated.data_contract_mismatch",
 		"generated.data_validation",
 		"generated.dependency_missing",
 		"generated.dependency_unavailable",
+		"generated.deployment_mismatch",
 		"generated.environment_mismatch",
 		"generated.external_service_failure",
+		"generated.resource_leak",
 		"generated.resource_pressure",
+		"generated.stale_artifact",
 		"generated.transient_infrastructure",
 		"generated.unknown_target_error",
+		"generated.version_incompatibility",
 	} {
 		if !slices.Contains(allowedHypothesisCodes, code) {
 			t.Fatalf("generated taxonomy omits %q", code)

@@ -59,20 +59,21 @@ type Defaults struct {
 
 // Profile selects one explicit generator transport and disclosure policy.
 type Profile struct {
-	Provider           string                     `json:"provider" yaml:"provider"`
-	Locality           provider.Locality          `json:"locality" yaml:"locality"`
-	Endpoint           string                     `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
-	Command            *Command                   `json:"command,omitempty" yaml:"command,omitempty"`
-	Model              string                     `json:"model" yaml:"model"`
-	RequireJSONSchema  bool                       `json:"require_json_schema" yaml:"require_json_schema"`
-	Timeout            string                     `json:"timeout" yaml:"timeout"`
-	MaximumInputBytes  int                        `json:"maximum_input_bytes" yaml:"maximum_input_bytes"`
-	MaximumOutputBytes int                        `json:"maximum_output_bytes" yaml:"maximum_output_bytes"`
-	Disclosure         map[string]ClassLimits     `json:"disclosure" yaml:"disclosure"`
-	SourceContext      *SourceContextPolicy       `json:"source_context,omitempty" yaml:"source_context,omitempty"`
-	Credential         *SecretReference           `json:"credential,omitempty" yaml:"credential,omitempty"`
-	Transport          *provider.TransportOptions `json:"transport,omitempty" yaml:"transport,omitempty"`
-	timeout            time.Duration
+	Provider              string                     `json:"provider" yaml:"provider"`
+	Locality              provider.Locality          `json:"locality" yaml:"locality"`
+	Endpoint              string                     `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	Command               *Command                   `json:"command,omitempty" yaml:"command,omitempty"`
+	Model                 string                     `json:"model" yaml:"model"`
+	RequireJSONSchema     bool                       `json:"require_json_schema" yaml:"require_json_schema"`
+	Timeout               string                     `json:"timeout" yaml:"timeout"`
+	MaximumInputBytes     int                        `json:"maximum_input_bytes" yaml:"maximum_input_bytes"`
+	MaximumOutputBytes    int                        `json:"maximum_output_bytes" yaml:"maximum_output_bytes"`
+	MaximumAnalysisPasses int                        `json:"maximum_analysis_passes,omitempty" yaml:"maximum_analysis_passes,omitempty"`
+	Disclosure            map[string]ClassLimits     `json:"disclosure" yaml:"disclosure"`
+	SourceContext         *SourceContextPolicy       `json:"source_context,omitempty" yaml:"source_context,omitempty"`
+	Credential            *SecretReference           `json:"credential,omitempty" yaml:"credential,omitempty"`
+	Transport             *provider.TransportOptions `json:"transport,omitempty" yaml:"transport,omitempty"`
+	timeout               time.Duration
 }
 
 // SourceContextPolicy controls a profile's default source disclosure. The
@@ -103,6 +104,16 @@ type SecretReference struct {
 
 // TimeoutDuration returns the validated request deadline.
 func (profile Profile) TimeoutDuration() time.Duration { return profile.timeout }
+
+// AnalysisPassLimit returns the configured provider-call ceiling. Existing
+// profiles preserve the original one-call behavior when the field is omitted.
+func (profile Profile) AnalysisPassLimit() int {
+	if profile.MaximumAnalysisPasses == 0 {
+		return 1
+	}
+
+	return profile.MaximumAnalysisPasses
+}
 
 // DefaultPath returns the platform per-user diagnosis configuration path.
 func DefaultPath() (string, error) {
@@ -266,6 +277,9 @@ func (profile *Profile) validate() error {
 	if profile.MaximumInputBytes < 4*1024 || profile.MaximumInputBytes > 2*1024*1024 ||
 		profile.MaximumOutputBytes < 1024 || profile.MaximumOutputBytes > 256*1024 {
 		return errors.New("input/output byte limits are outside supported bounds")
+	}
+	if profile.MaximumAnalysisPasses < 0 || profile.MaximumAnalysisPasses > 2 {
+		return errors.New("maximum_analysis_passes must be 1 or 2 when set")
 	}
 	if err := profile.validateDisclosure(); err != nil {
 		return err

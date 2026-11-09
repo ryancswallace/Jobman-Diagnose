@@ -20,13 +20,15 @@ core client -> verification -> exact-range enrichment -> deterministic engine
                                   explicit --ai/--profile activation
                                                    |
                                                    v
-                           disclosure projection -> sealed request schema 5
+                           disclosure projection -> sealed request schema 6
                                                    |
                                                    v
-                             one StructuredGenerator call (optional)
+                        initial StructuredGenerator call (optional)
+                                                   |
+                              complex context? -> bounded review call
                                                    |
                                                    v
-                        strict proposal schema 2 -> deterministic reconciliation
+                        strict proposal schema 3 -> deterministic reconciliation
                                                    |
                                                    v
                                       diagnosis report schema 1
@@ -106,9 +108,10 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    with that source artifact and accounted separately. Log
    content also requires Jobman's `configured_value_redaction_v1` capability.
    Profile `source_context` or `--ai-source limited|full` separately approves
-   one current source snapshot; `--ai-source none` suppresses a profile
-   default. Inference must resolve exactly one direct-command source path, and
-   `--source-file` supplies an explicit override. Source context is unredacted,
+   bounded current source snapshots; `--ai-source none` suppresses a profile
+   default. Limited automatic inference starts with direct-command sources and
+   may add runtime-referenced files beneath the recorded working directory;
+   `--source-file` supplies a single explicit override. Source context is unredacted,
    point-in-time data and never independently authorizes a generated cause.
    Before projection, current source is compared with runtime source locations;
    detectable path, line-range, or traceback-line mismatches produce a
@@ -124,20 +127,33 @@ Generated analysis wraps, rather than replaces, the deterministic engine:
    actions, fixed untrusted-data instructions, and a derived request-specific
    response JSON Schema. The schema binds the exact request ID plus every
    scalar code, category, evidence, finding, and action authority exposed to
-   the model.
-5. Exactly one configured generator is called. There is no discovery, proxy,
-   redirect, provider fallback, tool call, or multi-agent loop.
-6. The returned `jobman.diagnosis_proposal` separates its issue-specific
-   headline, concrete root cause, and causal failure path. It is decoded again
+   the model. A derived diagnostic-focus index repeats the host-selected
+   diagnostic lines, and the proposal must account for all of them exactly
+   before causal synthesis.
+5. The configured generator is called once by default. A profile may permit
+   one additional review call for source-rich, multi-stream, multi-diagnostic,
+   or initially multi-claim incidents. The review uses the same provider,
+   model, evidence authority, limits, and total timeout, and treats the first
+   proposal as untrusted draft material. There is no discovery, proxy,
+   redirect, provider fallback, tool call, multi-agent loop, or open-ended
+   generation loop.
+6. The returned schema-3 `jobman.diagnosis_proposal` separates primary,
+   contributing, and alternative causal claims. Each includes an issue-specific
+   headline, concrete root cause, and causal failure path. The initial schema
+   deliberately omits resolution; a review adds a verification observation,
+   remediation, and recovery condition. It is decoded again
    in Go and checked for size, structure, controlled values, valid citations,
-   valid finding contradictions, allowlisted action IDs, relational
+   exact diagnostic coverage, empty contradiction arrays, allowlisted action IDs, relational
    invariants that the portable provider schema cannot express, repeated text,
    generic failure restatements, and evidence-plumbing language presented as a
    cause.
-7. Accepted hypotheses are appended below deterministic findings at a fixed
-   uncalibrated confidence. The root cause and failure path remain visibly
-   distinct in the report. Generated output cannot alter factual findings,
-   create actions, or control retry advice.
+7. Accepted hypotheses are appended below deterministic findings at bounded,
+   role-sensitive, uncalibrated confidence. The root cause and failure path
+   remain visibly distinct in the report. Exact cited focus lines are appended
+   under a distinct `Observed diagnostics` label. Validated resolution prose becomes
+   non-executing advisory actions after authoritative deterministic actions.
+   Generated output cannot alter factual findings, create an execution vector,
+   or control retry advice.
 
 Once a request is attempted, the final disclosure manifest conservatively
 records the projection as disclosed even if transport or proposal validation

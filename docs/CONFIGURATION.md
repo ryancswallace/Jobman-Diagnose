@@ -123,6 +123,7 @@ profiles:
     timeout: 30s
     maximum_input_bytes: 262144
     maximum_output_bytes: 32768
+    maximum_analysis_passes: 2
     disclosure:
       metadata:
         maximum_items: 256
@@ -150,7 +151,10 @@ Profile names contain only lowercase letters, digits, `.`, `_`, and `-`.
 `defaults.profile` is required and must name one defined profile.
 `require_json_schema` must be true. Deadlines range from `100ms` through `5m`;
 input limits range from 4 KiB through 2 MiB; output limits range from 1 KiB
-through 256 KiB.
+through 256 KiB. `maximum_analysis_passes` is optional: omitted or `1` makes
+one model call, while `2` permits one bounded review call for a complex
+assessment. Both calls use the same provider/model, evidence authority, byte
+limits, and total `timeout`; there is no open-ended loop.
 
 `disclosure.metadata` is mandatory and requires `maximum_items` and
 `maximum_bytes`. Optional `command`, `path`, and `environment_name` classes
@@ -176,16 +180,21 @@ optional `log_content` and `source_content` require `maximum_artifacts` and
         maximum_artifacts: 2
         maximum_bytes: 65536
       source_content:
-        maximum_artifacts: 1
+        maximum_artifacts: 6
         maximum_bytes: 262144
 ```
 
-These are hard disclosure ceilings. Metadata and source context still fail
-closed if their selected values cannot fit. Log content is different: Jobman
+These are hard disclosure ceilings. Metadata and the highest-priority source
+context fail closed if their selected values cannot fit; lower-priority
+automatically inferred source files are omitted when the combined ceiling is
+full. Log content is different: Jobman
 Diagnose ranks exact causal and structured ranges across the collected streams
 and projects continuous context windows that fit `log_content.maximum_bytes`
-and `maximum_artifacts`. When no such range exists it projects bounded terminal
-output. It never sends bytes outside the ceiling.
+and `maximum_artifacts`. Causal windows also retain only a fixed number of
+surrounding lines, preventing high-volume repetitive messages from crowding out
+a compact terminal cause even when the complete log fits the byte ceiling;
+structured ranges that fit the byte budget are preserved. When no such range exists it projects
+bounded terminal output. It never sends bytes outside the ceiling.
 
 The AI activation flag and profile are intersected. A disclosure allowance
 alone never sends a class. `--ai` and `--profile` approve metadata plus bounded
@@ -248,7 +257,7 @@ profiles:
         maximum_items: 256
         maximum_bytes: 131072
       source_content:
-        maximum_artifacts: 1
+        maximum_artifacts: 6
         maximum_bytes: 262144
     source_context:
       mode: limited
@@ -277,19 +286,25 @@ overrides its mode. An explicit limited override uses the profile's configured
 radius when that profile also defaults to limited; otherwise it uses 20 lines
 on each side.
 
-The companion infers a source path only when the recorded direct target
-command contains exactly one argument or executable with a supported source
-extension. Relative inferred paths are resolved against the recorded target
-working directory. Shell snippets, extensionless executables, and commands
-that name multiple source files require `--source-file PATH`. An explicit
-relative path is resolved against the diagnosis process's current directory.
+The companion starts with supported source paths in the recorded direct target
+command. Relative inferred paths are resolved against the recorded target
+working directory. In limited mode, when `source_content.maximum_artifacts` is
+greater than one, it may then add supported files referenced by runtime stack
+locations, but only when their resolved paths remain beneath the recorded
+working directory. Direct-command sources are highest priority; lower-priority
+runtime files that do not fit the remaining combined byte ceiling are omitted.
+With a one-artifact limit, commands that name multiple source files remain
+ambiguous and require `--source-file PATH`. Shell snippets and extensionless
+executables also require an explicit file. An explicit relative path is
+resolved against the diagnosis process's current directory.
 
 Limited mode selects the resolved symmetric radius, clipped at the file
 boundaries. The anchor is chosen in this order: `--source-line N`, the
 last matching source location in a selected Python/JVM/compiler-style runtime
 log, then line 1. `--source-line` is invalid with full mode. The selected
-window must fit `source_content.maximum_bytes`. Full mode requires the entire
-file to fit that ceiling. Both modes reject an empty file, a final-path
+windows together must fit `source_content.maximum_bytes`. `--source-file`, an
+explicit line, and full mode select exactly one file; full mode requires the
+entire file to fit that ceiling. Both modes reject an empty file, a final-path
 symlink, a non-regular file, invalid UTF-8, NUL bytes, concurrent replacement,
 and files larger than the 1 MiB hard limit.
 
@@ -301,14 +316,17 @@ enabling a persistent default on a remote profile. Pair source with
 `--ai-logs`: source context can explain a cited runtime signal, but host
 validation never lets source text alone establish a generated failure cause.
 
-Before provider projection, the companion compares the selected file with
+Before provider projection, the companion compares each selected file with
 source paths and lines recorded in target logs. It classifies a different file,
 a runtime line beyond the current file, or a differing Python traceback source
 line as a mismatch, emits `source_context_mismatch`, and withholds that source
 artifact. A matching path and valid line are only consistent with the runtime
 record; they do not attest to an executed revision. With no comparable runtime
 location, the point-in-time source remains unverified and retains the existing
-source trust warning.
+source trust warning. An inferred runtime line beyond the current file is
+clipped only for local collection so assessment can report and withhold the
+mismatch; an explicitly requested out-of-range `--source-line` remains an input
+error.
 
 ## Inspection commands
 
@@ -462,9 +480,9 @@ profiles:
         maximum_bytes: 131072
 ```
 
-The child receives one `jobman.diagnosis_generation_request` schema-5 JSON
+The child receives one `jobman.diagnosis_generation_request` schema-6 JSON
 value on standard input and must write one raw
-`jobman.diagnosis_proposal` schema-2 JSON value to standard output. Its
+`jobman.diagnosis_proposal` schema-3 JSON value to standard output. Its
 environment is minimal and does not inherit ambient variables. The bridge sets
 `JOBMAN_DIAGNOSE_PROVIDER_PROTOCOL=3`, `JOBMAN_DIAGNOSE_PROVIDER_MODEL`, and
 `JOBMAN_DIAGNOSE_REQUEST_ID`; an explicitly referenced credential is available
@@ -487,10 +505,11 @@ error string. A proposal that is structurally valid but merely repeats the
 failure mechanism or evidence plumbing reports the controlled
 `proposal_not_specific` reason without echoing the rejected model text.
 
-The profile `timeout` bounds the complete provider operation, including the
-wait for a non-streaming HTTP provider to finish inference and return response
-headers. Choose a value that covers cold model startup and worst-case
-structured generation; the supported range is 100ms through 5m.
+The profile `timeout` bounds the complete analysis workflow, including an
+optional review call and the wait for a non-streaming HTTP provider to finish
+inference and return response headers. Choose a value that covers cold model
+startup and worst-case structured generation; the supported range is 100ms
+through 5m.
 
 Core invocation context remains separate. When launched through Jobman
 extension protocol 1, `JOBMAN_EXECUTABLE`, `JOBMAN_STATE_DIR`, and optional

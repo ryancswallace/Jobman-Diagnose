@@ -247,7 +247,8 @@ func runDiagnosis(
 		limits := selection.profile.Disclosure[string(diagnosis.DisclosureSourceContent)]
 		source, sourceErr := sourcecontext.Collect(ctx, evidence, sourcecontext.Options{
 			Mode: selection.sourceMode, File: parsed.sourceFile, Line: parsed.sourceLine,
-			LinesBeforeAndAfter: selection.sourceRadius, MaximumBytes: limits.MaximumBytes,
+			LinesBeforeAndAfter: selection.sourceRadius, MaximumArtifacts: limits.MaximumArtifacts,
+			MaximumBytes: limits.MaximumBytes,
 		})
 		if sourceErr != nil {
 			return sourceErr

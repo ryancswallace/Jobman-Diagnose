@@ -35,7 +35,7 @@ const (
 	maximumEnrichmentItems = 128
 	maximumCollectorText   = 256
 	maximumEnrichmentBytes = 512 * 1024
-	maximumSourceContexts  = 8
+	maximumSourceContexts  = 16
 	maximumSourceBytes     = 1024 * 1024
 )
 
@@ -76,8 +76,8 @@ type EnrichmentItem struct {
 	Disclosure       diagnostic.DisclosureClass `json:"disclosure"`
 }
 
-// SourceContextMode controls how much of one explicitly approved source file
-// is retained in analysis evidence.
+// SourceContextMode controls how much explicitly approved source content is
+// retained in analysis evidence.
 type SourceContextMode string
 
 // Supported source-context selection modes.

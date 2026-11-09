@@ -107,18 +107,31 @@ Confidence scores are integers from 0 through 100 with derived bands:
 
 Every confidence value includes a nonempty basis. Scores express the strength
 of the named analyzer and cited facts; schema 1 does not claim probability
-calibration. Accepted generated hypotheses use score 40 with an explicit
-uncalibrated basis and rank below observed or exact deterministic findings.
+calibration. Accepted generated hypotheses use a bounded role-sensitive score
+with an explicit uncalibrated basis: primary claims rank above contributing
+conditions, which rank above unresolved alternatives; multiple direct citations
+raise the score slightly. Generated contradiction arrays are constrained empty,
+and generated findings remain below observed or exact deterministic findings.
 
 Actions are never marked safe to automate. `read_only_argv` contains only a
 host-validated direct Jobman inspection vector; it is displayed but never run.
 A true `requires_confirmation` indicates that the described change would need
 user authority if a future workflow offered it; the report itself cannot
 perform it. A generator can only reorder action IDs already present in the
-deterministic report. Reconciliation may also map the first supported
-generated hypothesis code to fixed, host-authored guidance. That guidance has
-no execution vector, is never safe to automate, and cannot contain
-model-authored commands or URLs.
+deterministic report. Reconciliation appends validated verification and
+remediation prose as advisory actions after deterministic guidance. These
+actions have no execution vector, are never safe to automate, and validation
+rejects commands, tools, and URLs; remediation actions require confirmation.
+The initial causal-assessment schema omits resolution, so these advisory actions
+are present only when an accepted review supplies them. Reconciliation omits
+schema-description and deterministic-action boilerplate that would not add
+incident-specific guidance.
+
+When an accepted generated finding cites an attributed diagnostic enrichment,
+its explanation ends with a separately labeled `Observed diagnostics` clause.
+Those exact, bounded, redacted projection lines are added deterministically by
+the host rather than copied from generated prose. They remain untrusted target
+output and can contain sensitive application data.
 
 ## Disclosure manifest
 
@@ -132,10 +145,12 @@ When invocation is attempted, the manifest records locality (`local` or
 classes, exact item, artifact, and enrichment IDs, counts, artifact and
 enrichment bytes, encoded request
 bytes, and projected redaction-notice count. The generation request protocol
-version is 5 and the current proposal protocol version is 2. The decoder
-retains schema-1 proposal provenance in historical reports. These values
+version is 6 and the current proposal protocol version is 3. The decoder
+retains schema-1 and schema-2 proposal provenance in historical reports. These values
 describe the request that may have reached the provider even if the provider
-failed or its proposal was rejected.
+failed or its proposal was rejected. Once a second analysis pass is attempted,
+the request ID identifies the review request and request bytes account for both
+sealed requests, even if the validated first pass is ultimately retained.
 `generated_content_used` is true only when validated proposal content entered
 the report.
 

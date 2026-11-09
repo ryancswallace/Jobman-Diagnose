@@ -15,7 +15,12 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
-const generatedAnalyzer = "generator.proposal/1"
+const generatedAnalyzer = "generator.proposal/2"
+
+type attemptFailure struct {
+	code   string
+	detail string
+}
 
 // Generator is the provider capability required by generated diagnosis.
 type Generator interface {
@@ -74,7 +79,9 @@ func ValidateGenerator(profile config.Profile, generator Generator) error {
 }
 
 // Diagnose produces the deterministic report first, then optionally appends
-// only validated, uncalibrated generated proposals.
+// only validated, uncalibrated generated proposals. Profiles may permit one
+// bounded review call for complex or multi-branch incidents; both calls share
+// the profile timeout and identical evidence authority.
 //
 //nolint:cyclop // The provider boundary keeps each provenance, validation, abstention, and fallback decision explicit.
 func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.FailureEvidence) (diagnosis.Report, error) {
@@ -94,47 +101,200 @@ func (augmenter *Augmenter) Diagnose(ctx context.Context, evidence diagnosis.Fai
 	if err != nil {
 		return diagnosis.Report{}, err
 	}
-	requestContext, cancel := context.WithTimeout(ctx, augmenter.profile.TimeoutDuration())
+	generationContext, cancel := context.WithTimeout(ctx, augmenter.profile.TimeoutDuration())
 	defer cancel()
-	augmenter.notify(ProgressWaiting)
-	response, generateErr := augmenter.generator.Generate(requestContext, prepared.Request)
-	if generateErr != nil {
-		if contextErr := ctx.Err(); contextErr != nil {
-			return diagnosis.Report{}, contextErr
-		}
-
-		return augmenter.handleFailure(report, evidence, prepared, "generator_failed", generatorFailureDetail(generateErr))
+	proposal, failure := augmenter.requestProposal(generationContext, prepared.Request, ProgressWaiting)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return diagnosis.Report{}, contextErr
 	}
-	augmenter.notify(ProgressValidating)
-	if response.RequestID != prepared.Request.RequestID || response.Provider != augmenter.generator.Name() ||
-		response.Model != augmenter.profile.Model {
-		return augmenter.handleFailure(
-			report, evidence, prepared, "generator_provenance_invalid",
-			"response_provenance_mismatch: provider response provenance did not match the selected request and profile",
-		)
+	if failure != nil {
+		return augmenter.handleFailure(report, evidence, prepared, failure.code, failure.detail)
 	}
-	proposal, err := provider.DecodeProposal(bytes.NewReader(response.JSON), prepared.Request)
-	if err != nil {
-		detail := "proposal_validation_failed: model output did not satisfy Jobman's bounded proposal rules"
-		if errors.Is(err, provider.ErrProposalNotSpecific) {
-			detail = "proposal_not_specific: model output did not provide a distinct, incident-specific root cause"
-		} else if errors.Is(err, provider.ErrProposalUnsupported) {
-			detail = "proposal_evidence_unsupported: model output asserted a cause class not supported by its cited evidence"
-		}
-		return augmenter.handleFailure(
-			report, evidence, prepared, "generator_proposal_invalid",
-			detail,
-		)
-	}
-	if len(proposal.Hypotheses) == 0 && len(proposal.RecommendedActions) == 0 && len(proposal.MissingEvidence) == 0 {
+	if !proposalHasContent(proposal) {
 		augmenter.notify(ProgressFallback)
 		return sealFallback(
 			report, evidence, prepared, "generator_abstained",
 			"model returned no hypotheses, recommended actions, or missing-evidence items",
 		)
 	}
+	warnings := make([]diagnosis.Warning, 0, 1)
+	if augmenter.profile.AnalysisPassLimit() > 1 && shouldReview(prepared.Request, proposal) {
+		reviewPrepared, reviewErr := PrepareReview(prepared, proposal, augmenter.profile.MaximumInputBytes)
+		if reviewErr != nil {
+			warnings = append(warnings, reviewWarning(
+				"generator_review_skipped",
+				"The optional second synthesis pass did not fit the configured request limit; the validated first-pass assessment was retained.",
+			))
+		} else {
+			reviewed, reviewFailure := augmenter.requestProposal(
+				generationContext, reviewPrepared.Request, ProgressReviewing,
+			)
+			if contextErr := ctx.Err(); contextErr != nil {
+				return diagnosis.Report{}, contextErr
+			}
+			// The review request has now been attempted. Record its digest and
+			// combined byte count conservatively even when the first proposal is
+			// retained because review transport, validation, or quality failed.
+			prepared = reviewPrepared
+			switch {
+			case reviewFailure != nil:
+				warnings = append(warnings, reviewWarning(
+					"generator_review_failed",
+					"The optional second synthesis pass failed validation or transport; the validated first-pass assessment was retained.",
+				))
+			case !proposalHasContent(reviewed):
+				warnings = append(warnings, reviewWarning(
+					"generator_review_abstained",
+					"The optional second synthesis pass returned no assessment; the validated first-pass assessment was retained.",
+				))
+			default:
+				if groundedCausalDetailScore(reviewed, reviewPrepared.Request.Projection) <
+					groundedCausalDetailScore(proposal, prepared.Request.Projection) {
+					warnings = append(warnings, reviewWarning(
+						"generator_review_regressed",
+						"The optional second synthesis pass lost grounded causal detail; the more specific validated first-pass assessment was retained.",
+					))
+				} else {
+					proposal = reviewed
+				}
+			}
+		}
+	}
 
-	return reconcile(report, evidence, prepared, proposal)
+	return reconcile(report, evidence, prepared, proposal, warnings...)
+}
+
+func (augmenter *Augmenter) requestProposal(
+	ctx context.Context,
+	request provider.Request,
+	waiting ProgressEvent,
+) (provider.Proposal, *attemptFailure) {
+	augmenter.notify(waiting)
+	response, err := augmenter.generator.Generate(ctx, request)
+	if err != nil {
+		return provider.Proposal{}, &attemptFailure{code: "generator_failed", detail: generatorFailureDetail(err)}
+	}
+	augmenter.notify(ProgressValidating)
+	if response.RequestID != request.RequestID || response.Provider != augmenter.generator.Name() ||
+		response.Model != augmenter.profile.Model {
+		return provider.Proposal{}, &attemptFailure{
+			code:   "generator_provenance_invalid",
+			detail: "response_provenance_mismatch: provider response provenance did not match the selected request and profile",
+		}
+	}
+	proposal, err := provider.DecodeProposal(bytes.NewReader(response.JSON), request)
+	if err == nil {
+		return proposal, nil
+	}
+	detail := "proposal_validation_failed: model output did not satisfy Jobman's bounded proposal rules"
+	if errors.Is(err, provider.ErrProposalNotSpecific) {
+		detail = "proposal_not_specific: model output did not provide a distinct, incident-specific causal assessment"
+	} else if errors.Is(err, provider.ErrProposalUnsupported) {
+		detail = "proposal_evidence_unsupported: model output asserted a cause not supported by its cited evidence"
+	}
+
+	return provider.Proposal{}, &attemptFailure{code: "generator_proposal_invalid", detail: detail}
+}
+
+func proposalHasContent(proposal provider.Proposal) bool {
+	return len(proposal.Hypotheses) != 0 || len(proposal.RecommendedActions) != 0 || len(proposal.MissingEvidence) != 0
+}
+
+func shouldReview(request provider.Request, proposal provider.Proposal) bool {
+	if request.Stage != provider.AnalysisInitial || len(proposal.Hypotheses) == 0 {
+		return false
+	}
+	if len(proposal.Hypotheses) > 1 {
+		return true
+	}
+	logArtifacts, sourceArtifacts := 0, 0
+	for _, artifact := range request.Projection.Artifacts {
+		switch artifact.Disclosure {
+		case string(diagnostic.DisclosureLogContent):
+			logArtifacts++
+		case string(diagnosis.DisclosureSourceContent):
+			sourceArtifacts++
+		}
+	}
+	diagnosticLines := 0
+	for _, focus := range request.DiagnosticFocus {
+		diagnosticLines += len(focus.Lines)
+	}
+
+	return diagnosticLines > 1 || len(request.Projection.Enrichment) > 1 ||
+		logArtifacts > 1 || logArtifacts != 0 && sourceArtifacts != 0
+}
+
+func reviewWarning(code, message string) diagnosis.Warning {
+	return diagnosis.Warning{Code: code, Message: message}
+}
+
+func groundedCausalDetailScore(proposal provider.Proposal, projection provider.Projection) int {
+	evidence := make(map[string]struct{})
+	for _, token := range causalDetailTokens(projectedCausalText(projection)) {
+		evidence[token] = struct{}{}
+	}
+	seen := make(map[string]struct{})
+	score := 0
+	for _, hypothesis := range proposal.Hypotheses {
+		causal := strings.Join([]string{hypothesis.Summary, hypothesis.RootCause, hypothesis.Explanation}, " ")
+		for _, token := range causalDetailTokens(causal) {
+			if _, duplicate := seen[token]; duplicate {
+				continue
+			}
+			if _, grounded := evidence[token]; !grounded {
+				continue
+			}
+			seen[token] = struct{}{}
+			score++
+			if strings.IndexFunc(token, func(value rune) bool { return value >= '0' && value <= '9' }) >= 0 ||
+				len(token) >= 10 {
+				score++
+			}
+		}
+	}
+
+	return score
+}
+
+func projectedCausalText(projection provider.Projection) string {
+	var value strings.Builder
+	for _, enrichment := range projection.Enrichment {
+		for _, line := range enrichment.DiagnosticLines {
+			value.WriteString(line)
+			value.WriteByte(' ')
+		}
+	}
+	for _, artifact := range projection.Artifacts {
+		if artifact.Disclosure == "log_content" {
+			value.WriteString(artifact.Content)
+			value.WriteByte(' ')
+		}
+	}
+
+	return value.String()
+}
+
+func causalDetailTokens(value string) []string {
+	ignored := map[string]struct{}{
+		"application": {}, "caused": {}, "condition": {}, "configuration": {}, "data": {}, "error": {},
+		"failed": {}, "failure": {}, "invalid": {}, "nonzero": {}, "process": {}, "status": {},
+		"target": {}, "validation": {}, "with": {}, "without": {},
+	}
+	fields := strings.FieldsFunc(strings.ToLower(value), func(character rune) bool {
+		return character < 'a' || character > 'z' && (character < '0' || character > '9')
+	})
+	result := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if len(field) < 3 {
+			continue
+		}
+		if _, skip := ignored[field]; !skip {
+			result = append(result, field)
+		}
+	}
+
+	return result
 }
 
 func (augmenter *Augmenter) handleFailure(
@@ -212,33 +372,36 @@ func reconcile(
 	evidence diagnosis.FailureEvidence,
 	prepared Prepared,
 	proposal provider.Proposal,
+	additionalWarnings ...diagnosis.Warning,
 ) (diagnosis.Report, error) {
 	report.Versions.GenerationRequestSchemaVersion = provider.RequestSchemaVersion
 	report.Versions.ProposalSchemaVersion = provider.ProposalSchemaVersion
-	confidence, err := diagnosis.NewConfidence(
-		40,
-		"This is an uncalibrated generated hypothesis ranked below Jobman's observed and exact deterministic findings.",
-	)
-	if err != nil {
-		return diagnosis.Report{}, err
-	}
 	for _, hypothesis := range proposal.Hypotheses {
 		if duplicatesDeterministicFinding(hypothesis, report.Findings) {
 			continue
+		}
+		confidence, err := generatedConfidence(hypothesis)
+		if err != nil {
+			return diagnosis.Report{}, err
 		}
 		identifier := fmt.Sprintf(
 			"finding:%03d:%s", len(report.Findings)+1, strings.ReplaceAll(hypothesis.Code, ".", "-"),
 		)
 		report.Findings = append(report.Findings, diagnosis.Finding{
 			ID: identifier, Code: hypothesis.Code, Category: hypothesis.Category, Severity: diagnosis.SeverityWarning,
-			Summary: hypothesis.Summary, Explanation: generatedExplanation(hypothesis), Confidence: confidence,
+			Summary: hypothesis.Summary,
+			Explanation: generatedExplanation(
+				hypothesis, diagnosticDetailsForHypothesis(hypothesis, prepared.Request),
+			),
+			Confidence:            confidence,
 			SupportingEvidence:    slices.Clone(hypothesis.SupportingEvidence),
 			ContradictingEvidence: slices.Clone(hypothesis.ContradictingEvidence),
-			ContradictingFindings: slices.Clone(hypothesis.ContradictsFindings), Analyzer: generatedAnalyzer,
+			ContradictingFindings: slices.Clone(hypothesis.ContradictsFindings),
+			Analyzer:              generatedAnalyzer + "/" + string(hypothesis.Role),
 		})
 	}
 	report.Actions = reorderActions(report.Actions, proposal.RecommendedActions)
-	report.Actions = prependGeneratedGuidance(report.Actions, proposal.Hypotheses)
+	report.Actions = appendGeneratedPlans(report.Actions, proposal.Hypotheses)
 	for _, missing := range proposal.MissingEvidence {
 		report.MissingEvidence = append(report.MissingEvidence, diagnosis.MissingEvidence{
 			Code: missing.Code, Description: missing.Description,
@@ -248,6 +411,7 @@ func reconcile(
 		Code:    "generated_content_uncalibrated",
 		Message: "Generated hypotheses are advisory and uncalibrated; deterministic facts, actions, and retry policy remain authoritative.",
 	})
+	report.Warnings = append(report.Warnings, additionalWarnings...)
 	report = appendSourceContextWarning(report, evidence, prepared.Request.Manifest.ArtifactIDs)
 	report.Citations = appendGeneratedCitations(report.Citations, evidence, proposal)
 	report.Mode = diagnosis.ModeMixed
@@ -262,6 +426,32 @@ func reconcile(
 	}
 
 	return sealed, nil
+}
+
+func generatedConfidence(hypothesis provider.Hypothesis) (diagnosis.Confidence, error) {
+	score := 30
+	role := "alternative explanation"
+	switch hypothesis.Role {
+	case provider.HypothesisPrimary:
+		score = 55
+		role = "primary causal assessment"
+	case provider.HypothesisContributing:
+		score = 45
+		role = "contributing causal assessment"
+	case provider.HypothesisAlternative:
+		// The defaults describe an alternative explanation.
+	}
+	if len(hypothesis.SupportingEvidence) > 1 {
+		score += 5
+	}
+	if len(hypothesis.ContradictingEvidence) != 0 {
+		score -= 10
+	}
+
+	return diagnosis.NewConfidence(
+		score,
+		"This is an uncalibrated "+role+" ranked from its causal role and bounded supporting evidence; Jobman's deterministic observations remain authoritative.",
+	)
 }
 
 func appendSourceContextWarning(
@@ -284,8 +474,42 @@ func appendSourceContextWarning(
 	return report
 }
 
-func generatedExplanation(hypothesis provider.Hypothesis) string {
-	return "Root cause: " + sentence(hypothesis.RootCause) + " Failure path: " + sentence(hypothesis.Explanation)
+func generatedExplanation(hypothesis provider.Hypothesis, diagnosticDetails []string) string {
+	result := "Root cause: " + sentence(hypothesis.RootCause) + " Failure path: " + sentence(hypothesis.Explanation)
+	if len(diagnosticDetails) != 0 {
+		result += " Observed diagnostics: " + strings.Join(diagnosticDetails, " | ")
+	}
+
+	return result
+}
+
+func diagnosticDetailsForHypothesis(hypothesis provider.Hypothesis, request provider.Request) []string {
+	support := make(map[string]struct{}, len(hypothesis.SupportingEvidence))
+	for _, identifier := range hypothesis.SupportingEvidence {
+		support[identifier] = struct{}{}
+	}
+	enrichmentArtifacts := make(map[string]string, len(request.Projection.Enrichment))
+	for _, enrichment := range request.Projection.Enrichment {
+		enrichmentArtifacts[enrichment.ID] = enrichment.SourceArtifactID
+	}
+	result := make([]string, 0, 8)
+	totalBytes := 0
+	for _, focus := range request.DiagnosticFocus {
+		_, direct := support[focus.EvidenceID]
+		_, attributed := support[enrichmentArtifacts[focus.EvidenceID]]
+		if !direct && !attributed {
+			continue
+		}
+		for _, line := range focus.Lines {
+			if slices.Contains(result, line) || len(result) >= 8 || totalBytes+len(line) > 2048 {
+				continue
+			}
+			result = append(result, line)
+			totalBytes += len(line)
+		}
+	}
+
+	return result
 }
 
 func sentence(value string) string {
@@ -312,13 +536,13 @@ func duplicatesDeterministicFinding(hypothesis provider.Hypothesis, findings []d
 	support := slices.Clone(hypothesis.SupportingEvidence)
 	slices.Sort(support)
 	for _, finding := range findings {
-		if finding.Analyzer == generatedAnalyzer {
+		if strings.HasPrefix(finding.Analyzer, "generator.") {
 			continue
 		}
 		findingSupport := slices.Clone(finding.SupportingEvidence)
 		slices.Sort(findingSupport)
 		sameText := hypothesis.Summary == finding.Summary &&
-			(hypothesis.RootCause == finding.Explanation || generatedExplanation(hypothesis) == finding.Explanation)
+			(hypothesis.RootCause == finding.Explanation || generatedExplanation(hypothesis, nil) == finding.Explanation)
 		if (hypothesisCode == finding.Code || sameText) && slices.Equal(support, findingSupport) {
 			return true
 		}
@@ -350,102 +574,80 @@ func reorderActions(actions []diagnosis.Action, preferred []string) []diagnosis.
 	return result
 }
 
-func prependGeneratedGuidance(
-	actions []diagnosis.Action,
-	hypotheses []provider.Hypothesis,
-) []diagnosis.Action {
-	for _, hypothesis := range hypotheses {
-		action, ok := generatedGuidanceAction(hypothesis)
-		if !ok {
+func appendGeneratedPlans(actions []diagnosis.Action, hypotheses []provider.Hypothesis) []diagnosis.Action {
+	plans := make([]diagnosis.Action, 0, len(hypotheses)*2)
+	for index, hypothesis := range hypotheses {
+		if hypothesis.Resolution == (provider.ResolutionPlan{}) {
 			continue
 		}
-		for _, existing := range actions {
-			if existing.Code == action.Code {
-				return actions
+		support := slices.Clone(hypothesis.SupportingEvidence)
+		sequence := index + 1
+		verifySummary, verifyCode, remediationSummary, remediationCode := generatedPlanLabels(hypothesis.Role)
+		if usefulGeneratedPlanText(hypothesis.Resolution.Verification) {
+			description := sentence(hypothesis.Resolution.Verification)
+			if usefulGeneratedPlanText(hypothesis.Resolution.SuccessCondition) {
+				description += " Expected recovery: " + sentence(hypothesis.Resolution.SuccessCondition)
 			}
+			plans = append(plans, diagnosis.Action{
+				ID: fmt.Sprintf("action:000:generated-verify-%02d", sequence), Code: verifyCode,
+				Kind: diagnosis.ActionInspect, Summary: verifySummary + ": " + hypothesis.Summary,
+				Description: description, SupportingEvidence: support, Execution: diagnosis.ActionExecutionNone,
+				Arguments: []string{}, RequiresConfirmation: false, SafeToAutomate: false,
+			})
 		}
-		result := make([]diagnosis.Action, 0, len(actions)+1)
-		result = append(result, action)
-
-		return append(result, actions...)
+		if hypothesis.Role == provider.HypothesisAlternative {
+			continue
+		}
+		if usefulGeneratedPlanText(hypothesis.Resolution.Remediation) {
+			plans = append(plans, diagnosis.Action{
+				ID: fmt.Sprintf("action:000:generated-remediate-%02d", sequence), Code: remediationCode,
+				Kind: diagnosis.ActionChange, Summary: remediationSummary + ": " + hypothesis.Summary,
+				Description: sentence(hypothesis.Resolution.Remediation), SupportingEvidence: support,
+				Execution: diagnosis.ActionExecutionNone, Arguments: []string{},
+				RequiresConfirmation: true, SafeToAutomate: false,
+			})
+		}
+	}
+	if len(plans) == 0 {
+		return actions
 	}
 
-	return actions
+	return append(actions, plans...)
 }
 
-func generatedGuidanceAction(hypothesis provider.Hypothesis) (diagnosis.Action, bool) {
-	action := diagnosis.Action{
-		ID: "action:000:generated-guidance", Kind: diagnosis.ActionInspect,
-		SupportingEvidence: slices.Clone(hypothesis.SupportingEvidence),
-		Execution:          diagnosis.ActionExecutionNone, Arguments: []string{}, SafeToAutomate: false,
-	}
-	switch hypothesis.Code {
-	case "generated.access_denied":
-		action.Code = "review_target_access"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Correct the target's access to the required resource"
-		action.Description = "Review the target identity, resource ownership, and applicable permission or authorization policy before creating another run."
-		action.RequiresConfirmation = true
-	case "generated.application_configuration":
-		action.Code = "review_application_configuration"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Correct the rejected application configuration"
-		action.Description = "Compare the affected setting with values enabled for the target deployment, update it through the application's normal configuration path, and then create a new run."
-		action.RequiresConfirmation = true
-	case "generated.application_input":
-		action.Code = "review_application_input"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Correct or validate the target input"
-		action.Description = "Compare the supplied input with the target application's accepted format and constraints before creating another run."
-		action.RequiresConfirmation = true
-	case "generated.application_defect":
-		action.Code = "review_application_defect"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Correct the application defect before retrying"
-		action.Description = "Inspect the cited failure path in the application source or deployed artifact, correct it through the normal development and deployment process, and then create a new run."
-		action.RequiresConfirmation = true
-	case "generated.data_validation":
-		action.Code = "review_invalid_data"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Correct or quarantine the invalid data"
-		action.Description = "Compare the rejected record or document with the application's accepted schema and business constraints before creating another run."
-		action.RequiresConfirmation = true
-	case "generated.dependency_missing":
-		action.Code = "restore_missing_dependency"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Install or deploy the missing dependency"
-		action.Description = "Restore the required module, executable, file, or deployed component through the target's normal build or deployment process before retrying."
-		action.RequiresConfirmation = true
-	case "generated.dependency_unavailable":
-		action.Code = "restore_required_dependency"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Restore or reconfigure the unavailable dependency"
-		action.Description = "Verify the dependency's availability and the target's connection configuration before retrying the unchanged workload."
-		action.RequiresConfirmation = true
-	case "generated.environment_mismatch":
-		action.Code = "review_target_environment"
-		action.Kind = diagnosis.ActionChange
-		action.Summary = "Align the target environment with its runtime requirements"
-		action.Description = "Review the target's declared environment and runtime assumptions, correct the mismatch through the normal job configuration path, and then create a new run."
-		action.RequiresConfirmation = true
-	case "generated.external_service_failure":
-		action.Code = "inspect_external_service"
-		action.Summary = "Verify the external service before retrying"
-		action.Description = "Check the service's availability and the target's authorized connection settings before deciding whether another run is useful."
-	case "generated.resource_pressure":
-		action.Code = "inspect_resource_constraints"
-		action.Summary = "Inspect the constrained resource before retrying"
-		action.Description = "Compare the cited resource evidence with the target's expected workload and available host or container limits."
-	case "generated.transient_infrastructure":
-		action.Code = "confirm_infrastructure_recovery"
-		action.Kind = diagnosis.ActionWait
-		action.Summary = "Confirm that the infrastructure condition has cleared"
-		action.Description = "Wait for the cited infrastructure condition to recover or verify its health before creating another run."
+func generatedPlanLabels(role provider.HypothesisRole) (string, string, string, string) {
+	switch role {
+	case provider.HypothesisPrimary:
+		return "Verify the AI-assisted likely cause", "generated.verify_primary_cause",
+			"Address the AI-assisted likely cause", "generated.address_primary_cause"
+	case provider.HypothesisContributing:
+		return "Verify the contributing condition", "generated.verify_contributing_condition",
+			"Address the contributing condition", "generated.address_contributing_condition"
+	case provider.HypothesisAlternative:
+		return "Distinguish the alternative explanation", "generated.distinguish_alternative", "", ""
 	default:
-		return diagnosis.Action{}, false
+		return "Verify the AI-assisted likely cause", "generated.verify_primary_cause",
+			"Address the AI-assisted likely cause", "generated.address_primary_cause"
+	}
+}
+
+func usefulGeneratedPlanText(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	for _, generic := range []string{
+		"a concrete, non-executing observation or comparison that would confirm or refute this claim",
+		"the observable condition that would demonstrate recovery after remediation",
+		"verify the intended endpoint, dependency health, name resolution, trust policy, and retry guidance",
+		"identify the target-specific error before changing configuration or creating another run",
+		"inspect the target-specific error before changing configuration or creating another run",
+		"inspect the rejected input and validation boundary",
+		"target configuration or migration state",
+	} {
+		if strings.Contains(normalized, generic) {
+			return false
+		}
 	}
 
-	return action, true
+	return normalized != ""
 }
 
 func appendGeneratedCitations(

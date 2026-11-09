@@ -30,6 +30,7 @@ const (
 	progressCollecting progressPhase = "collecting"
 	progressPreparing  progressPhase = "preparing"
 	progressWaiting    progressPhase = "waiting"
+	progressReviewing  progressPhase = "reviewing"
 	progressValidating progressPhase = "validating"
 	progressFallback   progressPhase = "fallback"
 )
@@ -123,6 +124,8 @@ func generationProgressObserver(reporter progressReporter) generation.ProgressOb
 			reporter.Phase(progressPreparing)
 		case generation.ProgressWaiting:
 			reporter.Phase(progressWaiting)
+		case generation.ProgressReviewing:
+			reporter.Phase(progressReviewing)
 		case generation.ProgressValidating:
 			reporter.Phase(progressValidating)
 		case generation.ProgressFallback:
@@ -251,7 +254,7 @@ func drawProgress(
 		"%s AI analysis: %s… %s",
 		frames[frame%len(frames)], progressPhaseText(phase, descriptor), formatProgressElapsed(now.Sub(started)),
 	)
-	if phase == progressWaiting && descriptor.timeout > 0 {
+	if (phase == progressWaiting || phase == progressReviewing) && descriptor.timeout > 0 {
 		line += " (timeout " + formatProgressDuration(descriptor.timeout) + "; Ctrl-C to cancel)"
 	} else {
 		line += " (Ctrl-C to cancel)"
@@ -274,6 +277,8 @@ func progressPhaseText(phase progressPhase, descriptor progressDescriptor) strin
 			return "waiting for profile " + profile
 		}
 		return "waiting for profile " + profile + " (model " + model + ")"
+	case progressReviewing:
+		return "reviewing the causal assessment for completeness"
 	case progressValidating:
 		return "validating the model response"
 	case progressFallback:

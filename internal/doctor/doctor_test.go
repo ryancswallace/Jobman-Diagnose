@@ -157,10 +157,16 @@ func validProbeResponse(t *testing.T, profile config.Profile) func(provider.Requ
 		proposal := provider.Proposal{
 			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
+				Role: provider.HypothesisPrimary,
 				Code: "generated.dependency_unavailable", Category: "network",
-				Summary:            "Inventory synchronization was refused by 127.0.0.1:65535",
-				RootCause:          "The synchronize inventory connection to 127.0.0.1:65535 failed with connection refused.",
-				Explanation:        "The connection refused signal prevents the inventory synchronization request from completing.",
+				Summary:     "Inventory synchronization was refused by 127.0.0.1:65535",
+				RootCause:   "The synchronize inventory connection to 127.0.0.1:65535 failed with connection refused.",
+				Explanation: "The connection refused signal prevents the inventory synchronization request from completing.",
+				Resolution: provider.ResolutionPlan{
+					Verification:     "Observe whether the inventory endpoint accepts the synchronization connection.",
+					Remediation:      "Restore availability of the configured inventory endpoint.",
+					SuccessCondition: "The inventory synchronization connection succeeds without refusal.",
+				},
 				SupportingEvidence: []string{"doctor:artifact:stderr"}, ContradictingEvidence: []string{},
 				ContradictsFindings: []string{},
 			}},

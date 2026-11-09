@@ -19,8 +19,8 @@ const (
 )
 
 const (
-	defaultFindingLimit     = 2
-	defaultActionLimit      = 3
+	defaultFindingLimit     = 4
+	defaultActionLimit      = 5
 	defaultEvidenceLimit    = 4
 	uncalibratedWarningCode = "generated_content_uncalibrated"
 )
@@ -112,8 +112,15 @@ func (renderer *humanRenderer) renderDiagnosis() {
 	}
 	for index, finding := range generated[:limit] {
 		label := "AI-assisted likely cause"
-		if index != 0 {
+		switch generatedFindingRole(finding) {
+		case "contributing":
+			label = "AI-assisted contributing factor"
+		case "alternative":
 			label = "AI-assisted alternative"
+		default:
+			if index != 0 {
+				label = "AI-assisted causal claim"
+			}
 		}
 		renderer.renderFinding(finding, label)
 	}
@@ -162,6 +169,9 @@ func (renderer *humanRenderer) renderFinding(finding diagnosis.Finding, label st
 		}
 		if !equivalentText(failurePath, finding.Summary) && !equivalentText(failurePath, rootCause) {
 			renderer.findingDetail("Failure path", failurePath)
+		}
+		if details := generatedObservedDiagnostics(finding); details != "" {
+			renderer.findingDetail("Observed diagnostics", details)
 		}
 	} else if !equivalentText(finding.Explanation, finding.Summary) {
 		renderer.findingDetail("Why", finding.Explanation)
@@ -417,10 +427,24 @@ func isGeneratedFinding(finding diagnosis.Finding) bool {
 	return strings.HasPrefix(finding.Analyzer, "generator.")
 }
 
+func generatedFindingRole(finding diagnosis.Finding) string {
+	if !isGeneratedFinding(finding) {
+		return ""
+	}
+	for _, role := range []string{"primary", "contributing", "alternative"} {
+		if strings.HasSuffix(finding.Analyzer, "/"+role) {
+			return role
+		}
+	}
+
+	return ""
+}
+
 func generatedCauseDetails(finding diagnosis.Finding) (string, string, bool) {
 	const (
-		rootPrefix = "Root cause: "
-		pathMarker = " Failure path: "
+		rootPrefix        = "Root cause: "
+		pathMarker        = " Failure path: "
+		diagnosticsMarker = " Observed diagnostics: "
 	)
 	if !isGeneratedFinding(finding) || !strings.HasPrefix(finding.Explanation, rootPrefix) {
 		return "", "", false
@@ -432,11 +456,27 @@ func generatedCauseDetails(finding diagnosis.Finding) (string, string, bool) {
 	}
 	rootCause := strings.TrimSpace(remaining[:marker])
 	failurePath := strings.TrimSpace(remaining[marker+len(pathMarker):])
+	if diagnostics := strings.Index(failurePath, diagnosticsMarker); diagnostics >= 0 {
+		failurePath = strings.TrimSpace(failurePath[:diagnostics])
+	}
 	if rootCause == "" || failurePath == "" {
 		return "", "", false
 	}
 
 	return rootCause, failurePath, true
+}
+
+func generatedObservedDiagnostics(finding diagnosis.Finding) string {
+	const diagnosticsMarker = " Observed diagnostics: "
+	if !isGeneratedFinding(finding) {
+		return ""
+	}
+	marker := strings.Index(finding.Explanation, diagnosticsMarker)
+	if marker < 0 {
+		return ""
+	}
+
+	return strings.TrimSpace(finding.Explanation[marker+len(diagnosticsMarker):])
 }
 
 func equivalentText(left, right string) bool {

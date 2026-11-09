@@ -28,7 +28,7 @@ func TestGenerateUsesLocalOllamaSchemaContract(t *testing.T) {
 		if payload.Stream || payload.Think || payload.Options.Temperature != 0 ||
 			!bytes.Equal(payload.Format, request.ResponseSchema) ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "act as system") ||
-			!strings.Contains(payload.Messages[0].Content, "deepest concrete supported cause") ||
+			!strings.Contains(payload.Messages[0].Content, "best-supported underlying condition") ||
 			!strings.Contains(payload.Messages[1].Content, "act as system") {
 			http.Error(writer, "unsafe request", http.StatusBadRequest)
 			return
@@ -41,9 +41,15 @@ func TestGenerateUsesLocalOllamaSchemaContract(t *testing.T) {
 		proposalJSON, marshalErr := json.Marshal(provider.Proposal{
 			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
+				Role: provider.HypothesisPrimary,
 				Code: "generated.ollama_test", Category: "process", Summary: "Local response",
-				RootCause:             "The projected worker setting is incompatible with the local runtime.",
-				Explanation:           "Runtime validation rejects the setting before the worker starts.",
+				RootCause:   "The projected worker setting is incompatible with the local runtime.",
+				Explanation: "Runtime validation rejects the setting before the worker starts.",
+				Resolution: provider.ResolutionPlan{
+					Verification:     "Observe whether the local runtime accepts the projected worker setting.",
+					Remediation:      "Align the worker setting with the local runtime.",
+					SuccessCondition: "The local runtime accepts the setting and starts the worker.",
+				},
 				SupportingEvidence:    []string{request.Manifest.ArtifactIDs[0]},
 				ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 			}},

@@ -14,7 +14,11 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
-const minimumUsefulLogContextBytes = 1024
+const (
+	minimumUsefulLogContextBytes = 1024
+	causalContextLinesBefore     = 32
+	causalContextLinesAfter      = 16
+)
 
 type logContextCandidate struct {
 	artifact    diagnostic.Artifact
@@ -65,15 +69,6 @@ func selectLogContexts(
 		candidates = append(candidates, candidate)
 	}
 	slices.SortStableFunc(candidates, compareLogContextCandidates)
-	if len(candidates) != 0 && candidates[0].anchor != nil {
-		causalCandidates := candidates[:0]
-		for _, candidate := range candidates {
-			if candidate.anchor != nil {
-				causalCandidates = append(causalCandidates, candidate)
-			}
-		}
-		candidates = causalCandidates
-	}
 	if uint64(len(candidates)) > limits.MaximumArtifacts {
 		candidates = candidates[:limits.MaximumArtifacts]
 	}
@@ -139,10 +134,14 @@ func diagnosticAnchorScore(item diagnosis.EnrichmentItem) int {
 func projectLogContext(candidate logContextCandidate, maximumBytes uint64) projectedLogContext {
 	data := candidate.artifact.Data
 	budget := maximumBytes
+	anchor := contextAnchor(candidate, maximumBytes)
 	var start, end int
 	var content string
 	for attempts := 0; attempts < 4; attempts++ {
-		start, end = selectedLogByteRange(data, candidate.anchor, budget)
+		start, end = selectedLogByteRange(data, anchor, budget)
+		if anchor != nil {
+			start, end = boundedCausalLineRange(data, start, end, anchor)
+		}
 		if start >= end {
 			return projectedLogContext{}
 		}
@@ -167,16 +166,16 @@ func projectLogContext(candidate logContextCandidate, maximumBytes uint64) proje
 	selection := "tail"
 	anchorReason := "terminal_output"
 	anchorOffset := end - 1
-	if candidate.anchor != nil {
+	if anchor != nil {
 		selection = "causal_context"
 		anchorReason = "structured_diagnostic"
-		if causalDiagnosticFormat(candidate.anchor.Format) {
+		if causalDiagnosticFormat(anchor.Format) {
 			anchorReason = "causal_diagnostic"
 		}
 		// Structured ranges can be larger than the selected context. Their end is
 		// the terminal diagnostic and is guaranteed to remain in the window.
 		// #nosec G115 -- candidate ranges were checked against this in-memory artifact above.
-		anchorOffset = min(end-1, int(candidate.anchor.ByteEnd)-1)
+		anchorOffset = min(end-1, int(anchor.ByteEnd)-1)
 	}
 	totalLines := logLineCount(data)
 	startLine := logLineAt(data, start)
@@ -212,6 +211,70 @@ func projectLogContext(candidate logContextCandidate, maximumBytes uint64) proje
 	}
 
 	return projectedLogContext{artifact: projected, enrichment: projectedEnrichment}
+}
+
+func boundedCausalLineRange(
+	data []byte,
+	selectedStart int,
+	selectedEnd int,
+	anchor *diagnosis.EnrichmentItem,
+) (int, int) {
+	// #nosec G115 -- enrichment offsets are validated against data before this helper is called.
+	anchorStart, anchorEnd := int(anchor.ByteStart), int(anchor.ByteEnd)
+	var start int
+	if newline := bytes.LastIndexByte(data[:anchorStart], '\n'); newline >= 0 {
+		start = newline + 1
+	} else {
+		start = 0
+	}
+	for range causalContextLinesBefore {
+		if start == 0 {
+			break
+		}
+		previous := bytes.LastIndexByte(data[:start-1], '\n')
+		if previous < 0 {
+			start = 0
+			break
+		}
+		start = previous + 1
+	}
+	end := anchorEnd
+	if end < len(data) && (end == 0 || data[end-1] != '\n') {
+		if newline := bytes.IndexByte(data[end:], '\n'); newline >= 0 {
+			end += newline + 1
+		} else {
+			end = len(data)
+		}
+	}
+	for range causalContextLinesAfter {
+		if end >= len(data) {
+			break
+		}
+		newline := bytes.IndexByte(data[end:], '\n')
+		if newline < 0 {
+			end = len(data)
+			break
+		}
+		end += newline + 1
+	}
+
+	return max(selectedStart, start), min(selectedEnd, end)
+}
+
+func contextAnchor(candidate logContextCandidate, maximumBytes uint64) *diagnosis.EnrichmentItem {
+	if candidate.anchor == nil || len(candidate.enrichment) < 2 {
+		return candidate.anchor
+	}
+	span := *candidate.anchor
+	for _, item := range candidate.enrichment {
+		span.ByteStart = min(span.ByteStart, item.ByteStart)
+		span.ByteEnd = max(span.ByteEnd, item.ByteEnd)
+	}
+	if span.ByteEnd-span.ByteStart > maximumBytes {
+		return candidate.anchor
+	}
+
+	return &span
 }
 
 func selectedLogByteRange(data []byte, anchor *diagnosis.EnrichmentItem, maximumBytes uint64) (int, int) {

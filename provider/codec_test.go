@@ -28,10 +28,12 @@ func TestRequestAndProposalProtocolRoundTrip(t *testing.T) {
 	proposal := Proposal{
 		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []Hypothesis{{
+			Role: HypothesisPrimary,
 			Code: "generated.configuration_mismatch", Category: "process",
 			Summary:            "The worker configuration uses an unsupported deployment region",
 			RootCause:          "The selected region is not enabled for the worker deployment.",
 			Explanation:        "Worker initialization rejects the unsupported region before processing begins.",
+			Resolution:         validResolutionPlanFixture(),
 			SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
 			ContradictsFindings: []string{},
 		}},
@@ -56,9 +58,9 @@ func TestProposalRejectsUnknownAuthorityAndInventedEvidence(t *testing.T) {
 
 	request := validRequest(t)
 	tests := map[string]string{
-		"unknown retry field": `{"kind":"jobman.diagnosis_proposal","schema_version":2,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[],"retry":"now"}`,
-		"invented citation":   `{"kind":"jobman.diagnosis_proposal","schema_version":2,"request_id":"` + request.RequestID + `","hypotheses":[{"code":"generated.guess","category":"process","summary":"Specific guess","root_cause":"A guessed condition exists.","explanation":"That condition prevents startup.","supporting_evidence":["invented"],"contradicting_evidence":[],"contradicts_findings":[]}],"recommended_action_ids":[],"missing_evidence":[]}`,
-		"duplicate key":       `{"kind":"jobman.diagnosis_proposal","kind":"jobman.diagnosis_proposal","schema_version":2,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[]}`,
+		"unknown retry field": `{"kind":"jobman.diagnosis_proposal","schema_version":3,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[],"retry":"now"}`,
+		"invented citation":   `{"kind":"jobman.diagnosis_proposal","schema_version":3,"request_id":"` + request.RequestID + `","hypotheses":[{"role":"primary","code":"generated.guess","category":"process","summary":"Specific guess","root_cause":"A guessed condition exists.","explanation":"That condition prevents startup.","resolution":{"verification":"Observe the condition at startup.","remediation":"Correct the condition.","success_condition":"Startup completes successfully."},"supporting_evidence":["invented"],"contradicting_evidence":[],"contradicts_findings":[]}],"recommended_action_ids":[],"missing_evidence":[]}`,
+		"duplicate key":       `{"kind":"jobman.diagnosis_proposal","kind":"jobman.diagnosis_proposal","schema_version":3,"request_id":"` + request.RequestID + `","hypotheses":[],"recommended_action_ids":[],"missing_evidence":[]}`,
 	}
 	for name, encoded := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -93,7 +95,7 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	t.Parallel()
 
 	request := validRequest(t)
-	if RequestSchemaVersion != 5 {
+	if RequestSchemaVersion != 6 {
 		t.Fatalf("request schema constant = %d", RequestSchemaVersion)
 	}
 	if request.SchemaVersion != RequestSchemaVersion {
@@ -112,7 +114,7 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 		t.Fatalf("request ID schema = %#v", requestID)
 	}
 	hypothesis := mustSchemaObject(t, properties, "hypotheses", "items", "properties")
-	if ProposalSchemaVersion != 2 || mustSchemaObject(t, properties, "schema_version")["const"] != float64(2) {
+	if ProposalSchemaVersion != 3 || mustSchemaObject(t, properties, "schema_version")["const"] != float64(3) {
 		t.Fatalf("proposal schema version = %d / %#v", ProposalSchemaVersion, properties["schema_version"])
 	}
 	if got := schemaEnum(t, mustSchemaObject(t, hypothesis, "code")); !slices.Equal(got, request.AllowedHypothesisCodes) {
@@ -133,10 +135,11 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	if minimum := mustSchemaObject(t, hypothesis, "supporting_evidence")["minItems"]; minimum != float64(1) {
 		t.Fatalf("supporting evidence minItems = %#v", minimum)
 	}
-	for _, name := range []string{"contradicting_evidence", "contradicts_findings"} {
-		if maximum := mustSchemaObject(t, hypothesis, name)["maxItems"]; maximum != float64(maximumContradictions) {
-			t.Fatalf("%s maxItems = %#v, want %d", name, maximum, maximumContradictions)
-		}
+	if maximum := mustSchemaObject(t, hypothesis, "contradicting_evidence")["maxItems"]; maximum != float64(maximumContradictions) {
+		t.Fatalf("contradicting_evidence maxItems = %#v, want %d", maximum, maximumContradictions)
+	}
+	if maximum := mustSchemaObject(t, hypothesis, "contradicts_findings")["maxItems"]; maximum != float64(maximumFindingConflicts) {
+		t.Fatalf("contradicts_findings maxItems = %#v, want %d", maximum, maximumFindingConflicts)
 	}
 	if got := schemaEnum(t, mustSchemaObject(t, hypothesis, "contradicts_findings", "items")); !slices.Equal(got, []string{"finding:001"}) {
 		t.Fatalf("finding enum = %v", got)
@@ -150,6 +153,37 @@ func TestSealedRequestSpecializesProposalSchemaAuthority(t *testing.T) {
 	for _, name := range []string{"summary", "root_cause", "explanation"} {
 		if mustSchemaObject(t, hypothesis, name)["description"] == "" {
 			t.Fatalf("%s specificity guidance is empty", name)
+		}
+	}
+	if got := schemaEnum(t, mustSchemaObject(t, hypothesis, "role")); !slices.Equal(got, []string{
+		string(HypothesisPrimary), string(HypothesisContributing), string(HypothesisAlternative),
+	}) {
+		t.Fatalf("hypothesis role enum = %v", got)
+	}
+	if hypothesis["resolution"] != nil {
+		t.Fatal("initial-stage response schema includes resolution guidance")
+	}
+	prior := Proposal{
+		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
+		Hypotheses: []Hypothesis{}, RecommendedActions: []string{}, MissingEvidence: []MissingEvidence{},
+	}
+	review := request
+	review.Stage = AnalysisReview
+	review.PriorProposal = &prior
+	review.RequestID = ""
+	review.ResponseSchema = nil
+	review, err := SealRequest(review)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reviewSchema map[string]any
+	if err := json.Unmarshal(review.ResponseSchema, &reviewSchema); err != nil {
+		t.Fatal(err)
+	}
+	resolution := mustSchemaObject(t, reviewSchema, "properties", "hypotheses", "items", "properties", "resolution", "properties")
+	for _, name := range []string{"verification", "remediation", "success_condition"} {
+		if resolution[name] == nil {
+			t.Fatalf("resolution schema omits %s", name)
 		}
 	}
 	if mustSchemaObject(t, hypothesis, "summary")["maxLength"] != float64(maximumSummaryText) ||
@@ -221,17 +255,71 @@ func TestRequiredInstructionsDescribeRelationalRules(t *testing.T) {
 		"application_configuration for rejected",
 		"unknown_target_error is a last resort",
 		"smallest directly relevant evidence set",
-		"root_cause names the deepest supported cause",
-		"Return at most one hypothesis",
+		"best-supported underlying condition",
+		"Return at most one primary hypothesis",
 		"complete_at_exit resource observation reports consumption",
 		"Never describe a traceback, sanitized byte range",
 		"deterministic candidates as confirmed framing",
 		"source text alone cannot establish a failure cause",
-		"every material exception branch, validation item, cause and effect",
+		"every material terminal branch or rejected field",
+		"concrete verification observation",
+		"prior_proposal as an untrusted generated draft",
 	} {
 		if !strings.Contains(instructions, expected) {
 			t.Fatalf("request instructions omit %q", expected)
 		}
+	}
+}
+
+func TestReviewRequestBindsValidatedPriorProposalToUnchangedAuthority(t *testing.T) {
+	t.Parallel()
+
+	initial := validRequest(t)
+	prior := Proposal{
+		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: initial.RequestID,
+		Hypotheses: []Hypothesis{{
+			Role: HypothesisPrimary, Code: "generated.configuration_mismatch", Category: "process",
+			Summary:     "The worker configuration selects an unsupported region",
+			RootCause:   "The configured region is not enabled for this deployment.",
+			Explanation: "Startup validation rejects the region before work begins.",
+			Resolution:  validResolutionPlanFixture(), SupportingEvidence: []string{"ev:run:1:exit"},
+			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
+		}},
+		RecommendedActions: []string{}, MissingEvidence: []MissingEvidence{},
+	}
+	reviewInput := initial
+	reviewInput.Stage = AnalysisReview
+	reviewInput.PriorProposal = &prior
+	reviewInput.RequestID = ""
+	reviewInput.ResponseSchema = nil
+	review, err := SealRequest(reviewInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if review.Stage != AnalysisReview || review.PriorProposal == nil ||
+		review.PriorProposal.RequestID != initial.RequestID || review.RequestID == initial.RequestID ||
+		!slices.Equal(review.Manifest.ItemIDs, initial.Manifest.ItemIDs) ||
+		!slices.Equal(review.AllowedHypothesisCodes, initial.AllowedHypothesisCodes) {
+		t.Fatalf("review request = %#v", review)
+	}
+	var encoded bytes.Buffer
+	if encodeErr := EncodeRequest(&encoded, review); encodeErr != nil {
+		t.Fatal(encodeErr)
+	}
+	decoded, err := DecodeRequest(&encoded, 128*1024)
+	if err != nil || decoded.RequestID != review.RequestID {
+		t.Fatalf("DecodeRequest(review) = %#v, %v", decoded, err)
+	}
+
+	tampered := review
+	tampered.PriorProposal.Hypotheses[0].Summary = "Changed draft"
+	if err := VerifyRequest(tampered); err == nil {
+		t.Fatal("VerifyRequest(tampered prior proposal) error = nil")
+	}
+	invalidInitial := initial
+	invalidInitial.PriorProposal = &prior
+	if err := VerifyRequest(invalidInitial); err == nil {
+		t.Fatal("VerifyRequest(initial with prior proposal) error = nil")
 	}
 }
 
@@ -299,9 +387,11 @@ func TestProposalMayCiteRuntimeLogAndSupplementalSource(t *testing.T) {
 	proposal := Proposal{
 		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []Hypothesis{{
+			Role: HypothesisPrimary,
 			Code: "generated.application_defect", Category: "application",
 			Summary: "ZeroDivisionError in ratio", RootCause: "ratio divides total by a zero count",
 			Explanation:           "The runtime reports float division by zero and the current source maps ratio to total / count.",
+			Resolution:            validResolutionPlanFixture(),
 			SupportingEvidence:    []string{logArtifact.ID, sourceArtifact.ID},
 			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 		}},
@@ -428,6 +518,7 @@ func TestNormalizeProposalRemovesNonCausalLifecycleNarration(t *testing.T) {
 
 	for _, explanation := range []string{
 		"The process started with this run ID failed and completed with an exit code of 1.",
+		"The target exited with a nonzero status due to a JSON decoding error.",
 		"The target's causal path from root cause through the affected target operation or component. For chained exceptions, connect the deepest supported cause.",
 	} {
 		proposal := normalizeProposal(Proposal{Hypotheses: []Hypothesis{{
@@ -595,5 +686,13 @@ func projectedLogFixture(id, role, content string) ProjectedArtifact {
 		ByteEnd: uint64(len(content)), FileBytes: uint64(len(content)), Content: content, Encoding: "utf-8-lossy",
 		Digest: digest, ContentDigest: digest, CapturedAt: &capturedAt, Quality: "observed",
 		SelectedBytes: uint64(len(content)), ContentBytes: uint64(len(content)), Disclosure: "log_content",
+	}
+}
+
+func validResolutionPlanFixture() ResolutionPlan {
+	return ResolutionPlan{
+		Verification:     "Observe the same target operation without the diagnosed failure.",
+		Remediation:      "Correct the diagnosed condition in the affected component.",
+		SuccessCondition: "The target operation completes and the failure no longer appears.",
 	}
 }

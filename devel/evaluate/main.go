@@ -51,19 +51,22 @@ type proposalCaptureDocument struct {
 }
 
 type proposalCapture struct {
-	CaseName           string          `json:"case_name,omitempty"`
-	Iteration          int             `json:"iteration,omitempty"`
-	RequestID          string          `json:"request_id"`
-	AnalysisEvidenceID string          `json:"analysis_evidence_id"`
-	Provider           string          `json:"provider,omitempty"`
-	Model              string          `json:"model,omitempty"`
-	ProviderRequestID  string          `json:"provider_request_id,omitempty"`
-	InputUnits         uint64          `json:"input_units,omitempty"`
-	OutputUnits        uint64          `json:"output_units,omitempty"`
-	FailureCode        string          `json:"failure_code,omitempty"`
-	ProposalAccepted   bool            `json:"proposal_accepted"`
-	ValidationCode     string          `json:"validation_code,omitempty"`
-	Proposal           json.RawMessage `json:"proposal,omitempty"`
+	CaseName           string                 `json:"case_name,omitempty"`
+	Iteration          int                    `json:"iteration,omitempty"`
+	Stage              provider.AnalysisStage `json:"stage"`
+	AnalysisPass       int                    `json:"analysis_pass"`
+	PriorRequestID     string                 `json:"prior_request_id,omitempty"`
+	RequestID          string                 `json:"request_id"`
+	AnalysisEvidenceID string                 `json:"analysis_evidence_id"`
+	Provider           string                 `json:"provider,omitempty"`
+	Model              string                 `json:"model,omitempty"`
+	ProviderRequestID  string                 `json:"provider_request_id,omitempty"`
+	InputUnits         uint64                 `json:"input_units,omitempty"`
+	OutputUnits        uint64                 `json:"output_units,omitempty"`
+	FailureCode        string                 `json:"failure_code,omitempty"`
+	ProposalAccepted   bool                   `json:"proposal_accepted"`
+	ValidationCode     string                 `json:"validation_code,omitempty"`
+	Proposal           json.RawMessage        `json:"proposal,omitempty"`
 }
 
 type captureGenerator struct {
@@ -243,6 +246,7 @@ func profileSourceOptions(profile config.Profile) (*evaluation.SourceContextOpti
 	return &evaluation.SourceContextOptions{
 		Mode:                diagnosis.SourceContextMode(profile.SourceContext.Mode),
 		LinesBeforeAndAfter: profile.SourceContext.LinesBeforeAndAfter,
+		MaximumArtifacts:    limits.MaximumArtifacts,
 		MaximumBytes:        limits.MaximumBytes,
 	}, nil
 }
@@ -367,7 +371,20 @@ func (generator *captureGenerator) Generate(
 	request provider.Request,
 ) (provider.Response, error) {
 	response, err := generator.Generator.Generate(ctx, request)
-	record := proposalCapture{RequestID: request.RequestID, AnalysisEvidenceID: request.AnalysisEvidenceID}
+	stage := request.Stage
+	if stage == "" {
+		stage = provider.AnalysisInitial
+	}
+	record := proposalCapture{
+		Stage: stage, AnalysisPass: 1, RequestID: request.RequestID,
+		AnalysisEvidenceID: request.AnalysisEvidenceID,
+	}
+	if stage == provider.AnalysisReview {
+		record.AnalysisPass = 2
+		if request.PriorProposal != nil {
+			record.PriorRequestID = request.PriorProposal.RequestID
+		}
+	}
 	if err != nil {
 		code, _, ok := provider.Diagnostic(err)
 		if ok {
@@ -404,7 +421,7 @@ func (generator *captureGenerator) Generate(
 func (generator *captureGenerator) write(path string) error {
 	generator.mu.Lock()
 	document := proposalCaptureDocument{
-		Kind: "jobman.diagnosis_evaluation_proposal_capture", SchemaVersion: 3,
+		Kind: "jobman.diagnosis_evaluation_proposal_capture", SchemaVersion: 4,
 		Records: slices.Clone(generator.records),
 	}
 	generator.mu.Unlock()
@@ -424,18 +441,27 @@ func (generator *captureGenerator) annotate(results []evaluation.Result) {
 		}
 	}
 	positions := make(map[string]int, len(labels))
+	current := make(map[string]evaluation.Result, len(labels))
 	generator.mu.Lock()
 	defer generator.mu.Unlock()
 	for index := range generator.records {
 		evidenceID := generator.records[index].AnalysisEvidenceID
-		position := positions[evidenceID]
-		if position >= len(labels[evidenceID]) {
-			continue
+		stage := generator.records[index].Stage
+		if stage == "" {
+			stage = provider.AnalysisInitial
 		}
-		label := labels[evidenceID][position]
+		label, available := current[evidenceID]
+		if stage == provider.AnalysisInitial || !available {
+			position := positions[evidenceID]
+			if position >= len(labels[evidenceID]) {
+				continue
+			}
+			label = labels[evidenceID][position]
+			positions[evidenceID]++
+			current[evidenceID] = label
+		}
 		generator.records[index].CaseName = label.Name
 		generator.records[index].Iteration = label.Iteration
-		positions[evidenceID]++
 	}
 }
 

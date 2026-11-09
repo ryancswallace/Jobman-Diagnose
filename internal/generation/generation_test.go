@@ -208,10 +208,16 @@ func TestPrepareProjectsExplicitSourceAlongsideRuntimeEvidence(t *testing.T) {
 		t.Fatalf("projected source = %#v", projected)
 	}
 	mixed, err := reconcile(report, failureEvidence, prepared, provider.Proposal{Hypotheses: []provider.Hypothesis{{
+		Role: provider.HypothesisPrimary,
 		Code: "generated.application_defect", Category: "application",
-		Summary:            "worker.py divides total by a zero count",
-		RootCause:          "ZeroDivisionError occurs when ratio divides total by count at worker.py line 2",
-		Explanation:        "The runtime traceback identifies division by zero, and the current source snapshot maps line 2 to total / count.",
+		Summary:     "worker.py divides total by a zero count",
+		RootCause:   "ZeroDivisionError occurs when ratio divides total by count at worker.py line 2",
+		Explanation: "The runtime traceback identifies division by zero, and the current source snapshot maps line 2 to total / count.",
+		Resolution: provider.ResolutionPlan{
+			Verification:     "Observe the count supplied to ratio when the failure occurs.",
+			Remediation:      "Handle a zero count before division.",
+			SuccessCondition: "The ratio operation completes without division by zero.",
+		},
 		SupportingEvidence: []string{core.Artifacts[0].ID, source.ID},
 	}}})
 	if err != nil {
@@ -426,6 +432,11 @@ func TestCausalMessageDiagnosticLinesPreserveCompleteOperation(t *testing.T) {
 	if got := selectDiagnosticLines("future_format", []string{line}); len(got) != 0 {
 		t.Fatalf("unknown diagnostic lines = %#v", got)
 	}
+	ansi := "\x1b[31m2026-08-12 ERROR exporter terminal=true endpoint=https://telemetry.internal/v1/traces error=x509\x1b[0m"
+	want := "2026-08-12 ERROR exporter terminal=true endpoint=https://telemetry.internal/v1/traces error=x509"
+	if got := selectDiagnosticLines("tls_verification_failed", []string{ansi}); !slices.Equal(got, []string{want}) {
+		t.Fatalf("ANSI diagnostic lines = %#v", got)
+	}
 }
 
 func TestPrepareProjectsExplicitCommandContext(t *testing.T) {
@@ -508,10 +519,16 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 		proposal := provider.Proposal{
 			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
+				Role: provider.HypothesisPrimary,
 				Code: "generated.application_configuration", Category: "process",
-				Summary:            "The worker configuration selects an unsupported deployment region",
-				RootCause:          "The selected region is not enabled for this worker deployment.",
-				Explanation:        "Startup validation rejects the unsupported region before processing begins.",
+				Summary:     "The worker configuration selects an unsupported deployment region",
+				RootCause:   "The selected region is not enabled for this worker deployment.",
+				Explanation: "Startup validation rejects the unsupported region before processing begins.",
+				Resolution: provider.ResolutionPlan{
+					Verification:     "Observe whether the configured region is enabled for the worker deployment.",
+					Remediation:      "Select a region enabled for the worker deployment.",
+					SuccessCondition: "Startup validation accepts the region and processing begins.",
+				},
 				SupportingEvidence: []string{request.Manifest.ArtifactIDs[0]}, ContradictingEvidence: []string{},
 				ContradictsFindings: []string{},
 			}},
@@ -544,21 +561,222 @@ func TestAugmenterReconcilesProposalWithoutChangingPrimaryOrRetry(t *testing.T) 
 		t.Fatalf("reconciled report = %#v", report)
 	}
 	generated := report.Findings[len(report.Findings)-1]
-	if generated.Confidence.Score != 40 || len(generated.ContradictingFindings) != 0 ||
+	if generated.Confidence.Score != 55 || len(generated.ContradictingFindings) != 0 ||
 		!strings.Contains(generated.Explanation, "Root cause: The selected region is not enabled") ||
 		!strings.Contains(generated.Explanation, "Failure path: Startup validation rejects") ||
 		!report.Disclosure.ProviderInvoked || !report.Disclosure.GeneratedContentUsed {
 		t.Fatalf("generated finding/disclosure = %#v / %#v", generated, report.Disclosure)
 	}
-	assertGeneratedGuidance(t, report.Actions, len(deterministicReport.Actions)+1, generated.SupportingEvidence)
+	assertGeneratedPlan(t, report.Actions, len(deterministicReport.Actions)+2, generated.SupportingEvidence)
 }
 
-func assertGeneratedGuidance(t *testing.T, actions []diagnosis.Action, wantCount int, wantEvidence []string) {
+//nolint:cyclop // One workflow test jointly verifies both calls, stages, progress, provenance, and reconciliation.
+func TestAugmenterReviewsComplexAssessmentWithinOneBoundedWorkflow(t *testing.T) {
+	t.Parallel()
+
+	evidence := reviewTestEvidence(t)
+	failureEvidence, err := enrichment.Collect(t.Context(), evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(t, true)
+	profile.MaximumAnalysisPasses = 2
+	var requests []provider.Request
+	var events []ProgressEvent
+	fake := &fakeGenerator{profile: profile, generate: func(request provider.Request) (provider.Response, error) {
+		requests = append(requests, request)
+		if len(requests) == 1 {
+			if request.Stage != provider.AnalysisInitial || request.PriorProposal != nil {
+				t.Fatalf("initial request = %#v", request)
+			}
+		} else if request.Stage != provider.AnalysisReview || request.PriorProposal == nil ||
+			request.PriorProposal.RequestID != requests[0].RequestID || request.RequestID == requests[0].RequestID ||
+			request.AnalysisEvidenceID != requests[0].AnalysisEvidenceID {
+			t.Fatalf("review request = %#v", request)
+		}
+		label := "Initial"
+		if request.Stage == provider.AnalysisReview {
+			label = "Reviewed"
+		}
+		return proposalResponse(t, profile, request, label+" inventory connection refusal")
+	}}
+	augmenter, err := NewAugmenter(
+		deterministic(t), fake, "test", profile, []string{"metadata", "log_content"}, false,
+		func(event ProgressEvent) { events = append(events, event) },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := augmenter.Diagnose(t.Context(), failureEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 2 || report.Disclosure.RequestID != requests[1].RequestID ||
+		report.Disclosure.RequestBytes <= uint64(len(mustJSON(t, requests[0]))) ||
+		!slices.Equal(events, []ProgressEvent{
+			ProgressPreparing, ProgressWaiting, ProgressValidating, ProgressReviewing, ProgressValidating,
+		}) {
+		t.Fatalf(
+			"review workflow requests/events/disclosure/warnings = %d / %v / %#v / %#v",
+			len(requests), events, report.Disclosure, report.Warnings,
+		)
+	}
+	generated := report.Findings[len(report.Findings)-1]
+	if !strings.HasPrefix(generated.Summary, "Reviewed") || generated.Analyzer != generatedAnalyzer+"/primary" ||
+		hasWarning(report, "generator_review_failed") {
+		t.Fatalf("reviewed report = %#v", report)
+	}
+}
+
+func TestAugmenterRetainsValidatedFirstPassWhenOptionalReviewFails(t *testing.T) {
+	t.Parallel()
+
+	evidence := reviewTestEvidence(t)
+	failureEvidence, err := enrichment.Collect(t.Context(), evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(t, true)
+	profile.MaximumAnalysisPasses = 2
+	calls := 0
+	var initialRequest, reviewRequest provider.Request
+	fake := &fakeGenerator{profile: profile, generate: func(request provider.Request) (provider.Response, error) {
+		calls++
+		if request.Stage == provider.AnalysisReview {
+			reviewRequest = request
+			return provider.Response{}, provider.NewFailure(provider.FailureRequestTimeout, errors.New("private provider detail"))
+		}
+		initialRequest = request
+		return proposalResponse(t, profile, request, "Initial inventory connection refusal")
+	}}
+	augmenter, err := NewAugmenter(
+		deterministic(t), fake, "test", profile, []string{"metadata", "log_content"}, false, nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := augmenter.Diagnose(t.Context(), failureEvidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generated := report.Findings[len(report.Findings)-1]
+	if calls != 2 || !strings.HasPrefix(generated.Summary, "Initial") ||
+		report.Disclosure.RequestID != reviewRequest.RequestID ||
+		report.Disclosure.RequestBytes <= uint64(len(mustJSON(t, initialRequest))) ||
+		!hasWarning(report, "generator_review_failed") || strings.Contains(
+		warningMessage(report, "generator_review_failed"), "private provider detail",
+	) {
+		t.Fatalf("first-pass fallback = calls %d, finding %#v, warnings %#v", calls, generated, report.Warnings)
+	}
+}
+
+func reviewTestEvidence(t *testing.T) diagnostic.Evidence {
 	t.Helper()
-	if len(actions) != wantCount || actions[0].Code != "review_application_configuration" ||
-		actions[0].Execution != diagnosis.ActionExecutionNone || !actions[0].RequiresConfirmation ||
-		!slices.Equal(actions[0].SupportingEvidence, wantEvidence) {
-		t.Fatalf("host-authored generated guidance = %#v", actions)
+	evidence, err := testevidence.Failed(
+		"nonzero_exit",
+		[]byte("synchronize inventory: dial tcp 127.0.0.1:4319: connect: connection refused\n"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout := evidence.Artifacts[0]
+	stdout.ID = "artifact:run:00000000000000000001:stdout"
+	stdout.Stream = "stdout"
+	stdout.Data = []byte("initializing inventory synchronization\n")
+	stdout.OriginalBytes = uint64(len(stdout.Data))
+	stdout.ByteStart = 0
+	stdout.ByteEnd = uint64(len(stdout.Data))
+	stdout.SelectedBytes = uint64(len(stdout.Data))
+	stdout.ContentBytes = uint64(len(stdout.Data))
+	stdout.Digest = ""
+	evidence.Artifacts = append(evidence.Artifacts, stdout)
+	evidence.Source.Capabilities = append(evidence.Source.Capabilities, "configured_value_redaction_v1")
+	evidence.EvidenceID = ""
+	evidence, err = diagnostic.Seal(evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return evidence
+}
+
+func proposalResponse(
+	t *testing.T,
+	profile config.Profile,
+	request provider.Request,
+	summary string,
+) (provider.Response, error) {
+	t.Helper()
+	support := ""
+	for _, artifact := range request.Projection.Artifacts {
+		if strings.Contains(artifact.Content, "connection refused") {
+			support = artifact.ID
+			break
+		}
+	}
+	if support == "" {
+		t.Fatal("connection-refusal artifact was not projected")
+	}
+	proposal := provider.Proposal{
+		Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
+		EvidenceCoverage: proposalEvidenceCoverage(request),
+		Hypotheses: []provider.Hypothesis{{
+			Role: provider.HypothesisPrimary, Code: "generated.dependency_unavailable", Category: "network",
+			Summary:     summary + " at 127.0.0.1:4319",
+			RootCause:   "Connection refused at 127.0.0.1:4319 during inventory synchronization.",
+			Explanation: "The connection refused signal prevented inventory synchronization from completing.",
+			Resolution: provider.ResolutionPlan{
+				Verification:     "Observe whether the inventory endpoint accepts the synchronization connection.",
+				Remediation:      "Restore availability of the configured inventory endpoint.",
+				SuccessCondition: "Inventory synchronization completes without a refused connection.",
+			},
+			SupportingEvidence: []string{support}, ContradictingEvidence: []string{},
+			ContradictsFindings: []string{},
+		}},
+		RecommendedActions: []string{}, MissingEvidence: []provider.MissingEvidence{},
+	}
+	encoded, err := json.Marshal(proposal)
+	return provider.Response{
+		JSON: encoded, Provider: "openai_compatible", Model: profile.Model, RequestID: request.RequestID,
+	}, err
+}
+
+func proposalEvidenceCoverage(request provider.Request) []provider.EvidenceCoverage {
+	result := make([]provider.EvidenceCoverage, 0, len(request.DiagnosticFocus))
+	for _, focus := range request.DiagnosticFocus {
+		result = append(result, provider.EvidenceCoverage{
+			EvidenceID: focus.EvidenceID, DiagnosticLines: slices.Clone(focus.Lines),
+		})
+	}
+
+	return result
+}
+
+func mustJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return encoded
+}
+
+func assertGeneratedPlan(t *testing.T, actions []diagnosis.Action, wantCount int, wantEvidence []string) {
+	t.Helper()
+	if len(actions) != wantCount {
+		t.Fatalf("host-authored generated plan = %#v", actions)
+	}
+	verify := actions[len(actions)-2]
+	remediate := actions[len(actions)-1]
+	if verify.Code != "generated.verify_primary_cause" ||
+		verify.Execution != diagnosis.ActionExecutionNone || verify.RequiresConfirmation ||
+		!strings.Contains(verify.Description, "Expected recovery:") ||
+		!slices.Equal(verify.SupportingEvidence, wantEvidence) ||
+		remediate.Code != "generated.address_primary_cause" || !remediate.RequiresConfirmation ||
+		remediate.Execution != diagnosis.ActionExecutionNone ||
+		!slices.Equal(remediate.SupportingEvidence, wantEvidence) {
+		t.Fatalf("host-authored generated plan = %#v", actions)
 	}
 }
 
@@ -581,9 +799,15 @@ func TestAugmenterRejectsGenericDuplicateOfDeterministicFinding(t *testing.T) {
 		proposal := provider.Proposal{
 			Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 			Hypotheses: []provider.Hypothesis{{
+				Role: provider.HypothesisPrimary,
 				Code: "generated.unknown_target_error", Category: primary.Category,
 				Summary: primary.Summary, RootCause: primary.Explanation,
-				Explanation:           "The same cited observations lead to the already reported deterministic finding.",
+				Explanation: "The same cited observations lead to the already reported deterministic finding.",
+				Resolution: provider.ResolutionPlan{
+					Verification:     "Observe the deterministic finding in the cited evidence.",
+					Remediation:      "Address the condition identified by the deterministic finding.",
+					SuccessCondition: "The deterministic failure no longer occurs.",
+				},
 				SupportingEvidence:    slices.Clone(primary.SupportingEvidence),
 				ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 			}},

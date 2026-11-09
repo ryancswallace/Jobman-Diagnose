@@ -1,17 +1,21 @@
-# Structured-generation protocol 5
+# Structured-generation protocol 6
 
-The provider boundary consists of a schema-5 generation request and a schema-2
+The provider boundary consists of a schema-6 generation request and a schema-3
 proposal. It is a proposal protocol, not a chat, agent, tool, or remote Jobman
 API.
 
 ## Request
 
-`jobman.diagnosis_generation_request` schema 5 contains:
+`jobman.diagnosis_generation_request` schema 6 contains:
 
 - a SHA-256 `request_id` over normalized semantic content;
+- an `initial` or `review` stage; a review also contains the previously
+  validated proposal as untrusted draft material;
 - the sealed companion analysis-evidence ID, which commits to core evidence,
   attributed enrichment, and any selected source snapshot, plus a minimal subject;
 - the exact approved evidence projection and accounting manifest;
+- a derived `diagnostic_focus` copy of every host-selected enrichment
+  diagnostic line, grouped by its existing evidence ID;
 - deterministic candidates whose every citation is in that projection;
 - controlled hypothesis codes and categories plus existing non-executing
   action catalog entries;
@@ -47,7 +51,11 @@ counters do not claim per-run attribution. Direct command values preserve execut
 argument boundaries. Environment items contain names and roles only. When log
 content is approved, the companion ranks exact causal and structured
 diagnostic ranges across the selected runs and streams, then projects bounded
-continuous context around the strongest ranges. If no diagnostic range is
+continuous context around the strongest ranges. Each causal context is bounded
+by both bytes and a fixed number of surrounding lines, so repetitive short
+messages cannot consume the model's attention merely because they fit the byte
+ceiling. A structured range that fits the byte budget is not further trimmed
+by the line bound. If no diagnostic range is
 available, it uses bounded terminal output. A projected log context records its
 selection and anchor reason, line and byte bounds within the sealed core
 artifact, source and selected-content digests, capture quality, byte accounting,
@@ -69,6 +77,12 @@ after the existing UTF-8 conversion. The lines remain untrusted data. The manife
 accounts for their IDs and encoded bytes separately. Other `local_only`
 evidence is never present.
 
+`diagnostic_focus` is a deterministic attention index over those selected
+lines. It contains no text or evidence ID that is not already in the sealed
+projection, is covered by the request digest, and is rebuilt and compared
+exactly during verification. It makes the model account for each important
+branch before compression without creating a second disclosure channel.
+
 The trusted prompt and fixed request instructions use one evidence-first
 sequence: inspect the bounded diagnostic lines, verify them against their
 runtime artifact, preserve every material fact and cause/effect pair, then
@@ -77,8 +91,12 @@ the same untrusted-data, authority, citation, abstention, and no-mutation
 boundaries.
 
 An explicitly approved `source_content` artifact contains either one exact
-continuous line window or one exact complete UTF-8 source file. Its projection
-records the absolute path, language and media type, selection mode, line and
+continuous line window or one exact complete UTF-8 source file. Limited
+automatic collection may include the direct-command source and additional
+runtime-referenced files beneath the recorded working directory, within the
+profile's combined artifact and byte ceilings. Explicit-file and full-file
+selection remain single-file operations. Each projection records the absolute
+path, language and media type, selection mode, line and
 byte bounds, whole-file and selected-content digests, capture time, and
 `point_in_time` quality. The current source is unredacted and untrusted. It is
 companion-collected context rather than core Jobman evidence and does not
@@ -97,14 +115,31 @@ trailing values, excessive nesting, unsorted or duplicate IDs, manifest
 mismatches, invalid evidence references, response-schema substitution, and
 digest mutation.
 
+A review request retains exactly the initial request's evidence projection,
+taxonomy, deterministic candidates, and action catalog. Its prior proposal is
+revalidated against that authority before sealing and contributes to the new
+request digest, but never becomes evidence or expands authority. The encoded
+request places the evidence projection and diagnostic focus before the prior
+draft so evidence remains the primary context.
+
 ## Proposal
 
 `jobman.diagnosis_proposal` contains the matching `request_id` and only:
 
-- zero or one hypothesis selected from the request's controlled code taxonomy,
-  with a controlled category, an issue-specific summary, a concrete
-  `root_cause`, a concise causal-path explanation, projected supporting
-  evidence IDs, and contradiction arrays constrained to empty;
+- an `evidence_coverage` checklist that copies every `diagnostic_focus` line
+  exactly under an allowed evidence ID before any causal synthesis. The host
+  requires the complete global set of focus IDs and lines, rejects additions
+  or omissions, and does not render this checklist directly;
+- zero to four causal claims selected from the request's controlled code
+  taxonomy: at most one `primary`, up to two independently supported
+  `contributing` conditions, and up to two genuinely competing `alternative`
+  explanations. Every claim has a controlled category, an issue-specific
+  summary, a concrete `root_cause`, a concise causal-path explanation,
+  projected supporting evidence IDs, and empty contradiction arrays. The
+  initial-stage schema omits resolution fields so the first call can focus on
+  causal analysis. A review-stage claim also has a non-executing resolution
+  plan containing a verification observation, high-level remediation, and
+  observable success condition;
 - up to eight action IDs selected from the supplied catalog; and
 - up to eight descriptions of missing evidence.
 
@@ -114,8 +149,11 @@ or mutations. Diagnostic prose may identify a short path or endpoint from the
 approved evidence, but cannot turn it into an operation. Host validation
 rejects invented references and controlled values even after a backend reports
 successful schema enforcement. It also retains relational checks that portable
-grammar backends cannot express, including duplicate hypothesis codes and
-duplicate catalog references. Fixed request instructions and schema field
+grammar backends cannot express, including invalid causal-role composition,
+duplicate causal claims, and duplicate catalog references. Repeated copies of
+the same otherwise valid evidence citation are sorted and compacted before
+validation; they cannot add authority, and this avoids discarding an otherwise
+grounded local-model diagnosis for harmless repetition. Fixed request instructions and schema field
 descriptions state those relational rules explicitly so smaller local models
 can satisfy them even though the grammar cannot encode cross-field equality.
 An empty proposal is an abstention.
@@ -142,6 +180,10 @@ for both the deepest exception and operation when both are available.
 An explicit remote HTTP 5xx response authorizes
 `generated.external_service_failure`, while connection refusal, DNS, TLS,
 reset, and deadline signals authorize `generated.dependency_unavailable`.
+When a later log line explicitly marks one of those reachability failures as
+`terminal=true`, it takes precedence over an earlier retry warning such as an
+HTTP 503 response; the earlier warning cannot authorize a competing
+external-service primary cause.
 Receiving a 5xx response does not by itself prove a separately transient
 infrastructure condition.
 Before reconciliation, the host collapses an optional generated explanation to
@@ -156,16 +198,36 @@ and the host.
 
 ## Reconciliation
 
-The deterministic report exists before the provider call. Valid hypotheses are
-appended at fixed uncalibrated confidence 40 and cannot contradict or replace
-deterministic findings. The report preserves the generated
+The deterministic report exists before any provider call. Valid hypotheses are
+appended at bounded, role-sensitive, uncalibrated confidence and cannot
+contradict or replace deterministic findings. The report preserves the generated
 summary and renders the other proposal fields as explicit `Root cause` and
-`Failure path` clauses. Action IDs may reorder only the existing deterministic
-action list. For the first recognized generated cause code, reconciliation may
-prepend fixed, non-executing guidance written by Jobman; the model supplies
-neither its prose nor an execution vector. Unknown target errors receive no
-specific guidance. Missing-evidence descriptions are advisory. Retry advice
-and the primary finding remain deterministic.
+`Failure path` clauses. For a claim that cites an attributed enrichment, the
+host also appends the exact bounded focus lines as a separately labeled
+`Observed diagnostics` clause. This deterministic quotation preserves concrete
+operands even when generated prose compresses them. Action IDs may reorder only
+the existing deterministic action list. When review-stage resolution is
+available, reconciliation appends each accepted claim's validated verification
+and remediation as non-executing advisory actions; changes require confirmation,
+alternative claims receive only a distinguishing action, and no action contains
+an execution vector. Schema-description and deterministic-action boilerplate is
+discarded instead of being shown as generated guidance. Missing-evidence
+descriptions are advisory. Retry advice and the primary finding remain
+deterministic.
+
+Profiles default to one provider call. `maximum_analysis_passes: 2` permits one
+review call when the request contains multiple log streams, multiple structured
+diagnostics, both runtime and source context, or an initial multi-claim
+assessment. The review uses the same configured provider and model, the same
+evidence authority, and the same overall timeout. It independently checks the
+first proposal for unsupported claims, missing branches, causal-role mistakes,
+and incomplete resolution guidance, then returns a complete replacement. If
+the optional review cannot fit, fails transport or validation, or returns an
+empty proposal, the already validated first pass is retained with a controlled
+warning. A valid review also replaces the first pass only when it retains at
+least as much grounded causal detail; otherwise the first pass is retained with
+a controlled regression warning. There is no open-ended loop or provider
+fallback.
 
 When no projected artifact contains a direct causal signal, or the artifact
 explicitly says it was truncated before the terminal exception or causal line,

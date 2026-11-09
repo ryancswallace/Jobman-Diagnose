@@ -10,6 +10,7 @@ import (
 	"github.com/ryancswallace/jobman-diagnose/internal/config"
 	"github.com/ryancswallace/jobman-diagnose/internal/enrichment"
 	"github.com/ryancswallace/jobman-diagnose/internal/testevidence"
+	"github.com/ryancswallace/jobman-diagnose/provider"
 )
 
 //nolint:cyclop // The assertions jointly verify selection, provenance, and rebased enrichment.
@@ -100,9 +101,43 @@ func TestCausalContextOutranksGenericStderrTail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(prepared.Request.Manifest.ArtifactIDs, []string{stdout.ID}) ||
-		prepared.Request.Projection.Artifacts[0].Stream != "stdout" {
+	if !slices.Contains(prepared.Request.Manifest.ArtifactIDs, stdout.ID) ||
+		len(prepared.Request.Projection.Artifacts) != 2 {
 		t.Fatalf("ranked projection = %#v", prepared.Request.Projection.Artifacts)
+	}
+	var causal *provider.ProjectedArtifact
+	for index := range prepared.Request.Projection.Artifacts {
+		if prepared.Request.Projection.Artifacts[index].ID == stdout.ID {
+			causal = &prepared.Request.Projection.Artifacts[index]
+		}
+	}
+	if causal == nil || causal.Selection != "causal_context" ||
+		!strings.Contains(causal.Content, "connection refused") {
+		t.Fatalf("causal stdout projection = %#v", causal)
+	}
+}
+
+func TestCausalContextLineBoundExcludesRepeatedNoiseBelowByteCeiling(t *testing.T) {
+	t.Parallel()
+
+	log := strings.Repeat("heartbeat accepted queue_depth=0\n", 180) +
+		"checkpoint writer: write /srv/checkpoints/partition-17.json: no space left on device\n"
+	core, err := testevidence.Failed("nonzero_exit", []byte(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := enrichment.Collect(t.Context(), core)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contexts := selectLogContexts(core.Artifacts, evidence.Enrichment, configLogLimit(1, 64*1024))
+	if len(contexts) != 1 {
+		t.Fatalf("causal contexts = %#v", contexts)
+	}
+	artifact := contexts[0].artifact
+	if artifact.ByteStart == 0 || strings.Count(artifact.Content, "heartbeat accepted") > causalContextLinesBefore ||
+		!strings.Contains(artifact.Content, "no space left on device") {
+		t.Fatalf("line-bounded causal context = %#v", artifact)
 	}
 }
 

@@ -220,9 +220,15 @@ func TestCommandBridgeHelper(_ *testing.T) {
 	proposal := provider.Proposal{
 		Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []provider.Hypothesis{{
+			Role: provider.HypothesisPrimary,
 			Code: "generated.bridge_test", Category: "process", Summary: "Bridge hypothesis",
-			RootCause:             "The projected worker setting is incompatible with the bridge runtime.",
-			Explanation:           "Runtime validation rejects the setting before the worker starts.",
+			RootCause:   "The projected worker setting is incompatible with the bridge runtime.",
+			Explanation: "Runtime validation rejects the setting before the worker starts.",
+			Resolution: provider.ResolutionPlan{
+				Verification:     "Observe whether the bridge runtime accepts the projected worker setting.",
+				Remediation:      "Align the worker setting with the bridge runtime.",
+				SuccessCondition: "The bridge runtime accepts the setting and starts the worker.",
+			},
 			SupportingEvidence:    []string{request.Manifest.ItemIDs[0]},
 			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 		}},

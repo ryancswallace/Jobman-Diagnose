@@ -72,8 +72,9 @@ Use `--ai-logs` when the target-specific exception or error appears only in
 stdout or stderr. Metadata-only AI mode cannot infer details that were not
 collected, and the model should abstain rather than guess.
 
-Proposal schema 2 requires separate issue summary, root cause, and failure
-path text. Jobman Diagnose rejects repeated text, generic nonzero-exit or
+Proposal schema 3 requires causal roles, separate issue summary, root cause,
+failure path text, and non-executing verification, remediation, and recovery
+criteria. Jobman Diagnose rejects repeated text, generic nonzero-exit or
 invalid-input restatements, and explanations that mistake traceback structure,
 enrichment, or byte ranges for the cause. `--require-model` reports this safe
 classification as `proposal_not_specific`; optional mode returns the complete

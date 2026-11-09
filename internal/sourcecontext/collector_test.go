@@ -106,6 +106,96 @@ func TestCollectLimitedUsesConfiguredSymmetricRadius(t *testing.T) {
 	}
 }
 
+func TestCollectLimitedAddsRuntimeReferencedSourceFiles(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	entry := filepath.Join(directory, "main.py")
+	helper := filepath.Join(directory, "worker.py")
+	writeSource(t, entry, "from worker import transform\ntransform()\n")
+	writeSource(t, helper, "def transform():\n    value = None\n    return value.currency\n")
+	outside := filepath.Join(t.TempDir(), "outside.py")
+	writeSource(t, outside, "raise RuntimeError('outside')\n")
+	log := []byte(fmt.Sprintf(
+		"Traceback (most recent call last):\n  File %q, line 3, in transform\nAttributeError: currency\n  at %s:1\n",
+		helper, outside,
+	))
+	evidence := sourceEvidence(t, directory, diagnostic.Command{
+		Executable: "python3", Arguments: []string{"main.py"},
+	}, log)
+
+	contexts, err := Collect(t.Context(), evidence, Options{
+		Mode: diagnosis.SourceContextLimited, MaximumArtifacts: 4,
+		LinesBeforeAndAfter: 2, MaximumBytes: 4096,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contexts) != 2 || contexts[0].Path != entry || contexts[1].Path != helper ||
+		contexts[0].ID != "context:source:001" || contexts[1].ID != "context:source:002" ||
+		contexts[1].AnchorLine != 3 || contexts[1].AnchorReason != "runtime_log" {
+		t.Fatalf("multi-file source contexts = %#v", contexts)
+	}
+	for _, context := range contexts {
+		if context.Path == outside {
+			t.Fatalf("runtime path outside the recorded working directory was collected: %#v", contexts)
+		}
+	}
+}
+
+func TestCollectDefersInferredRuntimeLineMismatchToAssessment(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	path := filepath.Join(directory, "worker.py")
+	writeSource(t, path, "value = 1\n")
+	log := []byte(fmt.Sprintf(
+		"Traceback (most recent call last):\n  File %q, line 99, in <module>\nRuntimeError: stale source\n",
+		path,
+	))
+	evidence := sourceEvidence(t, directory, diagnostic.Command{
+		Executable: "python3", Arguments: []string{"worker.py"},
+	}, log)
+	contexts, err := Collect(t.Context(), evidence, Options{
+		Mode: diagnosis.SourceContextLimited, MaximumArtifacts: 2,
+		LinesBeforeAndAfter: 2, MaximumBytes: 4096,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contexts) != 1 || contexts[0].AnchorReason != "runtime_log_clipped" {
+		t.Fatalf("clipped source context = %#v", contexts)
+	}
+	assessment := Assess(evidence.Artifacts, contexts[0])
+	if assessment.Status != AssessmentMismatch || assessment.Reason != ReasonRuntimeLineOutOfRange {
+		t.Fatalf("source assessment = %#v", assessment)
+	}
+}
+
+func TestCollectLimitedKeepsHighestPrioritySourcesWithinCombinedBudget(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+	entry := filepath.Join(directory, "main.py")
+	helper := filepath.Join(directory, "worker.py")
+	writeSource(t, entry, "from worker import transform\ntransform()\n")
+	writeSource(t, helper, strings.Repeat("worker_value = 1\n", 80))
+	evidence := sourceEvidence(t, directory, diagnostic.Command{
+		Executable: "python3", Arguments: []string{"main.py"},
+	}, []byte("  File \"worker.py\", line 40, in transform\nValueError: rejected\n"))
+
+	contexts, err := Collect(t.Context(), evidence, Options{
+		Mode: diagnosis.SourceContextLimited, MaximumArtifacts: 4,
+		LinesBeforeAndAfter: 20, MaximumBytes: uint64(len("from worker import transform\ntransform()\n")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contexts) != 1 || contexts[0].Path != entry {
+		t.Fatalf("budgeted source contexts = %#v", contexts)
+	}
+}
+
 func TestCollectFullRequiresExactBoundedFile(t *testing.T) {
 	t.Parallel()
 
@@ -202,6 +292,11 @@ func TestCollectRejectsInvalidOptionsAndCancellation(t *testing.T) {
 		Mode: diagnosis.SourceContextFull, MaximumBytes: 1, LinesBeforeAndAfter: 1,
 	}); err == nil {
 		t.Fatal("Collect(full with context radius) error = nil")
+	}
+	if _, err := Collect(t.Context(), evidence, Options{
+		Mode: diagnosis.SourceContextLimited, MaximumArtifacts: 17, MaximumBytes: 1,
+	}); err == nil {
+		t.Fatal("Collect(excessive artifact count) error = nil")
 	}
 }
 

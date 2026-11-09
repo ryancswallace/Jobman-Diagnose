@@ -26,6 +26,7 @@ profiles:
     timeout: 30s
     maximum_input_bytes: 262144
     maximum_output_bytes: 32768
+    maximum_analysis_passes: 2
     disclosure:
       metadata:
         maximum_items: 128
@@ -55,7 +56,7 @@ profiles:
 	}
 	if profile.Provider != "ollama" || profile.Locality != provider.LocalityLocal || profile.TimeoutDuration() == 0 ||
 		profile.SourceContext == nil || profile.SourceContext.Mode != SourceContextModeLimited ||
-		profile.SourceContext.LinesBeforeAndAfter != 37 {
+		profile.SourceContext.LinesBeforeAndAfter != 37 || profile.AnalysisPassLimit() != 2 {
 		t.Fatalf("profile = %#v", profile)
 	}
 	approved, err := profile.ApprovedClasses([]string{
@@ -97,6 +98,7 @@ func TestLoadRejectsUnsafeTransportAndDisclosure(t *testing.T) {
 		"endpoint credential":   strings.Replace(validOpenAIConfig(), "https://example.com", "https://token@example.com", 1),
 		"local only disclosure": strings.Replace(validOpenAIConfig(), "metadata:", "local_only:", 1),
 		"schema disabled":       strings.Replace(validOpenAIConfig(), "require_json_schema: true", "require_json_schema: false", 1),
+		"analysis passes":       strings.Replace(validOpenAIConfig(), "maximum_output_bytes: 32768", "maximum_output_bytes: 32768\n    maximum_analysis_passes: 3", 1),
 	}
 	for name, encoded := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -105,6 +107,18 @@ func TestLoadRejectsUnsafeTransportAndDisclosure(t *testing.T) {
 				t.Fatal("Load() error = nil")
 			}
 		})
+	}
+}
+
+func TestAnalysisPassLimitDefaultsToOne(t *testing.T) {
+	t.Parallel()
+
+	profile, err := Load(writeConfig(t, validOpenAIConfig()), "hosted")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.MaximumAnalysisPasses != 0 || profile.AnalysisPassLimit() != 1 {
+		t.Fatalf("analysis pass limit = %d / %d", profile.MaximumAnalysisPasses, profile.AnalysisPassLimit())
 	}
 }
 

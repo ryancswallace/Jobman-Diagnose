@@ -43,6 +43,9 @@ func proposalJSONSchemaForRequest(request Request) (json.RawMessage, error) {
 	if err = specializeRequestID(properties, request.RequestID); err != nil {
 		return nil, err
 	}
+	if err = specializeEvidenceCoverage(properties, request.DiagnosticFocus); err != nil {
+		return nil, err
+	}
 	if err = specializeHypotheses(properties, request, evidenceIDs, findingIDs); err != nil {
 		return nil, err
 	}
@@ -56,6 +59,44 @@ func proposalJSONSchemaForRequest(request Request) (json.RawMessage, error) {
 	}
 
 	return encoded, nil
+}
+
+func specializeEvidenceCoverage(properties map[string]any, focus []DiagnosticFocus) error {
+	coverage, err := schemaObject(properties, "evidence_coverage")
+	if err != nil {
+		return err
+	}
+	coverage["minItems"] = float64(len(focus))
+	coverage["maxItems"] = float64(len(focus))
+	if len(focus) == 0 {
+		return nil
+	}
+	entry, err := schemaObject(coverage, "items", "properties")
+	if err != nil {
+		return err
+	}
+	identifiers := make([]string, 0, len(focus))
+	lines := make([]string, 0, len(focus)*2)
+	for _, item := range focus {
+		identifiers = append(identifiers, item.EvidenceID)
+		lines = append(lines, item.Lines...)
+	}
+	slices.Sort(lines)
+	lines = slices.Compact(lines)
+	if enumErr := setSchemaEnum(entry, "evidence_id", identifiers); enumErr != nil {
+		return enumErr
+	}
+	diagnosticLines, err := schemaObject(entry, "diagnostic_lines")
+	if err != nil {
+		return err
+	}
+	diagnosticItems, err := schemaObject(diagnosticLines, "items")
+	if err != nil {
+		return err
+	}
+	diagnosticItems["enum"] = lines
+
+	return nil
 }
 
 func proposalAuthorityIDs(request Request) ([]string, []string, []string) {
@@ -104,17 +145,55 @@ func specializeHypotheses(
 	if err != nil {
 		return err
 	}
+	if shapeErr := specializeHypothesisShape(hypothesisCollection, hypotheses, request); shapeErr != nil {
+		return shapeErr
+	}
 	if enumErr := setSchemaEnum(hypotheses, "code", request.AllowedHypothesisCodes); enumErr != nil {
 		return enumErr
 	}
 	if enumErr := setSchemaEnum(hypotheses, "category", request.AllowedCategories); enumErr != nil {
 		return enumErr
 	}
-	for _, name := range []string{"summary", "root_cause", "explanation"} {
-		if _, fieldErr := schemaObject(hypotheses, name); fieldErr != nil {
-			return fieldErr
+
+	return specializeHypothesisReferences(hypotheses, request, evidenceIDs, findingIDs)
+}
+
+func specializeHypothesisShape(
+	hypothesisCollection map[string]any,
+	hypotheses map[string]any,
+	request Request,
+) error {
+	if request.Stage == AnalysisInitial {
+		delete(hypotheses, "resolution")
+		hypothesisItem, err := schemaObject(hypothesisCollection, "items")
+		if err != nil {
+			return err
+		}
+		removeSchemaRequired(hypothesisItem, "resolution")
+	}
+	for _, name := range []string{"summary", "root_cause", "explanation", "role"} {
+		if _, err := schemaObject(hypotheses, name); err != nil {
+			return err
 		}
 	}
+	if request.Stage != AnalysisReview {
+		return nil
+	}
+	for _, name := range []string{"verification", "remediation", "success_condition"} {
+		if _, err := schemaObject(hypotheses, "resolution", "properties", name); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func specializeHypothesisReferences(
+	hypotheses map[string]any,
+	request Request,
+	evidenceIDs []string,
+	findingIDs []string,
+) error {
 	supportingIDs := append(slices.Clone(request.Manifest.ArtifactIDs), request.Manifest.EnrichmentIDs...)
 	if len(supportingIDs) == 0 {
 		supportingIDs = evidenceIDs
@@ -144,6 +223,20 @@ func specializeHypotheses(
 	contradicts["enum"] = slices.Clone(findingIDs)
 
 	return nil
+}
+
+func removeSchemaRequired(object map[string]any, name string) {
+	required, ok := object["required"].([]any)
+	if !ok {
+		return
+	}
+	filtered := make([]any, 0, len(required))
+	for _, value := range required {
+		if value != name {
+			filtered = append(filtered, value)
+		}
+	}
+	object["required"] = filtered
 }
 
 func requestSupportsGeneratedCause(request Request) bool {

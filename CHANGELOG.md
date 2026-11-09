@@ -9,6 +9,21 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 - Pin the shared evidence implementation to published Jobman v1.9.0 and verify
   assembled compatibility with that release in addition to the v1.4.0 baseline.
+- Upgrade generated diagnosis to request schema 6 and proposal schema 3. AI
+  assessments now distinguish a primary cause, contributing conditions, and
+  unresolved alternatives. A sealed diagnostic-focus index and exact proposal
+  coverage checklist make the model account for every selected diagnostic line;
+  accepted findings retain cited lines under `Observed diagnostics`. The first
+  pass concentrates on causal analysis, while an accepted review can add
+  verification, remediation, and an observable recovery condition rendered as
+  non-executing advisory actions after deterministic guidance.
+- Allow profiles to opt into one conditional second model call for complex,
+  multi-stream, multi-diagnostic, or source-rich incidents. The review uses the
+  same provider, evidence authority, limits, and total timeout; simple cases and
+  existing profiles continue to use one call.
+- Expand limited source context from one inferred file to bounded direct-command
+  and runtime-referenced files, and retain useful terminal context from other
+  streams alongside higher-ranked causal log windows.
 
 ### Added
 
@@ -43,6 +58,37 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
   findings, and honor canceled preparation for metadata-only evidence.
 - Keep shared analysis and report IDs stable across log recapture times while
   preserving capture provenance, source observation times and local report IDs.
+- Recognize every current generated-proposal analyzer version during live
+  evaluation, and correct thirteen synthetic source fixtures whose recorded
+  runtime locations had drifted from their checked-in source files. Fixture
+  tests now compare every mapped current source with its generated runtime
+  location, except the intentional stale-source control. The database-deadlock
+  case now accepts both the narrower concurrency class and the defensible
+  transient-infrastructure class.
+- Retain a validated first-pass diagnosis when an optional review loses
+  grounded causal detail, while still reporting the controlled review outcome.
+- Suppress generated resolution actions that merely copy response-schema or
+  deterministic-action boilerplate instead of adding incident-specific advice.
+- Route inferred out-of-range runtime source lines through stale-source
+  assessment and controlled withholding instead of aborting diagnosis during
+  source collection.
+- Strip ANSI and unsafe terminal controls from derived diagnostic focus lines,
+  accept harmless duplicate coverage lines and evidence citations after
+  normalization, and prevent container restart status or database error labels
+  from authorizing an unsupported generic cause.
+- Bound causal log context by both bytes and surrounding lines so repetitive
+  short messages cannot crowd out a terminal failure, and prefer an explicitly
+  terminal reachability or TLS failure over an earlier retry warning.
+- Collapse generic generated lifecycle narration such as a nonzero-exit
+  restatement so reports emphasize the concrete root cause and observed
+  diagnostic instead.
+
+### Security
+
+- Treat first-pass model output as untrusted data during optional review and
+  revalidate it without allowing it to add evidence or authority. Automatically
+  inferred runtime source paths must remain beneath the recorded working
+  directory after symbolic-link resolution.
 
 ## [0.6.0] - 2026-08-13
 

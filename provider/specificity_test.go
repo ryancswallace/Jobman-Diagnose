@@ -1,5 +1,7 @@
 package provider
 
+// cspell:ignore PSQL
+
 import (
 	"encoding/json"
 	"strings"
@@ -193,6 +195,9 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 			{ID: "node-refusal", Content: "AggregateError [ECONNREFUSED]: connect ECONNREFUSED 10.24.8.11:6379"},
 			{ID: "maven-dependency", Content: "Could not resolve dependencies: Could not find artifact com.example:pricing-rules:jar:7.3.0"},
 			{ID: "shell-parameter", Content: "deploy.sh: 12: APP_REGION: parameter not set"},
+			{ID: "compiler", Content: "worker.c:42:17: error: incompatible type for argument 1"},
+			{ID: "database-deadlock", Content: "PSQLException: ERROR: deadlock detected"},
+			{ID: "crash-loop", Content: "CrashLoopBackOff; no terminated-container logs were retained"},
 		},
 	}}
 	tests := []struct {
@@ -210,6 +215,9 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 		{name: "network endpoint retained", code: "generated.dependency_unavailable", ref: "network", text: "Connection refused at 127.0.0.1:5432", want: true},
 		{name: "network endpoint omitted", code: "generated.dependency_unavailable", ref: "network", text: "Connection refused", want: false},
 		{name: "panic supports application defect", code: "generated.application_defect", ref: "panic", text: "panic: index out of range [3] with length 2", want: true},
+		{name: "compiler location supports application defect", code: "generated.application_defect", ref: "compiler", text: "incompatible type for argument 1", want: true},
+		{name: "database error label is not an application defect", code: "generated.application_defect", ref: "database-deadlock", text: "deadlock detected", want: false},
+		{name: "database deadlock is a concurrency failure", code: "generated.concurrency_failure", ref: "database-deadlock", text: "deadlock detected", want: true},
 		{name: "configuration value error is not a defect", code: "generated.application_defect", ref: "configuration", text: "deployment configuration is invalid", want: false},
 		{name: "configuration retains narrow class", code: "generated.application_configuration", ref: "configuration", text: "database.dsn is required", want: true},
 		{name: "business invariant is not a defect", code: "generated.application_defect", ref: "business-data", text: "inventory invariant violated for ORD-2048", want: false},
@@ -237,6 +245,7 @@ func TestHypothesisCauseSupportedRequiresDirectCausalSignals(t *testing.T) {
 		{name: "Node refusal spelling", code: "generated.dependency_unavailable", ref: "node-refusal", text: "ECONNREFUSED at 10.24.8.11:6379", want: true},
 		{name: "Maven missing artifact", code: "generated.dependency_missing", ref: "maven-dependency", text: "Could not find artifact com.example:pricing-rules:jar:7.3.0", want: true},
 		{name: "shell parameter is configuration", code: "generated.application_configuration", ref: "shell-parameter", text: "APP_REGION parameter not set", want: true},
+		{name: "crash loop status is not an unknown target cause", code: "generated.unknown_target_error", ref: "crash-loop", text: "CrashLoopBackOff", want: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -263,6 +272,38 @@ func TestDirectCauseSignalMakesExplicitHTTPServerFailureTaxonomyExclusive(t *tes
 		if DirectCauseSignalSupported(code, projection) {
 			t.Fatalf("HTTP 503 also authorized %s", code)
 		}
+	}
+}
+
+func TestTerminalDependencyFailureSupersedesEarlierHTTPServerWarning(t *testing.T) {
+	t.Parallel()
+
+	projection := Projection{Artifacts: []ProjectedArtifact{{
+		ID: "stderr", Disclosure: "log_content",
+		Content: "WARN exporter attempt=1 HTTP 503 Service Unavailable from https://telemetry.internal/v1/traces\n" +
+			"ERROR exporter terminal=true endpoint=https://telemetry.internal/v1/traces error=x509: certificate signed by unknown authority",
+	}}}
+	if !DirectCauseSignalSupported("generated.dependency_unavailable", projection) {
+		t.Fatal("terminal TLS failure did not authorize dependency_unavailable")
+	}
+	if DirectCauseSignalSupported("generated.external_service_failure", projection) {
+		t.Fatal("earlier HTTP 503 outranked the explicitly terminal TLS failure")
+	}
+
+	request := Request{Projection: projection}
+	dependency := Hypothesis{
+		Code: "generated.dependency_unavailable", Summary: "telemetry.internal TLS verification failed",
+		RootCause:          "x509 reported certificate signed by unknown authority for telemetry.internal",
+		Explanation:        "The terminal exporter attempt could not establish TLS to telemetry.internal/v1/traces.",
+		SupportingEvidence: []string{"stderr"},
+	}
+	if !hypothesisCauseSupported(dependency, request) {
+		t.Fatal("terminal TLS hypothesis was rejected because of the earlier HTTP 503")
+	}
+	external := dependency
+	external.Code = "generated.external_service_failure"
+	if hypothesisCauseSupported(external, request) {
+		t.Fatal("external_service_failure remained valid after the terminal TLS signal")
 	}
 }
 

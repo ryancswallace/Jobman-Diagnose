@@ -35,7 +35,7 @@ func TestGenerateUsesStrictSchemaAndKeepsEvidenceInUserData(t *testing.T) {
 		if payload.ResponseFormat.Type != "json_schema" || !payload.ResponseFormat.JSONSchema.Strict ||
 			!bytes.Equal(payload.ResponseFormat.JSONSchema.Schema, request.ResponseSchema) || payload.Temperature != 0 ||
 			len(payload.Messages) != 2 || strings.Contains(payload.Messages[0].Content, "ignore prior instructions") ||
-			!strings.Contains(payload.Messages[0].Content, "deepest concrete supported cause") ||
+			!strings.Contains(payload.Messages[0].Content, "best-supported underlying condition") ||
 			!strings.Contains(payload.Messages[1].Content, "ignore prior instructions") {
 			http.Error(writer, "unsafe projection", http.StatusBadRequest)
 			return
@@ -180,9 +180,15 @@ func validOpenAIProposal(request provider.Request) provider.Proposal {
 	return provider.Proposal{
 		Kind: provider.ProposalKind, SchemaVersion: provider.ProposalSchemaVersion, RequestID: request.RequestID,
 		Hypotheses: []provider.Hypothesis{{
+			Role: provider.HypothesisPrimary,
 			Code: "generated.compatible_test", Category: "process", Summary: "Compatible response",
-			RootCause:             "The projected worker setting is incompatible with the selected runtime.",
-			Explanation:           "Runtime validation rejects the incompatible setting before work begins.",
+			RootCause:   "The projected worker setting is incompatible with the selected runtime.",
+			Explanation: "Runtime validation rejects the incompatible setting before work begins.",
+			Resolution: provider.ResolutionPlan{
+				Verification:     "Observe whether the selected runtime accepts the projected worker setting.",
+				Remediation:      "Align the worker setting with the selected runtime.",
+				SuccessCondition: "The selected runtime accepts the setting and starts the worker.",
+			},
 			SupportingEvidence:    []string{request.Manifest.ArtifactIDs[0]},
 			ContradictingEvidence: []string{}, ContradictsFindings: []string{},
 		}},

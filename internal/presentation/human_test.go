@@ -115,6 +115,7 @@ func TestHumanMakesGeneratedDiagnosisProminent(t *testing.T) {
 		"      - Status: Advisory; confidence not calibrated",
 		"      - Root cause: region moon-1 is not enabled for this deployment",
 		"      - Failure path: startup validation rejects the region before work begins",
+		"      - Observed diagnostics: configuration rejected: region moon-1 is disabled",
 		"  • Confirmed by Jobman [F1]",
 		"Correct the rejected application configuration",
 		"AI disclosure\n", "Validated generated hypotheses from jobman-llama contributed",
@@ -128,6 +129,24 @@ func TestHumanMakesGeneratedDiagnosisProminent(t *testing.T) {
 	}
 	if strings.Contains(rendered, "Medium (40/100)") || strings.Contains(rendered, "generated_content_uncalibrated") {
 		t.Fatalf("mixed human output exposes internal AI ranking details:\n%s", rendered)
+	}
+}
+
+func TestGeneratedFindingRoleUsesVersionedAnalyzerSuffix(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		analyzer string
+		want     string
+	}{
+		{analyzer: "generator.proposal/2/primary", want: "primary"},
+		{analyzer: "generator.proposal/2/contributing", want: "contributing"},
+		{analyzer: "generator.proposal/2/alternative", want: "alternative"},
+		{analyzer: "builtin.rules/1", want: ""},
+	} {
+		if got := generatedFindingRole(diagnosis.Finding{Analyzer: test.analyzer}); got != test.want {
+			t.Errorf("generatedFindingRole(%q) = %q, want %q", test.analyzer, got, test.want)
+		}
 	}
 }
 
@@ -324,9 +343,10 @@ func mixedPresentationFixture(t *testing.T) (diagnosis.Report, diagnosis.Failure
 		Category: "application", Severity: diagnosis.SeverityWarning,
 		Summary: "Deployment region moon-1 is not enabled for the target application",
 		Explanation: "Root cause: region moon-1 is not enabled for this deployment. " +
-			"Failure path: startup validation rejects the region before work begins.",
+			"Failure path: startup validation rejects the region before work begins. " +
+			"Observed diagnostics: configuration rejected: region moon-1 is disabled",
 		Confidence: confidence, SupportingEvidence: support,
-		ContradictingEvidence: []string{}, ContradictingFindings: []string{}, Analyzer: "generator.proposal/1",
+		ContradictingEvidence: []string{}, ContradictingFindings: []string{}, Analyzer: "generator.proposal/2/primary",
 	})
 	report.Actions = append([]diagnosis.Action{{
 		ID: "action:000:generated-guidance", Code: "review_application_configuration", Kind: diagnosis.ActionChange,
