@@ -5,6 +5,10 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Fixed
+
+- Outline the README logo subtitle so it renders without an installed font.
+
 ## [0.7.1] - 2026-11-10
 
 ### Fixed

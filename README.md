@@ -2,7 +2,7 @@
 <!-- markdownlint-disable MD033 -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/logo-diagnose.svg">
-  <img alt="Jobman" src="assets/logo-dark-diagnose.svg" width="420">
+  <img alt="Jobman Diagnose" src="assets/logo-dark-diagnose.svg" width="420">
 </picture>
 <!-- markdownlint-enable MD033 -->
 
