@@ -1076,6 +1076,7 @@
         "target.dns_resolution_message"
       ],
       "allowed_generated_codes": [
+        "generated.access_denied",
         "generated.dependency_unavailable"
       ],
       "required_finding_codes": [
@@ -1857,7 +1858,7 @@
             ]
           }
         ],
-        "maximum_citations": 5
+        "maximum_citations": 6
       }
     },
     {

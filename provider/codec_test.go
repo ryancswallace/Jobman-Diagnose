@@ -53,6 +53,77 @@ func TestRequestAndProposalProtocolRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDecodeProposalCanonicalizesGeneratedWhitespace(t *testing.T) {
+	t.Parallel()
+
+	request := validRequest(t)
+	proposal := validProposalFixture(request)
+	proposal.Hypotheses[0].Summary = "  resolver for api.internal\n  returned\tno address  "
+	proposal.Hypotheses[0].RootCause = "resolver\r\nreturned no address"
+	proposal.Hypotheses[0].Explanation = "lookup failed\u00a0before connection"
+	proposal.Hypotheses[0].Resolution.Verification = "compare\nresolver output"
+	proposal.Hypotheses[0].Resolution.Remediation = "correct\tthe resolver configuration"
+	proposal.Hypotheses[0].Resolution.SuccessCondition = "lookup\r\nsucceeds"
+	proposal.MissingEvidence = []MissingEvidence{{
+		Code: "generated.target_error", Description: "bounded\nresolver trace",
+	}}
+	encoded, err := json.Marshal(proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeProposal(bytes.NewReader(encoded), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hypothesis := decoded.Hypotheses[0]
+	for name, values := range map[string][2]string{
+		"summary":           {hypothesis.Summary, "resolver for api.internal returned no address"},
+		"root cause":        {hypothesis.RootCause, "resolver returned no address"},
+		"explanation":       {hypothesis.Explanation, "lookup failed before connection"},
+		"verification":      {hypothesis.Resolution.Verification, "compare resolver output"},
+		"remediation":       {hypothesis.Resolution.Remediation, "correct the resolver configuration"},
+		"success condition": {hypothesis.Resolution.SuccessCondition, "lookup succeeds"},
+		"missing evidence":  {decoded.MissingEvidence[0].Description, "bounded resolver trace"},
+	} {
+		if values[0] != values[1] {
+			t.Fatalf("%s = %q, want %q", name, values[0], values[1])
+		}
+	}
+}
+
+func TestDecodeProposalRejectsNonWhitespaceControlText(t *testing.T) {
+	t.Parallel()
+
+	request := validRequest(t)
+	proposal := validProposalFixture(request)
+	proposal.Hypotheses[0].RootCause = "resolver returned\a no address"
+	encoded, err := json.Marshal(proposal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeProposal(bytes.NewReader(encoded), request); err == nil {
+		t.Fatal("DecodeProposal() error = nil")
+	}
+}
+
+func validProposalFixture(request Request) Proposal {
+	return Proposal{
+		Kind: ProposalKind, SchemaVersion: ProposalSchemaVersion, RequestID: request.RequestID,
+		Hypotheses: []Hypothesis{{
+			Role: HypothesisPrimary,
+			Code: "generated.configuration_mismatch", Category: "process",
+			Summary:            "The worker configuration uses an unsupported deployment region",
+			RootCause:          "The selected region is not enabled for the worker deployment.",
+			Explanation:        "Worker initialization rejects the unsupported region before processing begins.",
+			Resolution:         validResolutionPlanFixture(),
+			SupportingEvidence: []string{"ev:run:1:exit"}, ContradictingEvidence: []string{},
+			ContradictsFindings: []string{},
+		}},
+		RecommendedActions: []string{"action:001"},
+		MissingEvidence:    []MissingEvidence{},
+	}
+}
+
 func TestProposalRejectsUnknownAuthorityAndInventedEvidence(t *testing.T) {
 	t.Parallel()
 

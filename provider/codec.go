@@ -203,6 +203,7 @@ func DecodeProposal(source io.Reader, request Request) (Proposal, error) {
 	if err := decodeStrictObject(encoded, &proposal, maximumProtocolDepth); err != nil {
 		return Proposal{}, fmt.Errorf("decode proposal: %w", err)
 	}
+	proposal = canonicalizeProposalText(proposal)
 	proposal = normalizeProposal(proposal)
 	proposal = normalizeProposalAgainstRequest(proposal, request)
 	if err := validateProposal(proposal, request); err != nil {
@@ -210,6 +211,35 @@ func DecodeProposal(source io.Reader, request Request) (Proposal, error) {
 	}
 
 	return proposal, nil
+}
+
+// canonicalizeProposalText collapses model-authored whitespace before the
+// existing text safety and length checks. Structured-output backends differ
+// in how reliably they honor prose formatting guidance, and a valid diagnosis
+// must not be rejected solely because a model copied a wrapped diagnostic.
+// Non-whitespace control characters are deliberately left intact so
+// validateProposal continues to reject them.
+func canonicalizeProposalText(proposal Proposal) Proposal {
+	for index := range proposal.Hypotheses {
+		hypothesis := &proposal.Hypotheses[index]
+		hypothesis.Summary = canonicalizeGeneratedText(hypothesis.Summary)
+		hypothesis.RootCause = canonicalizeGeneratedText(hypothesis.RootCause)
+		hypothesis.Explanation = canonicalizeGeneratedText(hypothesis.Explanation)
+		hypothesis.Resolution.Verification = canonicalizeGeneratedText(hypothesis.Resolution.Verification)
+		hypothesis.Resolution.Remediation = canonicalizeGeneratedText(hypothesis.Resolution.Remediation)
+		hypothesis.Resolution.SuccessCondition = canonicalizeGeneratedText(hypothesis.Resolution.SuccessCondition)
+	}
+	for index := range proposal.MissingEvidence {
+		proposal.MissingEvidence[index].Description = canonicalizeGeneratedText(
+			proposal.MissingEvidence[index].Description,
+		)
+	}
+
+	return proposal
+}
+
+func canonicalizeGeneratedText(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 // DecodeTransportJSON decodes one already bounded provider envelope while

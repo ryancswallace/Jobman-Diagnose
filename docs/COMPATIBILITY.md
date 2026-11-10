@@ -77,5 +77,7 @@ newer release. Continuous integration tests assembled invocation against both
 released versions and current main, without sibling-module replacements.
 
 The dependency pin and deterministic checks do not waive the live-provider
-release gates in [RELEASE.md](../RELEASE.md). The v0.7.0 stable release passed
-the complete hosted-provider promotion gate before publication.
+release gates in [RELEASE.md](../RELEASE.md). The v0.7.1 release candidate
+passed the complete hosted strict-output and local-runtime promotion gates. The
+models, runtimes, limits, summaries, controls, and retained artifact identities
+are recorded in [live-provider promotion evidence](LIVE_PROVIDER_PROMOTION.md).

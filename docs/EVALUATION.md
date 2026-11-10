@@ -229,5 +229,10 @@ promotion assessment. The direct OpenAI profile in the
 [configuration guide](CONFIGURATION.md#openai-compatible-http) is suitable for
 this sequence after `OPENAI_API_KEY` is set in the invoking environment.
 
+The completed v0.7.1 hosted and local runs provide a concrete
+[live-provider promotion evidence](LIVE_PROVIDER_PROMOTION.md) example. Its
+public record contains only non-secret identities, limits, aggregate metrics,
+control coverage, and artifact digests; raw proposal captures remain private.
+
 Strict JSON Schema establishes shape and bounded authority. The host's
 evidence-grounding checks and this corpus establish diagnostic usefulness.

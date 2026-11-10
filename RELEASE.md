@@ -90,6 +90,11 @@ redirect, locality, and deterministic-fallback cases in the release build. A
 clean deterministic installation must need no configuration, credentials,
 Python, network, or provider runtime.
 
+Keep each completed candidate record immutable rather than replacing it for a
+later model or release. The v0.7.1 hosted and local identities, limits,
+summaries, control coverage, and private-artifact digests are recorded in
+[`docs/LIVE_PROVIDER_PROMOTION.md`](docs/LIVE_PROVIDER_PROMOTION.md).
+
 ## Publish
 
 Create an annotated `vX.Y.Z` tag only after the candidate gates pass, sign it
