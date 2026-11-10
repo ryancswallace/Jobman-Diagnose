@@ -109,7 +109,6 @@ summaries:
 | Local private proposal capture | `ae28de9dde10b8110a74400a8f830be72803828025af8b9599407f80b3314e55` |
 
 The immutable candidate identities `v0.7.0-rc.1` through `v0.7.0-rc.5` and
-stable identity `v0.7.0` remain unchanged. The planned `v0.7.1` tag will record
-the validated patch release; none of these identities will be moved or
-redefined. This evidence records validation and does not independently approve
-a deployment.
+stable identity `v0.7.0` remain unchanged. The `v0.7.1` tag records the
+validated patch release; none of these identities is moved or redefined. This
+evidence records validation and does not independently approve a deployment.

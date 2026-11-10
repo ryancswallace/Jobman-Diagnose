@@ -1,13 +1,13 @@
 # Compatibility
 
-Status: v0.7.0 stable
+Status: v0.7.1 stable
 
 Compatibility is governed by explicit schemas and capabilities, not matching
 semantic versions.
 
 | Surface | Supported now |
 | --- | --- |
-| Jobman Diagnose release | v0.7.0 |
+| Jobman Diagnose release | v0.7.1 |
 | Jobman release | v1.4.0 or newer with evidence schema 1 |
 | Jobman diagnostic evidence | Schemas 1 and 2; schema 2 requires a core build with the shared collector |
 | Jobman CLI envelope | Schema 1 with `data.evidence` |
@@ -70,14 +70,14 @@ local Jobman command vectors for shared jobs. The public
 [`deterministic` package](SHARED_REPORTS.md) is the supported embedding entry
 point; external applications must not import `internal/engine`.
 
-Jobman Diagnose v0.7.0 pins published Jobman v1.9.0 for its public schema-2
+Jobman Diagnose v0.7.1 pins published Jobman v1.9.0 for its public schema-2
 collector and bounded evidence decoder. Jobman v1.4.0 remains the oldest local
 CLI compatibility baseline; shared evidence requires Jobman v1.9.0 or a compatible
 newer release. Continuous integration tests assembled invocation against both
 released versions and current main, without sibling-module replacements.
 
 The dependency pin and deterministic checks do not waive the live-provider
-release gates in [RELEASE.md](../RELEASE.md). The v0.7.1 release candidate
-passed the complete hosted strict-output and local-runtime promotion gates. The
+release gates in [RELEASE.md](../RELEASE.md). The v0.7.1 stable source passed
+the complete hosted strict-output and local-runtime promotion gates. The
 models, runtimes, limits, summaries, controls, and retained artifact identities
 are recorded in [live-provider promotion evidence](LIVE_PROVIDER_PROMOTION.md).
