@@ -50,6 +50,8 @@ archives:
     files:
       - LICENSE
       - README.md
+      - assets/logo-diagnose.svg
+      - assets/logo-dark-diagnose.svg
       - CHANGELOG.md
       - CITATION.cff
       - CODE_OF_CONDUCT.md
@@ -84,6 +86,10 @@ nfpms:
         dst: /usr/share/licenses/jobman-diagnose/THIRD_PARTY_NOTICES.md
       - src: README.md
         dst: /usr/share/doc/jobman-diagnose/README.md
+      - src: assets/logo-diagnose.svg
+        dst: /usr/share/doc/jobman-diagnose/assets/logo-diagnose.svg
+      - src: assets/logo-dark-diagnose.svg
+        dst: /usr/share/doc/jobman-diagnose/assets/logo-dark-diagnose.svg
       - src: docs/INSTALLATION.md
         dst: /usr/share/doc/jobman-diagnose/INSTALLATION.md
       - src: docs/CONFIGURATION.md

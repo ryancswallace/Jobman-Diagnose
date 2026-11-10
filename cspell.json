@@ -24,6 +24,10 @@
     "/\\b[0-9a-f]{32,}\\b/g"
   ],
   "words": [
+    "Audiowide",
+    "Inkscape",
+    "miterlimit",
+    "tspan",
     "actionlint",
     "anchore",
     "asciicheck",
