@@ -123,7 +123,16 @@ func Run(
 	if len(proposal.Hypotheses) != 1 || proposal.Hypotheses[0].Role != provider.HypothesisPrimary ||
 		proposal.Hypotheses[0].Code != "generated.dependency_unavailable" ||
 		!slices.Contains(proposal.Hypotheses[0].SupportingEvidence, "doctor:artifact:stderr") {
-		report.fail("causal_probe", "the model did not identify the direct synthetic connection-refusal cause")
+		detail := "the model did not identify the direct synthetic connection-refusal cause"
+		if len(proposal.Hypotheses) == 0 {
+			detail += "; it returned no hypothesis"
+		} else {
+			detail += fmt.Sprintf(
+				"; it returned %d hypothesis(es), beginning with controlled code %s and role %s",
+				len(proposal.Hypotheses), safeLabel(proposal.Hypotheses[0].Code), safeLabel(string(proposal.Hypotheses[0].Role)),
+			)
+		}
+		report.fail("causal_probe", detail)
 		return report, nil
 	}
 	report.pass("causal_probe", "the model identified and cited the direct synthetic connection-refusal cause")

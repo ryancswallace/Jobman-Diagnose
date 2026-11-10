@@ -110,7 +110,7 @@ func TestRunReportsSafeReadinessFailures(t *testing.T) {
 				})
 				return provider.Response{JSON: encoded, Provider: "openai_compatible", Model: profile.Model, RequestID: request.RequestID}, err
 			}},
-			wantCode: "causal_probe", wantText: "did not identify",
+			wantCode: "causal_probe", wantText: "returned no hypothesis",
 		},
 	}
 	for _, test := range tests {
