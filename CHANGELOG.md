@@ -5,6 +5,20 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ## [Unreleased]
 
+### Fixed
+
+- Canonicalize whitespace in structured generated text before the existing
+  host validation so wrapped diagnostics remain usable without allowing raw
+  multiline output or other control characters into rendered diagnoses.
+- Report the controlled hypothesis code and role, but never response text, when
+  a provider doctor proposal passes validation but misses the causal probe.
+
+### Documentation
+
+- Record the completed hosted strict-output and local-runtime promotion gates,
+  including exact model/runtime identities, disclosure limits, repeated
+  summaries, safety-control coverage, and private-artifact digests.
+
 ## [0.7.0] - 2026-11-09
 
 ### Changed
