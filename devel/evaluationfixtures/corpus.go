@@ -294,7 +294,8 @@ func generatedCases() []evaluation.Case {
 		requiredFailure("long_noisy_storage", "long-noisy-storage-v1.json", "generated.resource_pressure",
 			[]string{"failure.filesystem", "failure.resource", "format.long", "stress.noisy", "style.real_world"},
 			facts(fact("exhaustion", "no space left", "disk is full"), fact("path", "/srv/checkpoints/partition-17.json", "partition-17.json")), nil),
-		requiredFailure("multi_failure_terminal_dns", "multi-failure-terminal-dns-v1.json", "generated.dependency_unavailable",
+		requiredFailureCodes("multi_failure_terminal_dns", "multi-failure-terminal-dns-v1.json",
+			[]string{"generated.access_denied", "generated.dependency_unavailable"},
 			[]string{"failure.network", "format.timestamped", "stress.interleaved", "stress.noisy", "style.real_world"},
 			facts(fact("terminal cause", "no such host", "DNS"), fact("host", "queue.service.internal")),
 			relations(relation("DNS failure stopped startup", []string{"no such host", "queue.service.internal"}, []string{"startup failed", "worker startup"}))),
@@ -360,10 +361,10 @@ func generatedCases() []evaluation.Case {
 		requiredFailure("python_connection_refused", "python-08-connection-refused-v1.json", "generated.dependency_unavailable",
 			[]string{"failure.network", "format.traceback", "language.python", "lab.python"},
 			facts(fact("exception", "ConnectionRefusedError"), fact("endpoint", "127.0.0.1:4319"), fact("service", "inventory service")), nil),
-		requiredFailure("python_chained_timeout", "python-09-chained-timeout-v1.json", "generated.dependency_unavailable",
+		withMaximumCitations(requiredFailure("python_chained_timeout", "python-09-chained-timeout-v1.json", "generated.dependency_unavailable",
 			[]string{"failure.network", "format.exception_chain", "language.python", "lab.python"},
 			facts(fact("timeout", "TimeoutError", "750 ms"), fact("outer failure", "UpstreamUnavailable", "inventory synchronization failed")),
-			relations(relation("timeout caused synchronization failure", []string{"TimeoutError", "did not respond"}, []string{"UpstreamUnavailable", "synchronization failed"}))),
+			relations(relation("timeout caused synchronization failure", []string{"TimeoutError", "did not respond"}, []string{"UpstreamUnavailable", "synchronization failed"}))), 6),
 		requiredFailure("python_missing_executable", "python-10-missing-executable-v1.json", "generated.dependency_missing",
 			[]string{"failure.dependency", "format.traceback", "language.python", "lab.python"},
 			facts(fact("exception", "FileNotFoundError"), fact("command", "warehouse-migrate")), nil),
@@ -610,6 +611,12 @@ func requiredFailureCodes(
 		Disposition: evaluation.GeneratedCauseRequired, RequiredFacts: requiredFacts,
 		RequiredRelations: requiredRelations, MaximumCitations: 5,
 	})
+}
+
+func withMaximumCitations(test evaluation.Case, maximum int) evaluation.Case {
+	test.GeneratedExpectation.MaximumCitations = maximum
+
+	return test
 }
 
 func mustAbstainFailure(
