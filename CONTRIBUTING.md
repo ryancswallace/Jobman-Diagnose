@@ -25,6 +25,9 @@ Use the exact Go patch recorded in `go.version`. The devcontainer is the
 supported reproducible environment; a local toolchain is equally welcome when
 it uses the same version. Pinned repository tools are installed under `bin/`.
 
+The [terminal recording source](docs/screencaps/tape/diagnose.tape) describes
+how to regenerate the optional synthetic demo. Generated recordings stay local.
+
 ## Verification
 
 Run focused tests while iterating, then the complete gate before submission:

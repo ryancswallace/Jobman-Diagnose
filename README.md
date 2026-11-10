@@ -31,15 +31,6 @@ executing suggested actions.
 Stored analysis wrappers use a 4 MiB encoding limit; the public encoder rejects
 oversized output before writing it, and the decoder enforces the same ceiling.
 
-<!-- Terminal demo slot. Generate the recording from
-docs/screencaps/tape/diagnose.tape, then replace this comment with:
-<p align="center">
-  <img src="docs/screencaps/gif/diagnose.gif"
-       alt="A Jobman-Diagnose terminal demo"
-       width="900">
-</p>
--->
-
 > [!TIP]
 > Start with `jobman diagnose JOB`. No AI setup is required.
 
@@ -158,8 +149,7 @@ jobman-diagnose --from-evidence evidence.json
 jobman-diagnose --from-evidence evidence.json --json --output report.json
 ```
 
-You can export diagnostic evidence on one machine and inspect it on another.
-You can also create a support bundle when a maintainer needs more context.
+Create a support bundle when a maintainer needs more context.
 These files can contain sensitive job details, so review them before sharing.
 See [support bundles] for the bundle contents and safety guidance, and the
 [security model] for file-handling details.

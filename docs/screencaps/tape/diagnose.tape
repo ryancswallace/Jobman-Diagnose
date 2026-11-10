@@ -8,6 +8,7 @@
 #   - start the configured model; the tape runs `doctor` to validate and warm it
 #
 # Example:
+#   mkdir -p gif mp4 webm
 #   JOBMAN_DEMO_CORE=/path/to/jobman/bin/jobman \
 #     JOBMAN_DIAGNOSE_CONFIG=/path/to/diagnosis.yaml \
 #     vhs tape/diagnose.tape
