@@ -99,7 +99,7 @@ Each dependency retains its own license terms.
     See the License for the specific language governing permissions and
     limitations under the License.
 
-## go1.26.10 · LICENSE
+## go1.26.11 · LICENSE
 
     Copyright 2009 The Go Authors.
 

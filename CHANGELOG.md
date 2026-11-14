@@ -7,6 +7,8 @@ format follows [Keep a Changelog], and releases use [Semantic Versioning].
 
 ### Fixed
 
+- Update the pinned Go toolchain to 1.26.11 to address standard-library security advisory GO-2026-6859.
+
 - Outline the README logo subtitle so it renders without an installed font.
 
 ## [0.7.1] - 2026-11-10
