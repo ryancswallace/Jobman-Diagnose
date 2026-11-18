@@ -1,4 +1,4 @@
-github.com/ryancswallace/jobman v1.9.0 h1:7vrEdH65svEQKt9CdlPTFFE8LF8d+rJHokLJ2U9kRoo=
-github.com/ryancswallace/jobman v1.9.0/go.mod h1:gNd0CgFzR27pH5FXPg7G2md4z2LEvQSRW7EJYfxrquo=
+github.com/ryancswallace/jobman v1.10.2 h1:xmJawN4r/GBEcWWj+2I99qaP+D9YPVQbqisdYDFMxbA=
+github.com/ryancswallace/jobman v1.10.2/go.mod h1:s84K3fEdC1ee28QXMGLIekyN9aNttK7luNaapRwi4Dg=
 go.yaml.in/yaml/v3 v3.0.6 h1:zcDfvjXEqTQmpjniUBLc91xYJMB2c4QOFxEF/LCEckM=
 go.yaml.in/yaml/v3 v3.0.6/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
